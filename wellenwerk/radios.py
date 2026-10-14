@@ -38,6 +38,20 @@ def hamlib_exe(name: str) -> str | None:
     return None
 
 
+def port_free(port: int, udp: bool = False) -> bool:
+    """Ist der Port auf diesem Rechner frei? (anderes Programm oder zweites Wellenwerk)"""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM if udp else socket.SOCK_STREAM) as s:
+        try:
+            if sys.platform == "win32":
+                s.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_EXCLUSIVEADDRUSE", -5), 1)
+            elif not udp:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)   # Nachlauf alter Verbindungen ignorieren, echte Belegung erkennen
+            s.bind(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
+
+
 def hamlib_env() -> dict:
     """Mitgelieferte Hamlib-Bibliotheken (Linux-Paket) fuer die Hamlib-Programme auffindbar machen."""
     env = dict(os.environ)
@@ -282,7 +296,7 @@ class RadioManager:
         if not prof:
             raise RuntimeError("Profil nicht gefunden")
         used = {rp.port for rp in self.active.values()}
-        port = next(p for p in range(self.base_port, self.base_port + 50) if p not in used)
+        port = next(p for p in range(self.base_port, self.base_port + 90) if p not in used and port_free(p) and port_free(p + 100, udp=True))
         rp = RadioProc(prof, port, self.on_change, self.on_spectrum)
         try:
             await rp.start()

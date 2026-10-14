@@ -562,13 +562,14 @@ async def rotor_spawn():
     exe = radmod.hamlib_exe("rotctld")
     if not exe:
         log.warning("rotctld nicht gefunden"); return
-    cmd = [exe, "-m", str(model), "-T", "127.0.0.1", "-t", "4650"]
+    rport = next((p for p in range(4650, 4700) if radmod.port_free(p)), 4650)
+    cmd = [exe, "-m", str(model), "-T", "127.0.0.1", "-t", str(rport)]
     if model not in (1,) and cfg.get("rot_device"):
         cmd += ["-r", cfg["rot_device"]]
     if cfg.get("rot_speed"):
         cmd += ["-s", str(cfg["rot_speed"])]
     ROTCTLD["proc"] = await asyncio.to_thread(subprocess.Popen, cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=radmod.hamlib_env())
-    cfg["rot_host"], cfg["rot_port"] = "127.0.0.1", 4650
+    cfg["rot_host"], cfg["rot_port"] = "127.0.0.1", rport
     CFG_PATH.write_text(json.dumps(cfg, indent=2))
     await asyncio.sleep(0.8)
     rotor.reconfigure(cfg["rot_host"], int(cfg["rot_port"]), bool(cfg["rot_enabled"]))

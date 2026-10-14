@@ -12,7 +12,7 @@ jobs:
         include:
           - os: windows-latest
           - os: macos-latest        # Apple Silicon
-          - os: macos-13            # Intel-Mac
+          - os: macos-15-intel      # Intel-Mac
           - os: ubuntu-22.04
     runs-on: ${{ matrix.os }}
     env:
