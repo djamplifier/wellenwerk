@@ -15,11 +15,12 @@ args = [
     "--name", "Wellenwerk", "--noconfirm", "--clean", "--onedir", "--console",
     "--paths", str(ROOT),
     "--add-data", f"{ROOT / 'static'}{sep}static",
-    "--add-data", f"{ROOT / 'docs'}{sep}docs",
     "--collect-submodules", "uvicorn", "--collect-submodules", "wellenwerk",
     "--hidden-import", "serial.tools.list_ports",
     "--distpath", str(ROOT / "dist"), "--workpath", str(ROOT / "build"), "--specpath", str(ROOT / "build"),
 ]
+if (ROOT / "docs").is_dir() and any((ROOT / "docs").iterdir()):
+    args += ["--add-data", f"{ROOT / 'docs'}{sep}docs"]
 ham = ROOT / "packaging" / "hamlib"
 if ham.is_dir():
     args += ["--add-data", f"{ham}{sep}hamlib"]
