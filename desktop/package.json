@@ -1,7 +1,7 @@
 {
   "name": "wellenwerk",
   "productName": "Wellenwerk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Wellenwerk – Stationssteuerung, Logbuch und Digitalbetrieb für Funkamateure",
   "author": {
     "name": "Wellenwerk",
@@ -28,6 +28,18 @@
       {
         "from": "../dist/Wellenwerk",
         "to": "server"
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE.txt"
+      },
+      {
+        "from": "../LIZENZEN.md",
+        "to": "LIZENZEN.md"
+      },
+      {
+        "from": "../licenses",
+        "to": "licenses"
       }
     ],
     "win": {
@@ -40,7 +52,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
-      "shortcutName": "Wellenwerk"
+      "shortcutName": "Wellenwerk",
+      "license": "../LICENSE"
     },
     "mac": {
       "target": [
@@ -66,5 +79,6 @@
     "electron": "33.4.11",
     "electron-builder": "25.1.8"
   },
-  "homepage": "https://github.com/djamplifier/wellenwerk"
+  "homepage": "https://github.com/djamplifier/wellenwerk",
+  "license": "GPL-3.0-or-later"
 }

@@ -27,7 +27,7 @@ from . import radios as radmod
 from . import winkey as wkmod
 from . import wsjtx
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("WW_DATA", BASE / "data"))
 DATA.mkdir(parents=True, exist_ok=True)
@@ -775,6 +775,8 @@ async def countries():
 @app.get("/docs/{name}")
 async def docs(name: str):
     p = BASE / "docs" / Path(name).name
+    if Path(name).name in ("LIZENZEN.md", "LICENSE"):
+        p = BASE / Path(name).name
     if not p.exists():
         raise HTTPException(404, "nicht gefunden")
     return Response(p.read_text(), media_type="text/plain; charset=utf-8")

@@ -2,6 +2,8 @@
 
 Wellenwerk ist ein Programm für die Funkstation: Funkgerät steuern, Logbuch führen, Digitalbetrieb (PSK, RTTY, Olivia, MT63, SSTV und mehr), Satelliten, Rotor und Karten – alles in einem Fenster.
 
+> **Lizenz und Haftung:** Wellenwerk ist freie Software unter der GNU General Public License 3 und wird **ohne jede Gewährleistung** bereitgestellt. Die Nutzung – insbesondere die Steuerung von Sendern, Funkgeräten und Rotoren – erfolgt auf eigene Verantwortung. Für die Einhaltung der Amateurfunk-Vorschriften ist die bedienende Person verantwortlich. Einzelheiten und alle Fremdlizenzen: [LIZENZEN.md](../LIZENZEN.md) bzw. im Programm unter **Hilfe → Lizenzen und Fremdkomponenten**.
+
 **Inhalt**
 1. [Installation](#1-installation)
 2. [Erster Start](#2-erster-start)

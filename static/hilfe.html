@@ -14,10 +14,13 @@ code { background: var(--code); padding: 1px 4px; border-radius: 3px; font-size:
 <body><main id="doc">Anleitung wird geladen …</main>
 <script src="/static/vendor/marked.min.js"></script>
 <script>
-fetch("/docs/Anleitung.md").then(r => { if (!r.ok) throw new Error("Anleitung nicht gefunden"); return r.text(); }).then(md => {
+const DOC = new URLSearchParams(location.search).get("d") === "lizenzen" ? "LIZENZEN.md" : "Anleitung.md";
+if (DOC !== "Anleitung.md") document.title = "Wellenwerk – Lizenzen";
+fetch("/docs/" + DOC).then(r => { if (!r.ok) throw new Error("Dokument nicht gefunden"); return r.text(); }).then(md => {
   const el = document.getElementById("doc"); el.innerHTML = marked.parse(md.replace(/\]\(bilder\//g, "](/docs/bilder/"));
   // Ueberschriften-Anker wie auf GitHub, damit das Inhaltsverzeichnis funktioniert
   el.querySelectorAll("h2, h3").forEach(h => h.id = h.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-"));
   el.querySelectorAll('a[href^="http"]').forEach(a => a.target = "_blank");
+  el.querySelectorAll('a[href="LICENSE"], a[href^="licenses/"]').forEach(a => { a.href = "/docs/" + (a.getAttribute("href") === "LICENSE" ? "LICENSE" : "LIZENZEN.md"); a.target = "_blank"; });
 }).catch(e => document.getElementById("doc").textContent = e.message);
 </script></body></html>

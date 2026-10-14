@@ -173,9 +173,13 @@ const MENU_WINDOW = (appId) => ({ label: "Fenster", items: [
 const MENU_HELP = { label: "Hilfe", items: [
   { label: "Anleitung", icon: "i-info", act: () => window.open("/static/hilfe.html", "_blank", "width=1100,height=860") },
   { label: "Tastenkürzel", act: () => showKeys() },
-  { label: "Über Wellenwerk", act: () => info("Über Wellenwerk", `<p><b>Wellenwerk</b> v${esc(WW.version)} – Stationssteuerung, Logbuch und Digitalmodi für Funkamateure.</p>
-    <p>Eigenständig entwickelt; Bedienung und Aufbau an bekannte Stationsprogramme angelehnt. Verwendet <b>Hamlib</b> (Geräte), <b>AD1C/country-files.com</b>, <b>Leaflet</b>, <b>OpenStreetMap</b>, <b>dockview</b>, <b>d3</b>, <b>satellite.js</b>, NOAA-SWPC-Daten und den EiBi-Sendeplan.</p>
-    <p class="hint">„Wellenwerk“ steht in keiner Verbindung zu anderen Funk-Programmen oder deren Herstellern.</p>`) },
+  { label: "Lizenzen und Fremdkomponenten", act: () => window.open("/static/hilfe.html?d=lizenzen", "_blank", "width=1000,height=800") },
+  { label: "Über Wellenwerk", act: () => info("Über Wellenwerk", `<p><b>Wellenwerk</b> v${esc(WW.version)} – Stationssteuerung, Logbuch und Digitalbetrieb für Funkamateure.</p>
+    <p>Freie Software unter der <b>GNU General Public License 3</b> (oder später). Verwendet u. a. <b>Hamlib</b> (LGPL), Zeichentabellen aus <b>fldigi</b> (GPL),
+    <b>Electron</b>, <b>Leaflet</b>, <b>dockview</b>, <b>D3</b>, <b>satellite.js</b> sowie Daten von OpenStreetMap, AD1C/country-files.com, NOAA SWPC, EiBi, CelesTrak und SatNOGS –
+    <a href="/static/hilfe.html?d=lizenzen" target="_blank">alle Lizenzen</a>.</p>
+    <p class="hint">Ohne jede Gewährleistung; Nutzung auf eigene Verantwortung, insbesondere bei der Steuerung von Sendern und Rotoren.
+    Wellenwerk ist ein eigenständiges Programm und steht in keiner Verbindung zu Herstellern anderer Funk-Software oder von Funkgeräten.</p>`) },
 ] };
 function showKeys() {
   const acc = store.get("accel", []);

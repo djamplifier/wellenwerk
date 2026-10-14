@@ -36,3 +36,11 @@ Ohne Installation (Entwicklung): `pip install -r requirements.txt` und `python -
 
 Pakete bauen: `python packaging/build.py` (Dienst, Ordner `dist/Wellenwerk`), dann in `desktop/` `npm install && npx electron-builder`.
 Für Windows, macOS (Apple Silicon und Intel) und Linux automatisch über `.github/workflows/build.yml` (GitHub Actions, Hamlib jeweils eingebaut).
+
+## Lizenz
+
+Wellenwerk ist freie Software unter der [GNU General Public License 3](LICENSE) (oder später) und wird **ohne jede Gewährleistung** bereitgestellt;
+die Nutzung, insbesondere die Steuerung von Sendern und Rotoren, erfolgt auf eigene Verantwortung.
+Mitgelieferte Fremdkomponenten (u. a. Hamlib, LGPL 2.1) und ihre Lizenzen: [LIZENZEN.md](LIZENZEN.md).
+Wellenwerk ist ein eigenständiges Programm und steht in keiner Verbindung zu Herstellern anderer Funk-Software oder von Funkgeräten.
+

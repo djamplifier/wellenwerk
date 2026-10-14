@@ -21,6 +21,9 @@ args = [
 ]
 if (ROOT / "docs").is_dir() and any((ROOT / "docs").iterdir()):
     args += ["--add-data", f"{ROOT / 'docs'}{sep}docs"]
+for f in ("LICENSE", "LIZENZEN.md"):
+    args += ["--add-data", f"{ROOT / f}{sep}."]
+args += ["--add-data", f"{ROOT / 'licenses'}{sep}licenses"]
 ham = ROOT / "packaging" / "hamlib"
 if ham.is_dir():
     args += ["--add-data", f"{ham}{sep}hamlib"]
