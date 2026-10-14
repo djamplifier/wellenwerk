@@ -1,0 +1,10 @@
+data/
+venv/
+__pycache__/
+build/
+dist/
+packaging/hamlib/
+venv/
+.venv-mac/
+desktop/node_modules/
+desktop/dist/

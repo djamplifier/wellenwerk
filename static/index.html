@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="de" data-chrome="office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wellenwerk</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dockview@8.4.1/dist/styles/dockview.css">
+<link rel="stylesheet" href="/static/style.css?v=__V__">
+</head>
+<body>
+<header class="titlebar"><img src="/static/logo.svg" class="logo" alt=""><span id="wintitle">Wellenwerk</span><i class="grow"></i><span class="tb-clock" id="tb-clock"></span></header>
+<nav id="menubar" class="menubar"></nav>
+<div id="toolbar" class="toolbar"></div>
+<nav id="apptabs" class="apptabs"></nav>
+<main id="workspaces"></main>
+<footer id="statusbar" class="statusbar"></footer>
+<div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dockview@8.4.1/dist/dockview.min.js"></script>
+<script src="/static/js/core.js?v=__V__"></script>
+<script src="/static/js/shell.js?v=__V__"></script>
+<script src="/static/js/dsp.js?v=__V__"></script>
+<script src="/static/js/dsp2-tables.js?v=__V__"></script>
+<script src="/static/js/dsp2.js?v=__V__"></script>
+<script src="/static/js/sstv.js?v=__V__"></script>
+<script src="/static/js/rig-face.js?v=__V__"></script>
+<script src="/static/js/rig-panels.js?v=__V__"></script>
+<script src="/static/js/logapp.js?v=__V__"></script>
+<script src="/static/js/sstv-ui.js?v=__V__"></script>
+<script src="/static/js/dmapp.js?v=__V__"></script>
+<script src="/static/js/apps2.js?v=__V__"></script>
+<script src="/static/js/ctx.js?v=__V__"></script>
+<script>setInterval(() => { const n = new Date(); document.getElementById("tb-clock").textContent = n.toISOString().slice(11, 19) + " UTC · " + n.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }); }, 1000);</script>
+</body>
+</html>

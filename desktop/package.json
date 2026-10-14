@@ -1,0 +1,25 @@
+{
+  "name": "wellenwerk",
+  "productName": "Wellenwerk",
+  "version": "1.0.0",
+  "description": "Wellenwerk – Stationssteuerung, Logbuch und Digitalbetrieb für Funkamateure",
+  "author": "Wellenwerk",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never"
+  },
+  "build": {
+    "appId": "de.wellenwerk.app",
+    "productName": "Wellenwerk",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "build/icon.png"],
+    "extraResources": [{ "from": "../dist/Wellenwerk", "to": "server" }],
+    "win": { "target": ["nsis"], "icon": "build/icon.png" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "perMachine": false, "shortcutName": "Wellenwerk" },
+    "mac": { "target": ["dmg"], "category": "public.app-category.utilities", "icon": "build/icon.png",
+      "extendInfo": { "NSMicrophoneUsageDescription": "Wellenwerk braucht den Audio-Eingang für Digitalbetrieb und SSTV (Empfang vom Funkgerät)." } },
+    "linux": { "target": ["AppImage", "deb"], "category": "HamRadio", "icon": "build/icon.png", "maintainer": "Wellenwerk" }
+  },
+  "devDependencies": { "electron": "33.4.11", "electron-builder": "25.1.8" }
+}

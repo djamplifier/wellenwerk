@@ -1,0 +1,78 @@
+name: Installationspakete bauen
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          - os: macos-latest        # Apple Silicon
+          - os: macos-13            # Intel-Mac
+          - os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Python-Abhaengigkeiten
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Hamlib (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = "4.6.5"
+          Invoke-WebRequest "https://github.com/Hamlib/Hamlib/releases/download/$v/hamlib-w64-$v.zip" -OutFile hamlib.zip
+          Expand-Archive hamlib.zip -DestinationPath hl
+          Move-Item "hl/hamlib-w64-$v" packaging/hamlib
+      - name: Hamlib (macOS, mit Bibliotheken)
+        if: runner.os == 'macOS'
+        run: |
+          brew install hamlib dylibbundler
+          mkdir -p packaging/hamlib/bin packaging/hamlib/lib
+          for b in rigctl rigctld rotctl rotctld; do cp "$(brew --prefix hamlib)/bin/$b" packaging/hamlib/bin/; done
+          dylibbundler -of -b -x packaging/hamlib/bin/rigctld -x packaging/hamlib/bin/rotctld -x packaging/hamlib/bin/rigctl -x packaging/hamlib/bin/rotctl -d packaging/hamlib/lib -p @executable_path/../lib/
+      - name: Hamlib (Linux, mit Bibliothek)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y libhamlib-utils
+          mkdir -p packaging/hamlib/bin packaging/hamlib/lib
+          for b in rigctl rigctld rotctl rotctld; do cp "$(which $b)" packaging/hamlib/bin/; done
+          cp -L $(ldd "$(which rigctld)" | awk '/libhamlib/ {print $3}') packaging/hamlib/lib/
+
+      - name: Dienst bauen (PyInstaller)
+        run: python packaging/build.py
+      - name: Dienst-Selbsttest
+        shell: bash
+        run: |
+          exe=dist/Wellenwerk/Wellenwerk; [ "$RUNNER_OS" = Windows ] && exe=$exe.exe
+          "$exe" --port 8099 --no-browser --data "$RUNNER_TEMP/wwdata" &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:8099/api/state > /dev/null && break; sleep 2; done
+          curl -sf http://127.0.0.1:8099/api/hamlib/models | head -c 200; echo
+          curl -sf http://127.0.0.1:8099/api/radios | grep -q '"connected":true'
+
+      - name: Desktop-Programm bauen
+        working-directory: desktop
+        shell: bash
+        run: |
+          npm ci || npm install
+          npx electron-builder --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wellenwerk-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
