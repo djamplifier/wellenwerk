@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wellenwerk – Anleitung</title>
+<style>
+:root { --bg: #f6f8fb; --fg: #1d2733; --acc: #1f5fae; --line: #d5dde8; --code: #eef2f7; }
+@media (prefers-color-scheme: dark) { :root { --bg: #14181d; --fg: #dde3ea; --acc: #6aa8ff; --line: #2c3540; --code: #1e252d; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 24px 24px 80px; }
+h1 { font-size: 28px; margin-top: 0; } h2 { margin-top: 2.2em; border-bottom: 1px solid var(--line); padding-bottom: 4px; } h3 { margin-top: 1.6em; }
+a { color: var(--acc); } img { max-width: 100%; border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.12); margin: 8px 0; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; } th, td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; } th { background: var(--code); }
+code { background: var(--code); padding: 1px 4px; border-radius: 3px; font-size: 13px; }
+</style></head>
+<body><main id="doc">Anleitung wird geladen …</main>
+<script src="/static/vendor/marked.min.js"></script>
+<script>
+fetch("/docs/Anleitung.md").then(r => { if (!r.ok) throw new Error("Anleitung nicht gefunden"); return r.text(); }).then(md => {
+  const el = document.getElementById("doc"); el.innerHTML = marked.parse(md.replace(/\]\(bilder\//g, "](/docs/bilder/"));
+  // Ueberschriften-Anker wie auf GitHub, damit das Inhaltsverzeichnis funktioniert
+  el.querySelectorAll("h2, h3").forEach(h => h.id = h.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-"));
+  el.querySelectorAll('a[href^="http"]').forEach(a => a.target = "_blank");
+}).catch(e => document.getElementById("doc").textContent = e.message);
+</script></body></html>

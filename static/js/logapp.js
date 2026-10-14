@@ -1,6 +1,6 @@
 "use strict";
 // Wellenwerk – Logbuch im klassischen Aufbau: Lookup/Favoriten/Funkgerät-Feld links, Logbuch oben, Cluster & Co. unten,
-// Band Map, Graulinie, Uhr und Rotor rechts. Eingabe ueber "Neuer Eintrag" (ALE).
+// Bandkarte, Graulinie, Uhr und Rotor rechts. Eingabe ueber "Neuer Eintrag".
 const LOG_COLS = [["qso_date", "Datum"], ["time_on", "Beginn"], ["time_off", "Ende"], ["call", "Rufzeichen"], ["mode", "Mode"], ["submode", "Submode"], ["rst_sent", "Ges."], ["rst_rcvd", "Empf."],
   ["band", "Band"], ["freq", "Freq"], ["name", "Name"], ["qth", "QTH"], ["gridsquare", "Locator"], ["country", "Land"], ["cont", "Kont."], ["cqz", "CQ"], ["ituz", "ITU"], ["state", "Staat"], ["cnty", "County"],
   ["iota", "IOTA"], ["darc_dok", "DOK"], ["tx_pwr", "Leistung"], ["comment", "Bemerkung"], ["qsl_sent", "QSL ges."], ["qsl_rcvd", "QSL empf."], ["qsl_via", "QSL via"], ["lotw_qsl_sent", "LoTW ges."], ["lotw_qsl_rcvd", "LoTW empf."],
@@ -476,7 +476,7 @@ function createHistogram(root) {
   return () => { ro.disconnect(); offs.forEach(f => f()); };
 }
 
-// ---------- Band Map (senkrecht) ----------
+// ---------- Bandkarte (senkrecht) ----------
 function createBandMap(root) {
   const bands = ["160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m"];
   root.innerHTML = `<div class="bm-wrap"><canvas class="bm"></canvas></div><div class="bm-tabs">${bands.map(b => `<button data-b="${b}">${b}</button>`).join("")}</div>`;
@@ -554,7 +554,7 @@ APPS.log = {
   title: "Logbuch", icon: "i-book",
   panels: {
     logbook: { title: "Mein Logbuch", create: createLogbook },
-    lookup: { title: "Lookup", create: createLookup, dock: { ref: "logbook", dir: "left" }, size: { width: 330 } },
+    lookup: { title: "Rufzeichen-Info", create: createLookup, dock: { ref: "logbook", dir: "left" }, size: { width: 330 } },
     favorites: { title: "Favoriten", create: createSelection, dock: { ref: "lookup", dir: "within" } },
     radiopane: { title: "Funkgerät-Feld", create: createRadioPane, dock: { ref: "lookup", dir: "within" } },
     recorder: { title: "Audio-Rekorder", create: createRecorder, dock: { ref: "lookup", dir: "below" } },
@@ -565,7 +565,7 @@ APPS.log = {
     cluster: { title: "DX-Cluster", create: createCluster, dock: { ref: ["solar30", "logbook"], dir: "within" } },
     alert: { title: "Alert (FT8)", create: createAlert, dock: { ref: ["cluster", "solar30"], dir: "within" } },
     histogram: { title: "DX-Histogramm", create: createHistogram, dock: { ref: ["cluster", "solar30"], dir: "within" } },
-    bandmap: { title: "Band Map", create: createBandMap, dock: { ref: "logbook", dir: "right" }, size: { width: 240 } },
+    bandmap: { title: "Bandkarte", create: createBandMap, dock: { ref: "logbook", dir: "right" }, size: { width: 240 } },
     greyline: { title: "Graulinie", create: createGreyline, dock: { ref: "logbook", dir: "right" } },
     clock: { title: "Uhr", create: createClock, dock: { ref: "greyline", dir: "right" } },
     rotator: { title: "Rotor", create: createRotorPane, dock: { ref: "bandmap", dir: "below" } },
@@ -577,13 +577,13 @@ APPS.log = {
   },
   layout(dv) {
     const lb = dv.addPanel({ id: "logbook:" + WW.logbook, component: "logbook", title: WW.logbook, params: { name: WW.logbook } });
-    const lk = dv.addPanel({ id: "lookup", component: "lookup", title: "Lookup", position: { referencePanel: lb.id, direction: "left" } });
+    const lk = dv.addPanel({ id: "lookup", component: "lookup", title: "Rufzeichen-Info", position: { referencePanel: lb.id, direction: "left" } });
     dv.addPanel({ id: "favorites", component: "favorites", title: "Favoriten", position: { referencePanel: "lookup", direction: "within" } });
     dv.addPanel({ id: "radiopane", component: "radiopane", title: "Funkgerät-Feld", position: { referencePanel: "lookup", direction: "within" } });
     lk.api.setActive();
     dv.addPanel({ id: "recorder", component: "recorder", title: "Audio-Rekorder", position: { referencePanel: "lookup", direction: "below" } });
     dv.addPanel({ id: "netserver", component: "netserver", title: "Netzwerk", position: { referencePanel: "recorder", direction: "within" } });
-    const bm = dv.addPanel({ id: "bandmap", component: "bandmap", title: "Band Map", position: { referencePanel: lb.id, direction: "right" } });
+    const bm = dv.addPanel({ id: "bandmap", component: "bandmap", title: "Bandkarte", position: { referencePanel: lb.id, direction: "right" } });
     dv.addPanel({ id: "solar30", component: "solar30", title: "30-Tage-Sonnendaten", position: { referencePanel: lb.id, direction: "below" } });
     ["solarcycle", "audiomon", "cluster", "alert", "histogram"].forEach(c => dv.addPanel({ id: c, component: c, title: APPS.log.panels[c].title, position: { referencePanel: "solar30", direction: "within" } }));
     dv.getPanel("cluster").api.setActive();
@@ -599,7 +599,7 @@ APPS.log = {
       { label: "Cabrillo-Export …", act: cabrilloDialog }, "-", { label: "Sicherung jetzt", act: async () => toast("Gesichert: " + (await post("/api/logbooks/backup", { name: WW.logbook })).file) }, { label: "Sicherungen …", act: backupsDialog }, "-",
       { label: "Logbuch drucken", act: () => window.open(`/print/log?${logq()}`, "_blank") }, { label: "QSL-Etiketten drucken (vorgemerkt/ungesendet)", act: () => window.open(`/print/labels?${logq("qsl=to_send")}`, "_blank") }] },
     { label: "Bearbeiten", items: [{ label: "Neuer Eintrag …", key: "Strg+N", act: () => openAle() }, { label: "Spot senden …", act: () => spotDialog() }] },
-    { label: "Ansicht", items: Object.entries({ lookup: "Lookup", favorites: "Favoriten", radiopane: "Funkgerät-Feld", recorder: "Audio-Rekorder", netserver: "Netzwerk", solar30: "30-Tage-Sonnendaten", solarcycle: "Sonnenzyklus", audiomon: "Audio-Monitor", cluster: "DX-Cluster", alert: "Alert (FT8)", histogram: "DX-Histogramm", bandmap: "Band Map", greyline: "Graulinie", clock: "Uhr", rotator: "Rotor", calendar: "Kalender", awards: "Diplome", qsl: "QSL & Online", stats: "Statistik" })
+    { label: "Ansicht", items: Object.entries({ lookup: "Rufzeichen-Info", favorites: "Favoriten", radiopane: "Funkgerät-Feld", recorder: "Audio-Rekorder", netserver: "Netzwerk", solar30: "30-Tage-Sonnendaten", solarcycle: "Sonnenzyklus", audiomon: "Audio-Monitor", cluster: "DX-Cluster", alert: "Alert (FT8)", histogram: "DX-Histogramm", bandmap: "Bandkarte", greyline: "Graulinie", clock: "Uhr", rotator: "Rotor", calendar: "Kalender", awards: "Diplome", qsl: "QSL & Online", stats: "Statistik" })
       .map(([k, l]) => ({ label: l, check: () => panelOpen("log", k), act: () => togglePanel("log", k) })) },
     { label: "Kalender", items: [{ label: "Kalender-Fenster (Contests, DXpeditionen)", act: () => addPanel("log", "calendar") }, "-", { label: "Contest-Kalender (WA7BNM) öffnen", act: () => window.open("https://www.contestcalendar.com/weeklycont.php", "_blank") }, { label: "DX-Kalender (NG3K) öffnen", act: () => window.open("https://www.ng3k.com/Misc/adxo.html", "_blank") }] },
     { label: "Länder", items: [{ label: "Diplome / DXCC-Matrix", act: () => addPanel("log", "awards") }, { label: "Länderliste aktualisieren", act: () => toast("Die Länderliste (cty) wird alle 14 Tage automatisch aktualisiert") }] },

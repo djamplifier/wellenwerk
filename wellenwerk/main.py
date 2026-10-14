@@ -27,7 +27,7 @@ from . import radios as radmod
 from . import winkey as wkmod
 from . import wsjtx
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("WW_DATA", BASE / "data"))
 DATA.mkdir(parents=True, exist_ok=True)
@@ -778,6 +778,14 @@ async def docs(name: str):
     if not p.exists():
         raise HTTPException(404, "nicht gefunden")
     return Response(p.read_text(), media_type="text/plain; charset=utf-8")
+
+
+@app.get("/docs/bilder/{name}")
+async def docs_image(name: str):
+    p = BASE / "docs" / "bilder" / Path(name).name
+    if p.suffix != ".png" or not p.exists():
+        raise HTTPException(404, "nicht gefunden")
+    return FileResponse(p, media_type="image/png")
 
 
 @app.get("/api/sat/catalog")

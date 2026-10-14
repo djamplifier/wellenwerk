@@ -212,7 +212,7 @@ function dmQsoSet(o) { const q = { ...store.get("dm.qso", {}), ...o }; store.set
 function createDmQso(root) {
   root.innerHTML = `<form class="dm-qso" autocomplete="off"><div class="grid2"><label>Rufzeichen<input name="call"></label><label>Name<input name="name"></label><label>QTH<input name="qth"></label><label>Locator<input name="grid"></label>
     <label>RST gesendet<input name="rsts"></label><label>RST empfangen<input name="rstr"></label><label class="wide">Bemerkung<input name="comment"></label></div><div class="dm-qinfo hint"></div>
-    <div class="ctl-row"><button type="submit" class="primary">Loggen</button><button type="button" class="dm-qclr">Neu</button><button type="button" class="dm-qlk">Lookup</button></div></form>`;
+    <div class="ctl-row"><button type="submit" class="primary">Loggen</button><button type="button" class="dm-qclr">Neu</button><button type="button" class="dm-qlk">Nachschlagen</button></div></form>`;
   const form = $("form", root);
   const fill = q => { for (const el of form.elements) if (el.name) el.value = q[el.name] || (el.name.startsWith("rst") ? (D.mode === "SSTV" ? "595" : "599") : ""); info(q.call); };
   const info = async c => { if (!c || c.length < 3) { $(".dm-qinfo", root).textContent = ""; return; } try { const r = await api(`/api/lookup/${encodeURIComponent(c)}?${logq()}`); $(".dm-qinfo", root).textContent = `${r.country || "?"} · ${r.km != null ? r.km.toLocaleString("de-DE") + " km · " + r.bearing + "°" : ""}${r.worked.call_count ? " · " + r.worked.call_count + "× gearbeitet" : ""}${r.dxcc && !r.worked.dxcc_worked ? " · NEUES LAND" : ""}`;

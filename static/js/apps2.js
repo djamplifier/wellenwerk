@@ -97,8 +97,8 @@ function createRotMap(root) {
         const pts = []; for (let d = 0; d <= km; d += 200) pts.push(destPoint(WW.home, az, d)); splitLine(pts).forEach(sg => L.polyline(sg, { color: "#d62828", weight: 2, dashArray: "6 5" }).addTo(lay));
         $(".rt-info", root).textContent = `${Math.round(az)}° · ${Math.round(km).toLocaleString("de-DE")} km`; ROT.az = az; } }
     if (view() === "gc") drawGc(); };
-  const drawGc = async () => { const cv = $(".rt-gc", root); if (!window.d3) { await loadScript("https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"); await loadScript("https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"); }
-    if (!WW.world) { const w = await (await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json")).json(); WW.world = { land: topojson.feature(w, w.objects.countries), borders: topojson.mesh(w, w.objects.countries, (a, b) => a !== b) }; }
+  const drawGc = async () => { const cv = $(".rt-gc", root); if (!window.d3) { await loadScript("/static/vendor/d3.min.js"); await loadScript("/static/vendor/topojson-client.min.js"); }
+    if (!WW.world) { const w = await (await fetch("/static/vendor/countries-110m.json")).json(); WW.world = { land: topojson.feature(w, w.objects.countries), borders: topojson.mesh(w, w.objects.countries, (a, b) => a !== b) }; }
     azimuthalMap(cv, { target: ROT.target, rotor: WW.rotor, path: ROT.path }); };
   const setTarget = t => { ROT.target = t; draw(); };
   root.addEventListener("change", async e => {
@@ -178,8 +178,8 @@ function createWorldMap(root) {
 function createBeamMap(root) {
   root.innerHTML = `<div class="beam-wrap"><canvas class="bmc"></canvas><div class="beam-hover"></div></div>`;
   const cv = $(".bmc", root); let pts = [], dx = null;
-  const draw = async () => { if (!window.d3) { await loadScript("https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"); await loadScript("https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"); }
-    if (!WW.world) { const w = await (await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json")).json(); WW.world = { land: topojson.feature(w, w.objects.countries), borders: topojson.mesh(w, w.objects.countries, (a, b) => a !== b) }; }
+  const draw = async () => { if (!window.d3) { await loadScript("/static/vendor/d3.min.js"); await loadScript("/static/vendor/topojson-client.min.js"); }
+    if (!WW.world) { const w = await (await fetch("/static/vendor/countries-110m.json")).json(); WW.world = { land: topojson.feature(w, w.objects.countries), borders: topojson.mesh(w, w.objects.countries, (a, b) => a !== b) }; }
     azimuthalMap(cv, { points: pts, rotor: WW.rotor, target: dx }); };
   cv.addEventListener("click", e => { const g = cv._g; if (!g) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left - g.c, y = e.clientY - r.top - g.c; if (Math.hypot(x, y) <= g.R) rotorSet((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360); });
   cv.addEventListener("mousemove", e => { const g = cv._g; if (!g || !window.d3) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left - g.c, y = e.clientY - r.top - g.c; const ll = g.proj.invert([x + g.c, y + g.c]);
@@ -202,7 +202,7 @@ const C_KMS = 299792.458;
 let _satInit = null;
 function satInit() { return _satInit = _satInit || satInitOnce().catch(e => { _satInit = null; throw e; }); }
 async function satInitOnce() {
-  if (!window.satellite) await loadScript("https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js");
+  if (!window.satellite) await loadScript("/static/vendor/satellite.min.js");
   const r = await api("/api/sat/catalog");
   SAT.list = r.sats.map(x => ({ ...x, rec: satellite.twoline2satrec(x.tle1, x.tle2), voice: x.transmitters.some(t => /FM|SSB|LSB|USB|CW|Transponder/i.test(t.mode + " " + t.desc) && t.up_low) }));
   SAT.chosen = new Set(store.get("sat.chosen", SAT.list.filter(s => s.transmitters.length).slice(0, 100).map(s => s.norad)));

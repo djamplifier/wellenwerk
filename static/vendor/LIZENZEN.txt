@@ -1,0 +1,10 @@
+Mitgelieferte Fremdbibliotheken (unverändert):
+- dockview 8.4.1 – MIT-Lizenz – https://github.com/mathuo/dockview
+- Leaflet 1.9.4 – BSD-2-Clause – https://leafletjs.com
+- D3 7.9.0 – ISC-Lizenz – https://d3js.org
+- satellite.js 5.0.0 – MIT-Lizenz – https://github.com/shashwatak/satellite-js
+- topojson-client 3.1.0 – ISC-Lizenz – https://github.com/topojson/topojson-client
+- world-atlas 2.0.2 (Natural Earth, gemeinfrei) – ISC-Lizenz – https://github.com/topojson/world-atlas
+- marked 12.0.2 – MIT-Lizenz – https://github.com/markedjs/marked
+- Schrift „Share Tech Mono“ – SIL Open Font License 1.1 – https://fonts.google.com/specimen/Share+Tech+Mono
+Kartenkacheln: © OpenStreetMap-Mitwirkende (ODbL), werden zur Laufzeit geladen.

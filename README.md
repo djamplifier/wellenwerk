@@ -22,6 +22,8 @@ Code, Logo und Icons sind eigenständig.
 - `desktop/`: Desktop-Programm (Electron), startet den Dienst und zeigt die Oberfläche
 - `packaging/`: Paketbau des Dienstes (PyInstaller); `.github/workflows/build.yml` baut die Installationsprogramme
 
+**[➜ Ausführliche Anleitung mit Bildern](docs/Anleitung.md)**
+
 ## Installation (eigenes Programm, kein Browser)
 Wellenwerk ist ein Desktop-Programm mit eigenem Fenster; der Dienst und Hamlib (Funkgeräte-/Rotorsteuerung) sind eingebaut.
 - **Windows:** `Wellenwerk-Setup-x.y.z.exe` ausführen. Beim ersten Start meldet Windows evtl. „Unbekannter Herausgeber“ → „Weitere Informationen“ → „Trotzdem ausführen“. USB-Treiber des Funkgeräts (z. B. Silicon Labs CP210x) installieren.

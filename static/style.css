@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap");
+@font-face { font-family: "Share Tech Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/static/vendor/share-tech-mono.woff2") format("woff2"); }
 
 /* ================= Fenster-Designs ================= */
 :root, [data-chrome="office"] {

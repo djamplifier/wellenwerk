@@ -171,6 +171,7 @@ const MENU_WINDOW = (appId) => ({ label: "Fenster", items: [
   ...Object.keys(APPS).map(a => ({ label: APPS[a].title, act: () => switchApp(a) })),
 ] });
 const MENU_HELP = { label: "Hilfe", items: [
+  { label: "Anleitung", icon: "i-info", act: () => window.open("/static/hilfe.html", "_blank", "width=1100,height=860") },
   { label: "Tastenkürzel", act: () => showKeys() },
   { label: "Über Wellenwerk", act: () => info("Über Wellenwerk", `<p><b>Wellenwerk</b> v${esc(WW.version)} – Stationssteuerung, Logbuch und Digitalmodi für Funkamateure.</p>
     <p>Eigenständig entwickelt; Bedienung und Aufbau an bekannte Stationsprogramme angelehnt. Verwendet <b>Hamlib</b> (Geräte), <b>AD1C/country-files.com</b>, <b>Leaflet</b>, <b>OpenStreetMap</b>, <b>dockview</b>, <b>d3</b>, <b>satellite.js</b>, NOAA-SWPC-Daten und den EiBi-Sendeplan.</p>

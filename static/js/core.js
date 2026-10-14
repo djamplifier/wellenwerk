@@ -94,7 +94,7 @@ function bearingTo(lat, lon) {
 // ---------- Funkgeraet: gemeinsame Befehle ----------
 async function setFreq(hz) {
   hz = Math.round(hz); if (!(hz > 0)) return;
-  WW.rig.freq = hz; WW.emit("rig-local", WW.rig);
+  WW.rig.freq = hz; WW._fpend = { hz, t: Date.now() }; WW.emit("rig-local", WW.rig);   // lokal sofort; aeltere Meldungen kurz ignorieren
   await act("/api/rig/freq", { hz });
   const b = bandFor(hz); if (b) { const m = store.get("bandmem", {}); m[b] = { f: hz, m: WW.rig.mode }; store.set("bandmem", m); }
 }
@@ -119,6 +119,8 @@ function connectWs() {
       case "rig":
         if (m.current || m.radio === WW.current) {
           const modelChanged = m.rig.connected && m.rig.model !== WW.capsModel;
+          // Waehrend schnellen Abstimmens (Mausrad, Tasten) keine noch nicht aktualisierte Geraetefrequenz uebernehmen
+          const p = WW._fpend; if (p && Date.now() - p.t < 1500 && m.rig.connected && m.rig.freq !== p.hz) m.rig = { ...m.rig, freq: p.hz };
           WW.rig = m.rig; if (modelChanged) loadCaps(); WW.emit("rig", WW.rig);
         }
         WW.emit("rig-any", m); break;
