@@ -33,10 +33,10 @@ function dmFill(t) {
 // ---------- Audio-Kette ----------
 function dmMakeRx() {
   const f = D.rx ? D.rx.freq : +store.get("dm.f", 1500), out = ch => WW.emit("dm-char", ch);
-  const markHigh = !/LSB|RTTYR/.test(WW.rig.mode || "USB") !== (store.get("dm.rev", false) === true);
+  const markHigh = !/LSB|RTTYR/.test(WW.rig.mode || "USB") !== (store.get("dm.rev", "auto") === true);
   if (!DM_ALL.includes(D.mode)) D.mode = "PSK31";
   const M = DIGI_MODES[D.mode];
-  D.rx = PSK_BAUD[D.mode] ? new Psk31Rx(f, out, PSK_BAUD[D.mode]) : D.mode === "RTTY" ? (store.get("dm.rev", false) === "auto" ? new RttyAuto(f, out, +store.get("dm.rtty.baud", 45.45), +store.get("dm.rtty.shift", 170), store.get("dm.rtty.usos", true))
+  D.rx = PSK_BAUD[D.mode] ? new Psk31Rx(f, out, PSK_BAUD[D.mode]) : D.mode === "RTTY" ? (store.get("dm.rev", "auto") === "auto" ? new RttyAuto(f, out, +store.get("dm.rtty.baud", 45.45), +store.get("dm.rtty.shift", 170), store.get("dm.rtty.usos", true))
       : Object.assign(new RttyRx(f, out, markHigh, +store.get("dm.rtty.baud", 45.45), +store.get("dm.rtty.shift", 170)), { usos: store.get("dm.rtty.usos", true) })) : D.mode === "CW" ? new CwRx(f, out)
     : M.image === "hell" ? M.rx(f, col => WW.emit("dm-hell", col)) : M.rx(f, out);
   D.rx.sql = store.get("dm.sql", 25) / 100; if (D.rx instanceof RttyAuto) D.rx.sqlv = D.rx.sql; if (D.rx instanceof Psk31Rx) { D.rx.afc = store.get("dm.afc", true); D.rx.freqCb = f2 => WW.emit("dm-freq", f2); }
@@ -44,9 +44,15 @@ function dmMakeRx() {
 }
 async function dmStart(dev) {
   if (D.running) return dmStop();
-  if (dev !== "__sdr" && !navigator.mediaDevices?.getUserMedia) return toast("Soundkarten-Zugriff nur über https://…:8443 möglich", true);
+  if (dev !== "__sdr" && !navigator.mediaDevices?.getUserMedia) {   // http ohne https: Soundkarte gesperrt – dann den Empfaenger nehmen
+    if (!(WW.radios || []).some(r => r.kind === "sdr" && r.connected)) return toast("Soundkarte nur über https://…:8443 oder im Desktop-Programm – oder einen Empfänger (WebSDR/KiwiSDR) verbinden", true);
+    dev = "__sdr"; store.set("dm.in", dev); $$(".dm-in").forEach(s => s.value = dev); toast("Eingang: Empfänger (Soundkarte nur über https)");
+  }
   try {
     D.fromSdr = dev === "__sdr";
+    if (D.fromSdr) {   // Empfaenger: PCM direkt aus dem Datenstrom – ohne Lücken durch Wiedergabe/Audiokontext (wichtig fuer RTTY-/CW-Takt)
+      D.ctx = null; D.unPcm = await rxPcm(null, rxTo8k((x, peak) => dmFeed(x, peak))); D.running = true; WW.emit("dm-run"); return;
+    }
     D.stream = D.fromSdr ? await rxStream() : await navigator.mediaDevices.getUserMedia({ audio: { deviceId: dev ? { exact: dev } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
     try { D.ctx = new AudioContext({ sinkId: { type: "none" } }); } catch { D.ctx = new AudioContext(); }
     await D.ctx.audioWorklet.addModule("/static/digi-worklet.js");
@@ -56,7 +62,7 @@ async function dmStart(dev) {
     src.connect(lp1).connect(lp2).connect(D.tap); D.running = true; WW.emit("dm-run");
   } catch (e) { toast("Audio: " + e.message, true); }
 }
-function dmStop() { D.running = false; try { if (!D.fromSdr) D.stream?.getTracks().forEach(t => t.stop()); D.ctx?.close(); } catch { } WW.emit("dm-run"); }
+function dmStop() { D.running = false; try { D.unPcm?.(); D.unPcm = null; } catch { } try { if (!D.fromSdr) D.stream?.getTracks().forEach(t => t.stop()); D.ctx?.close(); } catch { } WW.emit("dm-run"); }
 async function dmFeedBuffer(samples, sr) {   // Testeinspeisung durch dieselbe Kette
   try { D.ctx = new AudioContext({ sinkId: { type: "none" } }); } catch { D.ctx = new AudioContext(); }
   await D.ctx.audioWorklet.addModule("/static/digi-worklet.js");
@@ -90,7 +96,7 @@ async function dmTx(text) {
   text = dmFill(text); if (!text.trim()) return;
   if (!WW.settings.callsign) return toast("Erst eigenes Rufzeichen eintragen (Optionen)", true);
   if (D.mode === "CW") { if (await act("/api/rig/morse", { text })) WW.emit("dm-echo", text); return; }
-  const f = D.rx ? D.rx.freq : 1500, markHigh = !/LSB|RTTYR/.test(WW.rig.mode || "USB") !== (store.get("dm.rev", false) === true);
+  const f = D.rx ? D.rx.freq : 1500, markHigh = !/LSB|RTTYR/.test(WW.rig.mode || "USB") !== (store.get("dm.rev", "auto") === true);
   D.txCtx = D.txCtx || new AudioContext();
   const sr = D.txCtx.sampleRate, data = PSK_BAUD[D.mode] ? psk31Tx(text, f, sr, PSK_BAUD[D.mode]) : D.mode === "RTTY" ? rttyTx(text, f, sr, markHigh, +store.get("dm.rtty.baud", 45.45), +store.get("dm.rtty.shift", 170)) : DIGI_MODES[D.mode].tx(text, f, sr);
   const done = dmPlay(data); WW.emit("dm-echo", text); await done;
@@ -124,9 +130,9 @@ function dmTune() {
 async function audioDevices(kind) { try { return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === kind); } catch { return []; } }
 function createWaterfall(root) {
   root.innerHTML = `<div class="pane-tb dm-tb"><select class="dm-mode">${dmModeOptions()}</select>
-    <button class="dm-run">▶ Empfang</button><label class="chk">Eingang <select class="dm-in"><option value="">Standard</option><option value="__sdr">Empfänger (WebSDR/KiwiSDR)</option></select></label><span class="lvl dm-lvl"><i></i></span>
+    <button class="dm-run">▶ Empfang</button><label class="chk">Eingang <select class="dm-in"><option value="">Standard</option><option value="__sdr" ${store.get("dm.in", "") === "__sdr" || !navigator.mediaDevices?.getUserMedia ? "selected" : ""}>Empfänger (WebSDR/KiwiSDR)</option></select></label><span class="lvl dm-lvl"><i></i></span>
     <b class="dm-f">1500 Hz</b><span class="hint dm-wpm"></span><label class="chk dm-afcw"><input type="checkbox" class="dm-afc" ${store.get("dm.afc", true) ? "checked" : ""}> AFC</label>
-    <label class="chk dm-revw"><select class="dm-rev" title="Lage von Mark/Space">${[["false", "normal"], ["true", "umgekehrt"], ["auto", "Lage automatisch"]].map(([v, l]) => `<option value="${v}" ${String(store.get("dm.rev", false)) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+    <label class="chk dm-revw"><select class="dm-rev" title="Lage von Mark/Space">${[["false", "normal"], ["true", "umgekehrt"], ["auto", "Lage automatisch"]].map(([v, l]) => `<option value="${v}" ${String(store.get("dm.rev", "auto")) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
       <label class="chk" title="Nach Leerzeichen auf Buchstaben zurückschalten (im Amateurfunk üblich, beim Wetterdienst aus)"><input type="checkbox" class="dm-usos" ${store.get("dm.rtty.usos", true) ? "checked" : ""}> USOS</label>
       <select class="dm-baud" title="Baudrate">${[45.45, 50, 75, 100].map(b => `<option ${b === +store.get("dm.rtty.baud", 45.45) ? "selected" : ""}>${b}</option>`).join("")}</select> Bd
       <select class="dm-shift" title="Shift">${[170, 200, 425, 450, 850].map(b => `<option ${b === +store.get("dm.rtty.shift", 170) ? "selected" : ""}>${b}</option>`).join("")}</select> Hz</label>
@@ -163,7 +169,7 @@ function createWaterfall(root) {
   if (!D.rx) dmMakeRx(); ui(); fit(); return () => { ro.disconnect(); offs.forEach(f => f()); };
 }
 function createDmRx(root) {
-  root.innerHTML = `<div class="pane-tb"><button class="dm-clr">Leeren</button><span class="hint">Klick auf ein Wort: als Rufzeichen, Name, QTH, Locator oder RST in den QSO-Bereich übernehmen.</span></div><canvas class="dm-hell hidden" title="Hellschreiber: das Auge liest – Text erscheint doppelt untereinander"></canvas><div class="dm-rx"></div>`;
+  root.innerHTML = `<div class="pane-tb"><button class="dm-clr">Leeren</button><span class="hint">Klick auf ein Wort: als Rufzeichen, Name, QTH, Locator oder RST in den QSO-Bereich übernehmen.</span></div><canvas class="dm-hell hidden" title="Hellschreiber: das Auge liest – Text erscheint doppelt untereinander"></canvas><div class="dm-rx" translate="no"></div>`;
   const el = $(".dm-rx", root), hc = $(".dm-hell", root);
   // Hellschreiber: Spalten laufen von rechts nach links, jede Spalte doppelt untereinander (gleicht Zeitversatz aus)
   let hx = 0; const hell = col => { if (hc.classList.contains("hidden")) return; const W = hc.width = hc.clientWidth || 600, s = 3, H = hc.height = 2 * col.length * s + 8;
@@ -222,7 +228,7 @@ function createDmQso(root) {
     <div class="ctl-row"><button type="submit" class="primary">Loggen</button><button type="button" class="dm-qclr">Neu</button><button type="button" class="dm-qlk">Nachschlagen</button></div></form>`;
   const form = $("form", root);
   const fill = q => { for (const el of form.elements) if (el.name) el.value = q[el.name] || (el.name.startsWith("rst") ? (D.mode === "SSTV" ? "595" : "599") : ""); info(q.call); };
-  const info = async c => { if (!c || c.length < 3) { $(".dm-qinfo", root).textContent = ""; return; } try { const r = await api(`/api/lookup/${encodeURIComponent(c)}?${logq()}`); $(".dm-qinfo", root).textContent = `${r.country || "?"} · ${r.km != null ? r.km.toLocaleString("de-DE") + " km · " + r.bearing + "°" : ""}${r.worked.call_count ? " · " + r.worked.call_count + "× gearbeitet" : ""}${r.dxcc && !r.worked.dxcc_worked ? " · NEUES LAND" : ""}`;
+  const info = async c => { if (!c || c.length < 3) { $(".dm-qinfo", root).textContent = ""; return; } try { const r = await api(`/api/lookup/${encodeURIComponent(c)}?${logq()}`); $(".dm-qinfo", root).textContent = `${r.country || "?"} · ${r.km != null ? r.km.toLocaleString(I18N.locale) + " km · " + r.bearing + "°" : ""}${r.worked.call_count ? " · " + r.worked.call_count + "× gearbeitet" : ""}${r.dxcc && !r.worked.dxcc_worked ? " · NEUES LAND" : ""}`;
     if (r.lat != null) D.heard.set(c, { lat: r.lat, lon: r.lon, country: r.country, t: Date.now() }); WW.emit("dm-heard"); } catch { } };
   form.addEventListener("input", e => { const q = store.get("dm.qso", {}); q[e.target.name] = e.target.name === "call" ? e.target.value.toUpperCase() : e.target.value; if (e.target.name === "call") e.target.value = q.call; store.set("dm.qso", q); if (e.target.name === "call") { clearTimeout(form._t); form._t = setTimeout(() => info(q.call), 300); } });
   form.addEventListener("submit", async e => { e.preventDefault(); const q = store.get("dm.qso", {}); if (!q.call) return toast("Rufzeichen fehlt", true);
@@ -249,7 +255,7 @@ function createSweeper(root) {
     fs.slice(0, 16).forEach(f => { f = cf(f); if (!D.sweep.some(ch => Math.abs(ch.f - f) < sep)) { const ch = { f, text: "", mode: sm }; const on = c => { ch.text = (ch.text + c).slice(-120); };
       ch.rx = sm === "RTTY" ? new RttyRx(f, on, true, +store.get("dm.rtty.baud", 45.45), sh) : sm === "CW" ? new CwRx(f, on) : new Psk31Rx(f, on); ch.rx.sql = 0.3; D.sweep.push(ch); } });
     draw(); };
-  const draw = () => { $(".sw-t tbody", root).innerHTML = D.sweep.sort((a, b) => a.f - b.f).map(ch => `<tr data-f="${ch.rx.freq}"><td class="nowrap"><b>${Math.round(ch.rx.freq)} Hz</b></td><td class="mono">${esc(ch.text.replace(/\n/g, " "))}</td></tr>`).join("") || '<tr><td class="hint">noch keine Signale erkannt</td></tr>'; };
+  const draw = () => { $(".sw-t tbody", root).innerHTML = D.sweep.sort((a, b) => a.f - b.f).map(ch => `<tr data-f="${ch.rx.freq}"><td class="nowrap"><b>${Math.round(ch.rx.freq)} Hz</b></td><td class="mono" translate="no">${esc(ch.text.replace(/\n/g, " "))}</td></tr>`).join("") || '<tr><td class="hint">noch keine Signale erkannt</td></tr>'; };
   $(".sw-mode", root).onchange = e => { store.set("sw.mode", e.target.value); D.sweep = []; if (D.sweepOn) rescan(); else draw(); };
   $(".sw-on", root).onchange = e => { D.sweepOn = e.target.checked; clearInterval(scanT); if (D.sweepOn) { rescan(); scanT = setInterval(() => { rescan(); }, 3000); } else { D.sweep = []; draw(); } };
   root.addEventListener("click", e => { const tr = e.target.closest("tr[data-f]"); if (tr) { const sm = store.get("sw.mode", "PSK31"); if (D.mode !== sm) dmSetMode(sm); dmSetFreq(+tr.dataset.f); } });

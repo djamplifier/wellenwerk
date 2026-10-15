@@ -169,6 +169,11 @@ async function loadLogbooks() {
 async function refreshState() {
   const st = await api("/api/state");
   Object.assign(WW, { settings: st.settings, station: st.station || {}, home: st.home, rotor: st.rotor, winkey: st.winkey || {}, cluster: st.cluster, wsjtx: st.wsjtx, bands: st.bands, version: st.version });
+  if (!I18N.chosen()) {   // dieser Browser hat noch keine Sprache gewaehlt: Sprache der Station; bestehende Installationen bleiben deutsch
+    const want = st.settings.lang || (st.settings.callsign ? "de" : I18N.lang);
+    let again = false; try { again = sessionStorage.getItem("ww.langReload") === want; sessionStorage.setItem("ww.langReload", want); } catch { }
+    if (want !== I18N.lang && I18N.languages[want] && !again) I18N.set(want, true, true);   // hoechstens einmal neu laden
+  }
   WW.rig = st.rig;
   await loadRadios();
   if (st.rig.connected && st.rig.model !== WW.capsModel) await loadCaps();

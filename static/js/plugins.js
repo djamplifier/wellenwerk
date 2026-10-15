@@ -5,6 +5,7 @@
 const PLUGINS = { list: [], running: new Map(), defs: new Map(), menu: [] };
 window.Wellenwerk = {
   get version() { return WW.version; },
+  get lang() { return I18N.lang; }, t: s => I18N.t(s), addTranslations: (lang, dict) => { if (lang === I18N.lang) I18N.add(dict); },
   register(id, def) { PLUGINS.defs.set(id, def); const w = PLUGINS.waiting?.get(id); if (w) w(def); },
 };
 function pluginCtx(p) {
@@ -13,6 +14,7 @@ function pluginCtx(p) {
     id: p.id, manifest: p,
     get settings() { return (PLUGINS.list.find(x => x.id === p.id) || p).values || {}; },
     station: () => WW.station || {}, settings_program: () => WW.settings, rig: () => WW.rig,
+    get lang() { return I18N.lang; }, locale: () => I18N.locale, t: s => I18N.t(s),
     on(ev, cb) { const off = WW.on(ev, cb); offs.push(off); return off; },
     api: (path, opts) => api(path.startsWith("/") ? path : `/api/plugins/${p.id}/${path}`, opts),
     post: (path, body) => post(path.startsWith("/") ? path : `/api/plugins/${p.id}/${path}`, body),

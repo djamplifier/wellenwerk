@@ -45,7 +45,7 @@ BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("WW_DATA", BASE / "data"))
 DATA.mkdir(parents=True, exist_ok=True)
 CFG_PATH = DATA / "config.json"
-DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
+DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100", lang="",
                 cluster_host="dxc.ve7cc.net", cluster_port=23, cluster_cmds="",
                 wsjtx_port=2237,
                 rot_enabled=False, rot_host="127.0.0.1", rot_port=4533, rot_park=0,
@@ -146,7 +146,8 @@ def station_identity() -> dict:
     return dict(callsign=call, home_callsign=(cfg.get("callsign") or "").upper(), operator=(st.get("operator") or cfg.get("operator") or "").upper(),
                 locator=loc, lat=ll[0] if ll else None, lon=ll[1] if ll else None, tx_pwr=st.get("tx_pwr") or cfg.get("tx_pwr") or "",
                 profile=st.get("name", ""), profile_id=st.get("id", ""), my_pota_ref=st.get("my_pota_ref", ""), my_sota_ref=st.get("my_sota_ref", ""),
-                my_wwff_ref=st.get("my_wwff_ref", ""), winlink_call=(cfg.get("wl_call") or call).upper())
+                my_wwff_ref=st.get("my_wwff_ref", ""), winlink_call=(cfg.get("wl_call") or call).upper(),
+                lang=cfg.get("lang") or "de")
 
 
 async def identity_changed():
@@ -345,28 +346,23 @@ async def on_spectrum(radio_id, line):
     await broadcast({"type": "spectrum", "radio": radio_id, **line})
 
 
-AUDIO_SUBS: dict = {}          # Empfaenger-Ton: Radio-ID -> {websocket: wird_gerade_gesendet}
+AUDIO_SUBS: dict = {}          # Empfaenger-Ton: Radio-ID -> {websocket: Warteschlange}
 
 
 def on_sdr_audio(radio_id, pcm: bytes, rate: int):
+    """Jeder Block geht vollstaendig und in Reihenfolge an jede Verbindung (Empfaenger senden stossweise;
+    Luecken wuerden Dekoder wie RTTY/CW aus dem Takt bringen). Nur bei echtem Rueckstau (> ~5 s) faellt Altes weg."""
     subs = AUDIO_SUBS.get(radio_id)
     if not subs:
         return
     frame = struct.pack("<I", rate) + pcm
-    for ws, busy in list(subs.items()):
-        if busy:                  # langsame Verbindung: Block auslassen statt Rueckstau
-            continue
-        subs[ws] = True
-
-        async def _send(ws=ws):
+    for q in list(subs.values()):
+        if q.full():
             try:
-                await ws.send_bytes(frame)
-            except Exception:
-                subs.pop(ws, None)
-            else:
-                if ws in subs:
-                    subs[ws] = False
-        asyncio.ensure_future(_send())
+                q.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        q.put_nowait(frame)
 
 
 radios = radmod.RadioManager(DATA, on_rig, on_spectrum=on_spectrum, on_audio=on_sdr_audio)
@@ -1110,20 +1106,20 @@ QSL_FILTERS = {
 }
 
 
-COND_RE = re.compile(r"^\s*([a-z_]+)\s*(!=|<>|>=|<=|=|~|!~|<|>|\s+(?:leer|nicht leer))\s*(.*?)\s*$", re.I)
+COND_RE = re.compile(r"^\s*([a-z_]+)\s*(!=|<>|>=|<=|=|~|!~|<|>|\s+(?:leer|nicht leer|empty|not empty))\s*(.*?)\s*$", re.I)
 
 
 def _cond(text: str) -> tuple[list, list]:
     """Feld-Bedingungen fuer gespeicherte Ansichten, mit ';' getrennt: call~DL, cqz=14, band!=20m,
-    qso_date>=20260101, iota nicht leer, comment leer. Nur bekannte Logbuch-Felder."""
+    qso_date>=20260101, iota nicht leer, comment leer (englisch: not empty / empty). Nur bekannte Logbuch-Felder."""
     w, a = [], []
     for part in filter(None, (p.strip() for p in (text or "").split(";"))):
         m = COND_RE.match(part)
         if not m or m.group(1).lower() not in QSO_FIELDS:
             raise HTTPException(400, f"Bedingung nicht verstanden: {part} (Beispiel: cqz=14; country~Japan; iota nicht leer)")
         f, op, v = m.group(1).lower(), m.group(2).strip().lower(), m.group(3)
-        if op in ("leer", "nicht leer"):
-            w.append(f"IFNULL({f},'') {'=' if op == 'leer' else '<>'} ''"); continue
+        if op in ("leer", "nicht leer", "empty", "not empty"):
+            w.append(f"IFNULL({f},'') {'=' if op in ('leer', 'empty') else '<>'} ''"); continue
         if f == "call":
             v = v.upper()
         elif f in ("band",):
@@ -1381,7 +1377,7 @@ async def get_awards():
 
 # ---------- Druck und Contest ----------
 def _print_page(title: str, body: str, css: str = "") -> Response:
-    html = f"""<!doctype html><html lang="de"><head><meta charset="utf-8"><title>{title}</title><style>
+    html = f"""<!doctype html><html lang="de"><head><meta charset="utf-8"><title>{title}</title><script src="/static/js/i18n.js"></script><style>
     body{{font:11pt system-ui,sans-serif;margin:12mm;color:#000}} table{{border-collapse:collapse;width:100%;font-size:9pt}}
     th,td{{border:1px solid #999;padding:2px 4px;text-align:left}} th{{background:#e5e8ec}} h1{{font-size:14pt;margin:0 0 6px}}
     .noprint{{margin-bottom:10px}} @media print{{.noprint{{display:none}} body{{margin:0}}}} {css}</style></head>
@@ -1409,7 +1405,7 @@ async def print_log(ids: str = "", q: str = "", band: str = "", mode: str = "", 
             ("qsl_sent", "QSL s"), ("qsl_rcvd", "QSL r"), ("comment", "Bemerkung")]
     fmt = lambda k, v: (f"{v[6:8]}.{v[4:6]}.{v[:4]}" if k == "qso_date" and v else f"{v[:2]}:{v[2:4]}" if k == "time_on" and v else v)
     body = (f"<h1>Logbuch {_esc(cfg.get('callsign'))} – {len(rows)} QSOs</h1><table><tr>" + "".join(f"<th>{h}</th>" for _, h in cols) + "</tr>"
-            + "".join("<tr>" + "".join(f"<td>{_esc(fmt(k, r.get(k)))}</td>" for k, _ in cols) + "</tr>" for r in rows) + "</table>")
+            + "".join("<tr translate='no'>" + "".join(f"<td>{_esc(fmt(k, r.get(k)))}</td>" for k, _ in cols) + "</tr>" for r in rows) + "</table>")
     return _print_page("Logbuch", body)
 
 
@@ -2442,13 +2438,20 @@ async def ws_audio(websocket: WebSocket, radio: str = ""):
     """Ton eines Empfaengers (KiwiSDR, OpenWebRX, SDR): Binaerbloecke [Abtastrate uint32 LE][PCM int16 LE mono]."""
     await websocket.accept()
     rid = radio or radios.current or ""
-    AUDIO_SUBS.setdefault(rid, {})[websocket] = False
+    q: asyncio.Queue = asyncio.Queue(maxsize=250)
+    AUDIO_SUBS.setdefault(rid, {})[websocket] = q
+
+    async def sender():
+        while True:
+            await websocket.send_bytes(await q.get())
+    task = asyncio.create_task(sender())
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
         pass
     finally:
+        task.cancel()
         AUDIO_SUBS.get(rid, {}).pop(websocket, None)
 
 
@@ -2464,7 +2467,8 @@ async def sdr_receivers(type: str = "", q: str = "", khz: float = 0, limit: int 
             continue
         if ql and ql not in (r.get("name", "") + " " + r.get("place", "") + " " + r.get("grid", "") + " " + r.get("antenna", "")).lower():
             continue
-        if khz and r.get("hi") and not (r.get("lo", 0) <= khz * 1000 <= r["hi"]):
+        hi = r.get("hi") or (32e6 if r["type"] == "kiwisdr" else 0)     # KiwiSDR ohne Angabe: Kurzwelle 0–32 MHz
+        if khz and hi and not (r.get("lo", 0) <= khz * 1000 <= hi):
             continue
         if free and r.get("users_max") and r.get("users", 0) >= r["users_max"]:
             continue

@@ -146,8 +146,8 @@ function createFace(root) {
   let rkey = JSON.stringify(rxRanges());
   const offs = [WW.on("rig", () => { const k = JSON.stringify(rxRanges()); if (k !== rkey) { rkey = k; RC.bsp = false; buildTuning(rc); renderTabs(rc); } renderFace(rc); }), WW.on("rig-local", () => renderFace(rc)), WW.on("rc-layout", rebuild), WW.on("caps", () => loadRigLayout()),
     WW.on("radios", () => renderTabs(rc)), WW.on("spots", () => renderBars(rc)), WW.on("spot", () => renderBars(rc)), WW.on("quicksave", () => renderBars(rc))];
-  const clk = setInterval(() => { const n = new Date(); $(".rc-date", rc).textContent = n.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    $(".rc-time", rc).textContent = n.toLocaleTimeString("de-DE") + "  ·  " + n.toISOString().slice(11, 19) + " UTC"; }, 1000);
+  const clk = setInterval(() => { const n = new Date(); $(".rc-date", rc).textContent = n.toLocaleDateString(I18N.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    $(".rc-time", rc).textContent = n.toLocaleTimeString(I18N.locale) + "  ·  " + n.toISOString().slice(11, 19) + " UTC"; }, 1000);
   const ro = new ResizeObserver(() => renderBars(rc)); ro.observe(rc);
   if (!RC.layout) loadRigLayout(); else rebuild();
   renderTabs(rc);
@@ -166,10 +166,16 @@ function renderTabs(rc) {
     sel._list = r.receivers.filter(x => x.key !== curKey); }).catch(() => { });
   sel.onchange = async () => { const v = sel.value; if (!v) return; if (v === "__list") { sel.value = ""; return openConnect(null, "sdr"); }
     const x = sel._list[+v]; sel.disabled = true; toast(`wechsle zu ${x.name.slice(0, 50)} …`);
-    try { await post("/api/radios", { ...cur, url: x.url, name: x.name.slice(0, 60), params: `freq=${(f / 1000).toFixed(3)}; mode=${WW.rig.mode || "USB"}; user=${WW.station?.callsign || "Wellenwerk"}` });
-      await post(`/api/radios/${cur.id}/connect`); if (cur.role !== "second") await post(`/api/radios/${cur.id}/select`); await loadRadios(); rxSync?.(); toast("Empfänger gewechselt"); }
-    catch (e) { toast(`${e.message} – zurück zu ${cur.name}`, true);      // vorherigen Empfaenger wiederherstellen
-      try { await post("/api/radios", { ...cur }); await post(`/api/radios/${cur.id}/connect`); if (cur.role !== "second") await post(`/api/radios/${cur.id}/select`); } catch { }
+    // Erst den neuen Empfaenger verbinden; der bisherige bleibt verbunden, bis das geklappt hat (sonst koennte sein Platz weg sein)
+    let nu = null;
+    try { nu = await post("/api/radios", { kind: "sdr", sdr_type: x.type, url: x.url, name: x.name.slice(0, 60), role: cur.role || "main",
+        params: `freq=${(f / 1000).toFixed(3)}; mode=${WW.rig.mode || "USB"}; user=${WW.station?.callsign || "Wellenwerk"}` });
+      await post(`/api/radios/${nu.id}/connect`); if (cur.role !== "second") await post(`/api/radios/${nu.id}/select`);
+      await post(`/api/radios/${cur.id}/disconnect`).catch(() => { }); await api(`/api/radios/${cur.id}`, { method: "DELETE" }).catch(() => { });
+      await loadRadios(); rxSync?.(); toast("Empfänger gewechselt"); }
+    catch (e) { toast(`${e.message} – bleibe bei ${cur.name}`, true);
+      if (nu) await api(`/api/radios/${nu.id}`, { method: "DELETE" }).catch(() => { });
+      if (cur.role !== "second") await post(`/api/radios/${cur.id}/select`).catch(() => { });
       await loadRadios(); rxSync?.(); } };
 }
 function modeList() {
@@ -218,7 +224,7 @@ function renderFace(rc) {
   $(".rc-sscale", rc).innerHTML = r.ptt ? "<span>PWR 0</span><span>25</span><span>50</span><span>75</span><span>100 %</span>" : "<span>S 1</span><span>3</span><span>5</span><span>7</span><span>9</span><span>+20</span><span>+40</span><span>+60</span>";
   $(".rc-sval", rc).textContent = r.ptt ? `SWR ${(m.SWR ?? 1).toFixed(1)}  ALC ${Math.round((m.ALC || 0) * 100)}%` : sText(db);
   // Statusblock
-  const flt = r.passband ? `Filter: ${(r.passband / 1000).toLocaleString("de-DE")} kHz` : "Filter: –";
+  const flt = r.passband ? `Filter: ${(r.passband / 1000).toLocaleString(I18N.locale)} kHz` : "Filter: –";
   const st = [["TX", r.ptt, "warn"], ["Busy", r.busy], ["Scanning", !!RC.scan], ["Split", r.split], [flt, !!r.passband, "plain"],
     [`Memory: ${r.mem >= 0 && r.mem != null ? r.mem : "–"}`, r.vfo === "MEM", "plain"], [`CTCSS: ${r.ctcss ? r.ctcss.toFixed(1) : "–"}`, !!f.TSQL || !!f.TONE, "plain"],
     [`RIT ${r.rit ? (r.rit > 0 ? "+" : "") + r.rit : ""}`, !!r.rit || f.RIT], [`XIT ${r.xit ? (r.xit > 0 ? "+" : "") + r.xit : ""}`, !!r.xit || f.XIT],
@@ -266,7 +272,7 @@ async function runCustom(b) {
 function dropValue(k) {
   const r = WW.rig, lv = r.levels || {};
   if (k === "mode") return `Mode: ${r.mode || "–"}`;
-  if (k === "filter") return `Filter: ${r.passband ? (r.passband / 1000).toLocaleString("de-DE") + " kHz" : "–"}`;
+  if (k === "filter") return `Filter: ${r.passband ? (r.passband / 1000).toLocaleString(I18N.locale) + " kHz" : "–"}`;
   if (k === "quickmem") return `Quick Mem: ${(store.get("qs." + WW.current, [])).length}`;
   if (k === "offset") return `Ablage: ${r.rptr_shift && r.rptr_shift !== "None" ? r.rptr_shift + " " + (r.rptr_offs / 1e3) + " kHz" : "Simplex"}`;
   if (k === "tone") return `CTCSS: ${r.ctcss ? r.ctcss.toFixed(1) : "aus"}`;
@@ -279,7 +285,7 @@ function dropMenu(k, anchor) {
   const r = WW.rig, lv = r.levels || {};
   let items = [];
   if (k === "mode") items = modeList().map(m => ({ label: m, on: m === r.mode, act: () => setMode(m) }));
-  else if (k === "filter") items = (FILTERS[r.mode] || FILTERS.USB).map(w => ({ label: `${(w / 1000).toLocaleString("de-DE")} kHz`, on: w === r.passband, act: () => setMode(r.mode, w) })).concat([{ label: "Standard des Geräts", act: () => setMode(r.mode, 0) }]);
+  else if (k === "filter") items = (FILTERS[r.mode] || FILTERS.USB).map(w => ({ label: `${(w / 1000).toLocaleString(I18N.locale)} kHz`, on: w === r.passband, act: () => setMode(r.mode, w) })).concat([{ label: "Standard des Geräts", act: () => setMode(r.mode, 0) }]);
   else if (k === "quickmem") { const qs = store.get("qs." + WW.current, []);
     items = qs.map((q, i) => ({ label: `${i + 1}: ${fmtMHz(q.f)} ${q.m || ""}`, act: () => { setFreq(q.f); if (q.m) setMode(q.m); } })).concat([{ label: "Aktuelle Frequenz speichern", act: quickSave }, { label: "Alle löschen", act: () => { store.set("qs." + WW.current, []); WW.emit("quicksave"); } }]); }
   else if (k === "offset") items = [["Simplex", "+", 0], ["−600 kHz (2 m)", "-", 600000], ["+600 kHz (2 m)", "+", 600000], ["−7,6 MHz (70 cm)", "-", 7600000], ["+7,6 MHz (70 cm)", "+", 7600000]].map(([l, s, o]) => ({ label: l, act: () => setOffset(s, o) }));

@@ -115,7 +115,7 @@ class OpenWebRXRig(SdrRig):
     async def run(self):
         self.say(f"verbinde mit {self.p.get('url')}")
         try:
-            self.ws = await websockets.connect(self._uri(), max_size=None, ping_interval=20, open_timeout=12, user_agent_header="Wellenwerk")
+            self.ws = await websockets.connect(self._uri(), max_size=None, ping_interval=None, open_timeout=12, user_agent_header="Wellenwerk")
         except Exception as e:
             raise RigError(f"OpenWebRX nicht erreichbar: {e}")
         await self._send("SERVER DE CLIENT client=wellenwerk type=receiver")

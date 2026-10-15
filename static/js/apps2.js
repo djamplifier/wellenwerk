@@ -104,7 +104,7 @@ function createRotMap(root) {
       if (ROT.target) { L.circleMarker([ROT.target.lat, ROT.target.lon], { radius: 6, color: "#d62828", fillOpacity: 1 }).bindTooltip(ROT.target.name || "").addTo(lay);
         const b = bearingTo(ROT.target.lat, ROT.target.lon), az = ROT.path === "long" ? (b.az + 180) % 360 : b.az, km = ROT.path === "long" ? 40030 - b.km : b.km;
         const pts = []; for (let d = 0; d <= km; d += 200) pts.push(destPoint(WW.home, az, d)); splitLine(pts).forEach(sg => L.polyline(sg, { color: "#d62828", weight: 2, dashArray: "6 5" }).addTo(lay));
-        $(".rt-info", root).textContent = `${Math.round(az)}° · ${Math.round(km).toLocaleString("de-DE")} km`; ROT.az = az; } }
+        $(".rt-info", root).textContent = `${Math.round(az)}° · ${Math.round(km).toLocaleString(I18N.locale)} km`; ROT.az = az; } }
     if (view() === "gc") drawGc(); };
   const drawGc = async () => { const cv = $(".rt-gc", root); if (!window.d3) { await loadScript("/static/vendor/d3.min.js"); await loadScript("/static/vendor/topojson-client.min.js"); }
     if (!WW.world) { const w = await (await fetch("/static/vendor/countries-110m.json")).json(); WW.world = { land: topojson.feature(w, w.objects.countries), borders: topojson.mesh(w, w.objects.countries, (a, b) => a !== b) }; }
@@ -192,7 +192,7 @@ function createBeamMap(root) {
     azimuthalMap(cv, { points: pts, rotor: WW.rotor, target: dx }); };
   cv.addEventListener("click", e => { const g = cv._g; if (!g) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left - g.c, y = e.clientY - r.top - g.c; if (Math.hypot(x, y) <= g.R) rotorSet((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360); });
   cv.addEventListener("mousemove", e => { const g = cv._g; if (!g || !window.d3) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left - g.c, y = e.clientY - r.top - g.c; const ll = g.proj.invert([x + g.c, y + g.c]);
-    $(".beam-hover", root).textContent = Math.hypot(x, y) <= g.R && ll ? `${Math.round((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360)}° · ${Math.round(d3.geoDistance([WW.home[1], WW.home[0]], ll) * 6371).toLocaleString("de-DE")} km` : ""; });
+    $(".beam-hover", root).textContent = Math.hypot(x, y) <= g.R && ll ? `${Math.round((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360)}° · ${Math.round(d3.geoDistance([WW.home[1], WW.home[0]], ll) * 6371).toLocaleString(I18N.locale)} km` : ""; });
   api("/api/map?" + logq()).then(r => { pts = r.points; draw(); });
   const ro = new ResizeObserver(draw); ro.observe(root); const offs = [WW.on("rotor", draw), WW.on("dx", d => { dx = d?.lat != null ? d : null; draw(); })];
   return () => { ro.disconnect(); offs.forEach(f => f()); };
@@ -326,7 +326,7 @@ function createSatInfo(root) {
   const sel = () => { const x = SAT.sel; if (!x) return; $("tbody", root).innerHTML = x.transmitters.map((t, i) => `<tr><td><input type="radio" name="stx" value="${i}" ${i === SAT.txi ? "checked" : ""}></td><td title="${esc(t.desc)}">${esc(t.desc.slice(0, 44))}</td><td>${esc(t.mode)}${t.invert ? " inv." : ""}</td><td class="mono">${t.down_low ? fmtMHz(t.down_low) : "–"}</td><td class="mono" data-dl="${i}">–</td><td class="mono">${t.up_low ? fmtMHz(t.up_low) : "–"}</td><td class="mono" data-ul="${i}">–</td></tr>`).join("") || '<tr><td colspan="7" class="hint">keine aktiven Sender bekannt</td></tr>'; };
   const tick = () => { const x = SAT.sel, l = SAT.now; if (!x || !l) return; const p = SAT.passes[0], now = Date.now();
     const nx = !p ? "kein Überflug in 48 h" : p.aos <= now ? `Überflug läuft, noch ${Math.max(0, Math.round((p.los - now) / 60000))} min` : `nächster Überflug in ${Math.round((p.aos - now) / 60000)} min (${hhmm(p.aos)} UTC, max ${Math.round(p.maxEl)}°)`;
-    $(".sat-head", root).innerHTML = `<b>${esc(x.name)}</b><span class="${l.el > 0 ? "up" : ""}">Az ${l.az.toFixed(1)}° · El ${l.el.toFixed(1)}°</span><span>${Math.round(l.range).toLocaleString("de-DE")} km</span><span>Höhe ${Math.round(l.alt)} km</span><span>${l.rr > 0 ? "entfernt sich" : "nähert sich"} ${Math.abs(l.rr).toFixed(2)} km/s</span><span class="hint">${nx}</span>`;
+    $(".sat-head", root).innerHTML = `<b>${esc(x.name)}</b><span class="${l.el > 0 ? "up" : ""}">Az ${l.az.toFixed(1)}° · El ${l.el.toFixed(1)}°</span><span>${Math.round(l.range).toLocaleString(I18N.locale)} km</span><span>Höhe ${Math.round(l.alt)} km</span><span>${l.rr > 0 ? "entfernt sich" : "nähert sich"} ${Math.abs(l.rr).toFixed(2)} km/s</span><span class="hint">${nx}</span>`;
     x.transmitters.forEach((t, i) => { const dl = $(`[data-dl="${i}"]`, root), ul = $(`[data-ul="${i}"]`, root); if (dl && t.down_low) dl.textContent = fmtMHz(Math.round(t.down_low * (1 - l.rr / C_KMS))); if (ul && t.up_low) ul.textContent = fmtMHz(Math.round(t.up_low * (1 + l.rr / C_KMS))); });
     $(".sat-trinfo", root).textContent = SAT.info || ""; };
   const offs = [WW.on("sat-sel", sel), WW.on("sat-tick", tick)]; satInit().then(sel); return () => offs.forEach(f => f());

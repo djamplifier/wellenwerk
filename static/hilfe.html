@@ -14,10 +14,14 @@ code { background: var(--code); padding: 1px 4px; border-radius: 3px; font-size:
 <body><main id="doc">Anleitung wird geladen …</main>
 <script src="/static/vendor/marked.min.js"></script>
 <script>
-const DOC = { lizenzen: "LIZENZEN.md", plugins: "Erweiterungen.md" }[new URLSearchParams(location.search).get("d")] || "Anleitung.md";
-document.title = "Wellenwerk – " + { "LIZENZEN.md": "Lizenzen", "Erweiterungen.md": "Erweiterungen entwickeln" }[DOC] || "Anleitung";
-fetch("/docs/" + DOC).then(r => { if (!r.ok) throw new Error("Dokument nicht gefunden"); return r.text(); }).then(md => {
-  const el = document.getElementById("doc"); el.innerHTML = marked.parse(md.replace(/\]\(bilder\//g, "](/docs/bilder/"));
+let LANG = new URLSearchParams(location.search).get("lang") || "de"; if (!new URLSearchParams(location.search).get("lang")) try { LANG = JSON.parse(localStorage.getItem("ww.lang") || localStorage.getItem("ww.lang.auto")) || ((navigator.language || "de").startsWith("de") ? "de" : "en"); } catch { }
+const EN = LANG !== "de";
+const DOC = { lizenzen: "LIZENZEN.md", plugins: EN ? "Extensions.md" : "Erweiterungen.md" }[new URLSearchParams(location.search).get("d")] || (EN ? "Manual.md" : "Anleitung.md");
+document.documentElement.lang = EN ? "en" : "de";
+document.title = "Wellenwerk – " + ({ "LIZENZEN.md": EN ? "Licenses" : "Lizenzen", "Erweiterungen.md": "Erweiterungen entwickeln", "Extensions.md": "Developing extensions", "Manual.md": "Manual" }[DOC] || "Anleitung");
+if (EN) document.getElementById("doc").textContent = "Loading manual …";
+fetch("/docs/" + DOC).then(r => { if (!r.ok) throw new Error(EN ? "Document not found" : "Dokument nicht gefunden"); return r.text(); }).then(md => {
+  const el = document.getElementById("doc"); el.innerHTML = marked.parse(md.replace(/\]\(bilder\//g, "](/docs/bilder/").replace(/\]\((Anleitung|Manual|Erweiterungen|Extensions)\.md/g, (m, n) => `](/static/hilfe.html?d=${/Erw|Ext/.test(n) ? "plugins" : ""}&lang=${/Anl|Erw/.test(n) ? "de" : "en"}`));
   // Ueberschriften-Anker wie auf GitHub, damit das Inhaltsverzeichnis funktioniert
   el.querySelectorAll("h2, h3").forEach(h => h.id = h.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-"));
   el.querySelectorAll('a[href^="http"]').forEach(a => a.target = "_blank");

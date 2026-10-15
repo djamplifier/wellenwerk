@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 COOKIE = "ww_session"
-OPEN_PATHS = ("/login", "/api/login", "/static/logo.svg", "/static/style.css", "/favicon.ico")
+OPEN_PATHS = ("/login", "/api/login", "/static/logo.svg", "/static/style.css", "/favicon.ico", "/static/js/i18n.js", "/static/i18n/en.json")
 # Wege, die den Sender einschalten koennen – fuer MCP-Clients nur mit Erlaubnis
 TX_PATHS = ("/api/rig/ptt", "/api/rig/morse", "/api/rig/raw", "/api/rig/op", "/api/winkey/send", "/api/winkey/text",
             "/api/winlink/connect", "/api/wsjtx/reply", "/api/wsjtx/text", "/api/programs/selfspot", "/api/chat/connect", "/api/chat/send")
@@ -97,7 +97,7 @@ async def _json(send, status: int, text: str):
 
 
 LOGIN_HTML = """<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wellenwerk – Anmelden</title><style>
+<title>Wellenwerk – Anmelden</title><script src="/static/js/i18n.js"></script><style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#e9eff7;font:15px system-ui,sans-serif;color:#1d2733}
 form{background:#fff;padding:28px 30px;border-radius:10px;box-shadow:0 6px 30px #0002;display:flex;flex-direction:column;gap:12px;width:min(320px,86vw)}
 img{width:56px;align-self:center} h1{margin:0;font-size:19px;text-align:center} input{font:inherit;padding:9px 10px;border:1px solid #b8c4d2;border-radius:6px}

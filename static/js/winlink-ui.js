@@ -2,7 +2,7 @@
 // Wellenwerk – Winlink: Postfach (Eingang/Ausgang/Gesendet/Archiv), Nachricht lesen und verfassen,
 // Verbindung ueber Telnet, ARDOP, VARA oder Packet (AGW) mit Protokoll.
 const WL = { folder: "in", sel: null, counts: {}, state: {}, log: [] };
-const WL_FOLDERS = [["in", "Eingang"], ["out", "Ausgang"], ["sent", "Gesendet"], ["archive", "Archiv"]];
+const WL_FOLDERS = [["in", "Posteingang"], ["out", "Postausgang"], ["sent", "Gesendet"], ["archive", "Archiv"]];
 const WL_METHODS = [["telnet", "Telnet – Winlink-Server (Internet)"], ["p2p", "Telnet – Peer (Station im Netz)"], ["ardop", "ARDOP (Kurzwelle)"], ["vara", "VARA (eigenes VARA-Programm)"], ["packet", "Packet (AGW, z. B. Direwolf)"]];
 const wlSize = n => n > 1024 ? (n / 1024).toFixed(1) + " kB" : n + " B";
 async function wlRefresh() { const s = await api("/api/winlink/state"); WL.counts = s.counts; WL.state = s; WL.log = s.log; WW.emit("wl-state"); }
@@ -16,7 +16,7 @@ function createWlFolders(root) {
   const offs = [WW.on("wl-state", draw), WW.on("wl-folder", draw)]; wlRefresh().then(draw).catch(() => { }); draw(); return () => offs.forEach(f => f());
 }
 function createWlList(root) {
-  root.innerHTML = `<div class="tablewrap"><table class="grid wl-t"><thead></thead><tbody></tbody></table></div>`;
+  root.innerHTML = `<div class="tablewrap"><table class="grid wl-t"><thead></thead><tbody translate="no"></tbody></table></div>`;
   let rows = [];
   const load = async () => { rows = await api("/api/winlink/folder/" + WL.folder); const who = WL.folder === "in" ? "Von" : "An";
     $("thead", root).innerHTML = `<tr><th>Datum (UTC)</th><th>${who}</th><th>Betreff</th><th>Größe</th><th></th></tr>`;
@@ -89,7 +89,7 @@ function createWlChat(root) {
   root.innerHTML = `<div class="ch-wrap"><div class="ctl-row ch-top"><select class="ch-m">${[["ardop", "ARDOP"], ["vara", "VARA"], ["packet", "Packet"], ["telnet", "Telnet (host:port)"]].map(([k, l]) => `<option value="${k}" ${k === st.method ? "selected" : ""}>${l}</option>`).join("")}</select>
       <input class="ch-t" placeholder="Rufzeichen der Gegenstation" value="${esc(st.target)}" style="width:150px"><input class="ch-f" placeholder="kHz (optional)" value="${esc(st.freq)}" style="width:90px">
       <button class="ch-call primary">Anrufen</button><button class="ch-listen">Auf Anrufe warten</button><button class="ch-stop danger">Trennen</button><span class="ch-st hint"></span><i class="grow"></i><button class="ch-log" title="Gegenstation ins Logbuch">${icon("i-book")} Loggen</button></div>
-    <div class="ch-log-area"></div>
+    <div class="ch-log-area" translate="no"></div>
     <form class="ch-in"><input class="ch-text grow" placeholder="Text eingeben, Enter sendet" autocomplete="off"><button class="primary">Senden</button></form></div>`;
   const area = $(".ch-log-area", root);
   const line = l => `<div class="ch-l ${l.kind}"><span>${esc(l.t)}</span> ${l.kind === "tx" ? "<b>&gt;</b> " : l.kind === "rx" ? "<b>&lt;</b> " : ""}${esc(l.text)}</div>`;

@@ -241,9 +241,11 @@ class CwRx {
       if (++this.k % 8) continue;                               // 1 kHz Takt fuer die Auswertung
       this.sm[this.si++ & 3] = Math.hypot(ei, eq); const env = (this.sm[0] + this.sm[1] + this.sm[2] + this.sm[3]) / 4;
       this.peak = Math.max(env, this.peak * 0.9995);
-      this.floor = env < this.floor ? this.floor * 0.9 + env * 0.1 : this.floor + (env - this.floor) * 0.0005;
-      const snrOk = this.peak > this.floor * 3 && this.peak > this.sql * 0.01;
-      const thr = this.floor + (this.down ? 0.4 : 0.55) * (this.peak - this.floor);
+      // Rauschboden nur in Tastpausen nachfuehren (sonst zieht ihn ein langer Strich hoch); steigt das Rauschen (AGC), folgt er zuegig
+      if (!this.down) this.floor = env < this.floor ? this.floor * 0.9 + env * 0.1 : this.floor + (env - this.floor) * 0.003;
+      const snrOk = this.peak > this.floor * 4 && this.peak > this.sql * 0.01;
+      // Schwelle: zwischen Rauschboden und Spitze, aber nie unter 2,5 x Rauschboden – Rauschspitzen in Pausen tasten so nicht
+      const thr = Math.max(this.floor * 2.5, this.floor + (this.down ? 0.4 : 0.55) * (this.peak - this.floor));
       const key = snrOk && env > thr;
       this.dur++;
       const deb = Math.max(5, Math.min(25, this.dit * 0.33));   // Entprellen

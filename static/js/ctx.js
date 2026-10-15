@@ -148,7 +148,7 @@ ctxRegister(".pane-lookup", () => callItems(WW.dxCall || ""));
 ctxRegister(".leaflet-container", (el, e) => { const m = el._wwmap; if (!m) return [];
   const ll = m.mouseEventToLatLng(e), lat = ll.lat, lon = ((ll.lng + 540) % 360) - 180, loc = latLonToGrid(lat, lon);
   const bt = bearingTo(lat, lon), brg = bt ? bt.az : null;
-  return [`${loc} · ${lat.toFixed(2)}°, ${lon.toFixed(2)}°${bt ? ` · ${Math.round(bt.az)}° · ${Math.round(bt.km).toLocaleString("de-DE")} km` : ""}`,
+  return [`${loc} · ${lat.toFixed(2)}°, ${lon.toFixed(2)}°${bt ? ` · ${Math.round(bt.az)}° · ${Math.round(bt.km).toLocaleString(I18N.locale)} km` : ""}`,
     { label: "Antenne hierhin drehen (kurzer Weg)", icon: "i-compass", disabled: brg == null, act: () => rotorSet(brg) },
     { label: "Antenne hierhin drehen (langer Weg)", disabled: brg == null, act: () => rotorSet(brg + 180) },
     { label: "Locator kopieren", icon: "i-copy", act: () => clipCopy(loc) }, { label: "Koordinaten kopieren", act: () => clipCopy(`${lat.toFixed(5)}, ${lon.toFixed(5)}`) },

@@ -336,6 +336,7 @@ function openOptions(tab = "station") {
       <p class="hint wide">Gleicht die S-Meter-Anzeige an das Gerät an. Angezeigt wird Faktor × Messwert + Versatz.</p></div></div>
     <div class="dtab ${tab === "theme" ? "" : "hidden"}" data-t="theme"><div class="grid2">
       <label>Fensterdesign<select name="o_chrome" data-local>${[["office", "Klassisch (hellblau)"], ["light", "Hell"], ["dark", "Dunkel"], ["night", "Nachtsicht (rot)"]].map(([k, l]) => `<option value="${k}" ${(o.chrome || "office") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label>Sprache / Language<select name="lang" translate="no">${Object.entries(I18N.languages).map(([k, l]) => `<option value="${k}" ${I18N.lang === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <p class="hint wide">Farben der Funkgeräte-Anzeige stellst du unter „Layout anpassen“ (Strg+F8) ein.</p></div></div>
     <div class="err"></div>`, onOpen: dd => {
       tabsIn(dd);
@@ -369,7 +370,7 @@ function openOptions(tab = "station") {
       else if (el.dataset.local !== undefined) loc[el.name.replace(/^o_/, "")] = el.type === "number" ? +v : v; else body[el.name] = v;
     });
     store.set("opts", loc); applyChrome();
-    try { WW.settings = await api("/api/settings", { method: "PUT", body }); d.close(); toast("Optionen gespeichert"); WW.emit("settings"); renderStatus(); }
+    try { WW.settings = await api("/api/settings", { method: "PUT", body }); d.close(); toast("Optionen gespeichert"); WW.emit("settings"); renderStatus(); if (body.lang && body.lang !== I18N.lang) I18N.set(body.lang); }
     catch (err) { d.querySelector(".err").textContent = err.message; }
   });
 }

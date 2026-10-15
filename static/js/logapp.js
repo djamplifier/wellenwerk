@@ -27,7 +27,7 @@ function createLogbook(root, params) {
       <select class="lb-qsl"><option value="">alle QSOs</option><option value="confirmed">bestätigt</option><option value="unconfirmed">unbestätigt</option><option value="lotw">LoTW bestätigt</option><option value="eqsl">eQSL bestätigt</option><option value="paper">Papier-QSL erhalten</option><option value="queued">QSL vorgemerkt</option><option value="to_send">QSL nicht gesendet</option><option value="no_qrz">nicht bei QRZ</option><option value="no_lotw">nicht bei LoTW</option><option value="no_eqsl">nicht bei eQSL</option><option value="no_clublog">nicht bei Club Log</option></select>
       <input type="date" class="lb-from"><input type="date" class="lb-to"><input class="lb-cond" placeholder="Bedingung, z. B. cqz=14; iota nicht leer" title="Feld-Bedingungen mit ; trennen. Vergleich: = != < > <= >=, ~ enthält, !~ enthält nicht, „leer“, „nicht leer“. Felder: call, band, mode, country, cqz, ituz, dxcc, state, cnty, iota, darc_dok, comment, qso_date (JJJJMMTT) …">
       <select class="lb-view" title="Gespeicherte Ansichten (Filter, Spalten, Sortierung)"></select></div>
-    <div class="tablewrap lb-wrap"><table class="grid lb-grid"><thead></thead><tbody></tbody></table></div>
+    <div class="tablewrap lb-wrap"><table class="grid lb-grid"><thead></thead><tbody translate="no"></tbody></table></div>
     <div class="lb-foot"><span class="lb-info"></span><i class="grow"></i><span>${esc(name)}</span><span>SQLite</span><span class="lb-count"></span><span class="lb-selc"></span></div>`;
   const cols = () => store.get("log.cols", LOG_DEFAULT_COLS);
   const q = () => { const p = new URLSearchParams({ log: name, limit: 2000, q: $(".lb-q", root).value.trim(), band: $(".lb-band", root).value, mode: $(".lb-mode", root).value, qsl: $(".lb-qsl", root).value, date_from: $(".lb-from", root).value, date_to: $(".lb-to", root).value, cond: $(".lb-cond", root).value.trim() }); return p; };
@@ -222,7 +222,7 @@ function createAle(root) {
     const w = r.worked, b = [];
     F("country").value = r.country || "";
     if (r.country) b.push(`<b>${esc(r.country)}</b>`, `<span class="badge">${esc(r.cont)}</span>`, `<span class="badge">CQ ${r.cqz} · ITU ${r.ituz}</span>`);
-    if (r.km != null) b.push(`<span class="badge clickable" data-bearing="${r.bearing}" title="Klick: Rotor drehen">${r.km.toLocaleString("de-DE")} km · ${r.bearing}° ↻</span>`);
+    if (r.km != null) b.push(`<span class="badge clickable" data-bearing="${r.bearing}" title="Klick: Rotor drehen">${r.km.toLocaleString(I18N.locale)} km · ${r.bearing}° ↻</span>`);
     if (r.dxcc && !w.dxcc_worked) b.push(`<span class="badge new_dxcc">Neues Land!</span>`); else if (r.dxcc && F("band").value && !w.dxcc_band) b.push(`<span class="badge new_band">Neu auf ${esc(F("band").value)}</span>`);
     if (w.call_count) b.push(`<span class="badge worked">${w.call_count}× gearbeitet</span>`);
     $(".ale-dx", root).innerHTML = b.join("");
@@ -299,7 +299,7 @@ function createLookup(root) {
       ${c ? `<fieldset><legend>Inhaber</legend><div class="lk-lines"><div>👤 <b>${esc(c.fullname || c.name || "")}</b></div>${c.address ? `<div>🏠 ${esc(c.address)}</div>` : ""}${c.email ? `<div>✉ <a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div>` : ""}
         ${c.web ? `<div>🌐 <a href="${esc(c.web)}" target="_blank">${esc(c.web)}</a></div>` : ""}${c.gridsquare ? `<div>⌗ ${esc(c.gridsquare)}</div>` : ""}<div class="hint">Quelle: ${esc(c.source)}</div></div></fieldset>` : ""}
       <fieldset><legend>Land</legend><div class="lk-lines"><div>🌍 <b>${esc(r.country || "unbekannt")}</b></div><div>DXCC=${r.dxcc ?? "–"}, Kont.=${esc(r.cont || "–")}, CQ ${r.cqz ?? "–"}, ITU ${r.ituz ?? "–"}</div>
-        ${r.km != null ? `<div class="clickable" data-bearing="${r.bearing}">🧭 ${r.km.toLocaleString("de-DE")} km, ${r.bearing}° (lang ${(r.bearing + 180) % 360}°) ↻</div>` : ""}</div>${matrixHtml(r.matrix_dxcc || {}, r.prefix || "Land")}</fieldset>
+        ${r.km != null ? `<div class="clickable" data-bearing="${r.bearing}">🧭 ${r.km.toLocaleString(I18N.locale)} km, ${r.bearing}° (lang ${(r.bearing + 180) % 360}°) ↻</div>` : ""}</div>${matrixHtml(r.matrix_dxcc || {}, r.prefix || "Land")}</fieldset>
       ${(r.worked.previous || []).length ? `<fieldset><legend>Letzte QSOs</legend><table class="mini">${r.worked.previous.slice(0, 8).map(p => `<tr><td>${fmtDate(p.qso_date)}</td><td>${esc(p.band)}</td><td>${esc(p.mode)}</td><td>${esc(p.name || "")}</td></tr>`).join("")}</table></fieldset>` : ""}`;
   };
   $(".lk-in", root).addEventListener("keydown", e => { if (e.key === "Enter") show(e.target.value); });
@@ -321,7 +321,7 @@ function createRadioPane(root) {
   root.innerHTML = `<div class="pane-tb"><button data-a="conn">${icon("i-plug")} Verbinden</button><button data-a="rc">${icon("i-radio")} Gerätesteuerung</button></div><div class="rp"></div>`;
   const draw = () => { const r = WW.rig, cur = WW.radios.find(x => x.id === WW.current);
     $(".rp", root).innerHTML = `<div class="rp-tab">${esc(cur?.name || "kein Funkgerät")}</div><div class="rp-row"><span>VFO A:</span><b class="rp-f">${r.freq ? fmtDots(r.freq) : "—"}</b></div><div class="rp-row"><span>VFO B:</span><b class="rp-f">${r.vfob_freq ? fmtDots(r.vfob_freq) : "—"}</b></div>
-      <div class="rp-grid"><button data-d="mode">Mode: ${esc(r.mode || "–")}</button><button data-d="filter">Filter: ${r.passband ? (r.passband / 1000).toLocaleString("de-DE") + " kHz" : "–"}</button>
+      <div class="rp-grid"><button data-d="mode">Mode: ${esc(r.mode || "–")}</button><button data-d="filter">Filter: ${r.passband ? (r.passband / 1000).toLocaleString(I18N.locale) + " kHz" : "–"}</button>
       ${(WW.caps.ui_choices || []).map(ch => `<button data-d="lvl:${ch.name}">${esc(dropValue("lvl:" + ch.name))}</button>`).join("")}
       ${(WW.caps.ui_funcs || []).slice(0, 12).map(f => `<button data-f="${f.name}" class="${(r.funcs || {})[f.name] ? "on" : ""}">${esc(f.label)}</button>`).join("")}<button data-p class="${r.ptt ? "on tx" : ""}">PTT</button></div>`; };
   root.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
@@ -455,7 +455,7 @@ function createAlert(root) {
   root.innerHTML = `<div class="pane-tb"><label class="chk"><input type="checkbox" class="al-cq"> nur CQ</label><label class="chk"><input type="checkbox" class="al-new"> nur Neue</label><span class="hint al-src"></span><button class="al-halt" title="WSJT-X: Senden stoppen">TX stopp</button><button class="al-clr">Leeren</button></div>
     <div class="tablewrap"><table class="grid"><thead><tr><th>UTC</th><th>dB</th><th>DT</th><th>Hz</th><th>Band</th><th>Nachricht</th><th>Rufzeichen</th><th>Land</th><th>km</th></tr></thead><tbody></tbody></table></div>`;
   const vis = d => (!$(".al-cq", root).checked || d.cq) && (!$(".al-new", root).checked || ["new_dxcc", "new_band"].includes(d.status));
-  const row = (d, f) => `<tr class="st-${d.status || "none"}${f ? " fresh" : ""}" data-call="${esc(d.call)}" data-id="${d.id || ""}" title="Doppelklick: in WSJT-X anrufen (Shift: auf der eigenen Frequenz)"><td>${esc(d.utc)}</td><td>${d.snr}</td><td>${d.dt}</td><td>${d.df}</td><td>${esc(d.band)}</td><td class="msg">${esc(d.message)}</td><td class="call">${esc(d.call)}</td><td>${esc(d.country)}</td><td>${d.km != null ? d.km.toLocaleString("de-DE") : ""}</td></tr>`;
+  const row = (d, f) => `<tr class="st-${d.status || "none"}${f ? " fresh" : ""}" data-call="${esc(d.call)}" data-id="${d.id || ""}" title="Doppelklick: in WSJT-X anrufen (Shift: auf der eigenen Frequenz)"><td>${esc(d.utc)}</td><td>${d.snr}</td><td>${d.dt}</td><td>${d.df}</td><td>${esc(d.band)}</td><td class="msg">${esc(d.message)}</td><td class="call">${esc(d.call)}</td><td>${esc(d.country)}</td><td>${d.km != null ? d.km.toLocaleString(I18N.locale) : ""}</td></tr>`;
   const draw = () => { $("tbody", root).innerHTML = WW.decodes.filter(vis).slice(0, 300).map(d => row(d)).join("") || `<tr><td colspan="9" class="hint">Noch keine Decodes. WSJT-X/JTDX: Einstellungen → Reporting → UDP Server auf diesen Rechner, Port ${esc(WW.settings.wsjtx_port)}.</td></tr>`;
     $(".al-src", root).textContent = WW.wsjtx.ident ? `${WW.wsjtx.ident} · ${WW.wsjtx.mode || ""} · ${fmtMHz(WW.wsjtx.dial || 0)} MHz` : ""; };
   root.addEventListener("change", draw); $(".al-clr", root).onclick = () => { WW.decodes = []; draw(); };
@@ -471,7 +471,7 @@ function createAlert(root) {
 function createCalendar(root) {
   root.innerHTML = `<div class="pane-tb"><button data-k="c" class="on">Contests</button><button data-k="d">DXpeditionen</button><label class="chk"><input type="checkbox" class="ca-now"> nur aktuell</label><label class="chk"><input type="checkbox" class="ca-need"> nur fehlende Länder</label><span class="hint ca-src"></span></div><div class="tablewrap"><table class="grid"><tbody><tr><td class="hint">Lade Kalender …</td></tr></tbody></table></div>`;
   let data = null, kind = "c";
-  const fmt = iso => iso ? new Date(iso).toLocaleString("de-DE", { timeZone: "UTC", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + " UTC" : "";
+  const fmt = iso => iso ? new Date(iso).toLocaleString(I18N.locale, { timeZone: "UTC", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + " UTC" : "";
   const draw = () => { if (!data) return; const now = Date.now(), onlyNow = $(".ca-now", root).checked, need = $(".ca-need", root).checked;
     $(".ca-need", root).parentElement.classList.toggle("hidden", kind === "c");
     if (kind === "c") {
@@ -550,7 +550,7 @@ function createGreyline(root) {
 function createClock(root) {
   root.innerHTML = `<div class="clk"><div class="clk-t"></div><div class="clk-s"></div></div>`;
   let utc = store.get("clk.utc", true);
-  const t = setInterval(() => { const n = new Date(); $(".clk-t", root).textContent = utc ? n.toISOString().slice(11, 19) : n.toLocaleTimeString("de-DE"); $(".clk-s", root).textContent = (utc ? "UTC · " : "Ortszeit · ") + n.toLocaleDateString("de-DE"); }, 500);
+  const t = setInterval(() => { const n = new Date(); $(".clk-t", root).textContent = utc ? n.toISOString().slice(11, 19) : n.toLocaleTimeString(I18N.locale); $(".clk-s", root).textContent = (utc ? "UTC · " : "Ortszeit · ") + n.toLocaleDateString(I18N.locale); }, 500);
   root.onclick = () => { utc = !utc; store.set("clk.utc", utc); };
   return () => clearInterval(t);
 }

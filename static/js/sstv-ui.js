@@ -29,7 +29,7 @@ function createSstv(root) {
     <button class="ss-tx primary">Bild senden …</button><button class="ss-save">Speichern</button><span class="hint ss-st"></span></div>
     <div class="ss-wrap"><canvas class="ss-cv" width="320" height="256"></canvas></div>`;
   const cv = $(".ss-cv", root), st = $(".ss-st", root);
-  const status = () => { const i = SSTV.img; st.textContent = !D.sstv ? "Empfang aus" : SSTV.busy && i ? `${i.mode}: Zeile ${i.lines} / ${i.h}` : i ? `fertig: ${i.mode}, ${i.t.toLocaleTimeString("de-DE")}` : "warte auf Bild (VIS) …";
+  const status = () => { const i = SSTV.img; st.textContent = !D.sstv ? "Empfang aus" : SSTV.busy && i ? `${i.mode}: Zeile ${i.lines} / ${i.h}` : i ? `fertig: ${i.mode}, ${i.t.toLocaleTimeString(I18N.locale)}` : "warte auf Bild (VIS) …";
     $(".ss-on", root).checked = !!D.sstv; };
   const show = i => { if (!i) return; if (cv.width !== i.w || cv.height !== i.h) { cv.width = i.w; cv.height = i.h; } cv.getContext("2d").putImageData(new ImageData(i.px, i.w, i.h), 0, 0); };
   $(".ss-on", root).onchange = e => sstvRxOn(e.target.checked);

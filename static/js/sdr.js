@@ -5,7 +5,7 @@ const RX = { players: new Map() };
 const isSdr = r => r && r.kind === "sdr";
 async function rxPlay(id) {
   if (RX.players.has(id)) return RX.players.get(id);
-  const P = { id, mute: store.get("rx.mute." + id, false), level: 0 };
+  const P = { id, mute: store.get("rx.mute." + id, false), level: 0, pcm: new Set() };
   RX.players.set(id, P);
   P.ctx = new AudioContext();
   await P.ctx.audioWorklet.addModule("/static/sdr-worklet.js");
@@ -16,7 +16,9 @@ async function rxPlay(id) {
   const proto = location.protocol === "https:" ? "wss://" : "ws://";
   const open = () => { P.ws = new WebSocket(`${proto}${location.host}/ws/audio?radio=${encodeURIComponent(id)}`); P.ws.binaryType = "arraybuffer";
     P.ws.onmessage = e => { const dv = new DataView(e.data), rate = dv.getUint32(0, true), s = new Int16Array(e.data, 4), f = new Float32Array(s.length);
-      for (let i = 0; i < s.length; i++) f[i] = s[i] / 32768; P.node.port.postMessage({ pcm: f, rate }, [f.buffer]); };
+      for (let i = 0; i < s.length; i++) f[i] = s[i] / 32768;
+      P.pcm.forEach(fn => { try { fn(f, rate); } catch (err) { console.error(err); } });   // Dekoder bekommen den Ton direkt, ohne Umweg ueber die Wiedergabe
+      P.node.port.postMessage({ pcm: f, rate }, [f.buffer]); };
     P.ws.onclose = () => { if (RX.players.get(id) === P) setTimeout(open, 2000); }; };
   open();
   if (P.ctx.state !== "running") document.addEventListener("pointerdown", () => P.ctx.resume(), { once: true });
@@ -26,6 +28,25 @@ function rxStop(id) { const P = RX.players.get(id); if (!P) return; RX.players.d
 function rxGain(id) { const P = RX.players.get(id); if (!P || !P.gain) return; const r = (WW.radios || []).find(x => x.id === id), af = r?.state?.levels?.AF ?? 0.8;
   P.gain.gain.value = P.mute ? 0 : af; }
 function rxMute(id, on) { const P = RX.players.get(id); if (!P) return; P.mute = on; store.set("rx.mute." + id, on); rxGain(id); WW.emit("rx"); }
+// Ton eines Empfaengers als PCM-Bloecke (Float32, Abtastrate des Empfaengers) an fn; Rueckgabe: abmelden
+async function rxPcm(id, fn) { const P = await rxPlay(id || WW.current || [...RX.players.keys()][0]); P.pcm.add(fn); return () => P.pcm.delete(fn); }
+// Abtastrate auf 8 kHz fuer die Dekoder: Tiefpass (gefenstertes sinc, 3,4 kHz) und lineare Interpolation; liefert Bloecke zu 512
+function rxTo8k(out) {
+  let rate = 0, taps = null, hist = null, pos = 0, prev = 0, blk = new Float32Array(512), bn = 0, peak = 0;
+  const design = r => { const N = 31, fc = 3400 / r, h = new Float32Array(N); let s = 0;
+    for (let i = 0; i < N; i++) { const m = i - (N - 1) / 2; h[i] = (m === 0 ? 2 * fc : Math.sin(2 * Math.PI * fc * m) / (Math.PI * m)) * (0.54 - 0.46 * Math.cos(2 * Math.PI * i / (N - 1))); s += h[i]; }
+    for (let i = 0; i < N; i++) h[i] /= s; return h; };
+  return (x, r) => {
+    if (r !== rate) { rate = r; taps = design(r); hist = new Float32Array(taps.length); pos = 0; }
+    const step = rate / 8000, N = taps.length;
+    for (let i = 0; i < x.length; i++) {
+      hist.copyWithin(0, 1); hist[N - 1] = x[i]; let y = 0; for (let k = 0; k < N; k++) y += hist[k] * taps[k];
+      while (pos < 1) { const v = prev + (y - prev) * pos; blk[bn++] = v; const a = Math.abs(v); if (a > peak) peak = a;
+        if (bn === 512) { out(blk, peak); blk = new Float32Array(512); bn = 0; peak = 0; } pos += step; }
+      pos -= 1; prev = y;
+    }
+  };
+}
 // Ton eines Empfaengers als MediaStream (fuer Digitalbetrieb und Fernbetrieb-Audio)
 async function rxStream(id) { const P = await rxPlay(id || [...RX.players.keys()][0] || WW.current); await P.ctx.resume(); return P.dest.stream; }
 function rxSync() {   // Wiedergabe passend zu den verbundenen Empfaengern starten/stoppen
@@ -46,7 +67,7 @@ function sdrPicker(root, done) {
       <input class="sp-q grow" placeholder="Suche: Ort, Rufzeichen, Locator, Antenne …" value="${esc(st.q)}"><label class="chk"><input type="checkbox" class="sp-free" ${st.free ? "checked" : ""}> freie Plätze</label>
       <label class="chk"><input type="checkbox" class="sp-band" ${st.band ? "checked" : ""}> empfängt aktuelle Frequenz</label></div>
     <div class="tablewrap sp-wrap"><table class="grid sp-t"><thead><tr><th>Art</th><th>Name</th><th>Ort</th><th>km</th><th>Plätze</th><th></th></tr></thead><tbody><tr><td colspan="6" class="hint">Liste wird geladen …</td></tr></tbody></table></div>
-    <fieldset><legend>Empfänger direkt eintragen</legend><div class="grid2">
+    <fieldset><legend>Gewählter Empfänger / direkt eintragen</legend><div class="grid2">
       <label>Art<select class="sp-mtype"></select></label>
       <label>Adresse<input class="sp-url" placeholder="http://empfaenger.example:8073"></label>
       <label class="wide">Parameter (optional, mit ; getrennt)<input class="sp-par" placeholder="z. B. password=…; span=200; freq=7074; mode=USB; user=Name"></label>
@@ -57,22 +78,33 @@ function sdrPicker(root, done) {
     Object.assign(st, { type: $(".sp-type", root).value, q: $(".sp-q", root).value, free: $(".sp-free", root).checked, band: $(".sp-band", root).checked }); store.set("sdr.pick", st);
     const khz = st.band && WW.rig.freq ? WW.rig.freq / 1000 : 0;
     try { const r = await api(`/api/sdr/receivers?type=${st.type}&q=${encodeURIComponent(st.q)}&free=${st.free}&khz=${khz}&limit=300`); rows = r.receivers;
-      $("tbody", root).innerHTML = rows.map((x, i) => `<tr data-i="${i}"><td>${esc(SDR_TYPES.find(t => t[0] === x.type)?.[1].split(" ")[0] || x.type)}</td><td title="${esc(x.antenna || "")}">${esc(x.name)}</td><td>${esc(x.place || x.grid || "")}</td><td>${x.km ?? "–"}</td>
+      $("tbody", root).innerHTML = rows.map((x, i) => `<tr data-i="${i}" title="Klick: auswählen · Doppelklick: verbinden"><td>${esc(SDR_TYPES.find(t => t[0] === x.type)?.[1].split(" ")[0] || x.type)}</td><td title="${esc(x.antenna || "")}">${esc(x.name)}</td><td>${esc(x.place || x.grid || "")}</td><td>${x.km ?? "–"}</td>
         <td>${x.users_max ? `${x.users}/${x.users_max}` : ""}</td><td class="nowrap">${x.type === "websdr" ? `<button type="button" data-a="web">im Browser</button>` : `<button type="button" data-a="main">verbinden</button><button type="button" data-a="second" title="zusätzlich zum Funkgerät">2. Empf.</button>`}</td></tr>`).join("")
         || `<tr><td colspan="6" class="hint">Keine passenden Empfänger.</td></tr>`;
       $(".sp-st", root).textContent = `${rows.length} von ${r.total} Empfängern`; } catch (e) { $(".sp-st", root).textContent = e.message; } };
   const connect = async (type, url, params, role, name) => {
     $(".sp-st", root).textContent = `verbinde mit ${name || url} …`;
     try { const p = await post("/api/radios", { kind: "sdr", sdr_type: type, url, params, role, name: (name || "").slice(0, 60) });
-      await post(`/api/radios/${p.id}/connect`); await loadRadios(); rxSync(); toast(`${p.name} verbunden`); done && done(); }
+      await post(`/api/radios/${p.id}/connect`); await loadRadios(); rxSync(); toast(`${p.name} verbunden`); done && done();
+      if (role === "main" && SHELL.active === "rig" && !panelOpen("rig", "waterfall")) addPanel("rig", "waterfall"); }   // Wasserfall gleich zeigen
     catch (e) { $(".sp-st", root).textContent = e.message; toast(e.message, true); } };
   root.addEventListener("change", e => { if (e.target.closest(".ctl-row") && e.target.matches("select, input[type=checkbox]")) load(); });
   root.addEventListener("input", e => { if (e.target.classList.contains("sp-q")) { clearTimeout(root._t); root._t = setTimeout(load, 300); } });
-  root.addEventListener("click", e => { const b = e.target.closest("button[data-a]"); if (!b) return; const x = rows[+b.closest("tr").dataset.i];
-    if (b.dataset.a === "web") window.open(websdrLink(x.url, (WW.rig.freq || 7074000) / 1000, WW.rig.mode), "_blank");
-    else connect(x.type, x.url, `freq=${((WW.rig.freq || 7074000) / 1000).toFixed(3)}; mode=${WW.rig.mode || "USB"}; user=${WW.station?.callsign || WW.settings.callsign || "Wellenwerk"}`, b.dataset.a, x.name); });
-  $(".sp-go", root).onclick = () => connect($(".sp-mtype", root).value, $(".sp-url", root).value.trim(), $(".sp-par", root).value, "main");
-  $(".sp-go2", root).onclick = () => connect($(".sp-mtype", root).value, $(".sp-url", root).value.trim(), $(".sp-par", root).value, "second");
+  const params = () => `freq=${((WW.rig.freq || 7074000) / 1000).toFixed(3)}; mode=${WW.rig.mode || "USB"}; user=${WW.station?.callsign || WW.settings.callsign || "Wellenwerk"}`;
+  const use = (x, role) => x.type === "websdr" ? window.open(websdrLink(x.url, (WW.rig.freq || 7074000) / 1000, WW.rig.mode), "_blank") : connect(x.type, x.url, params(), role, x.name);
+  let picked = null;   // per Klick gewaehlte Zeile: die Knoepfe unten verbinden sie, Doppelklick verbindet sofort
+  const pick = tr => { $$("tr.sel", root).forEach(t => t.classList.remove("sel")); picked = null; if (!tr || tr.dataset.i == null) return;
+    tr.classList.add("sel"); picked = rows[+tr.dataset.i];
+    if (picked.type !== "websdr") { $(".sp-mtype", root).value = picked.type; $(".sp-url", root).value = picked.url; $(".sp-par", root).value = ""; }
+    $(".sp-st", root).textContent = `gewählt: ${picked.name}`; };
+  root.addEventListener("click", e => { const tr = e.target.closest(".sp-t tbody tr"); const b = e.target.closest("button[data-a]");
+    if (b && tr) return use(rows[+tr.dataset.i], b.dataset.a);
+    if (tr) pick(tr); });
+  root.addEventListener("dblclick", e => { const tr = e.target.closest(".sp-t tbody tr"); if (tr && tr.dataset.i != null && !e.target.closest("button")) use(rows[+tr.dataset.i], "main"); });
+  const go = role => picked && picked.type !== "websdr" && $(".sp-url", root).value.trim() === picked.url ? use(picked, role)
+    : connect($(".sp-mtype", root).value, $(".sp-url", root).value.trim(), $(".sp-par", root).value || params(), role);
+  $(".sp-go", root).onclick = () => go("main");
+  $(".sp-go2", root).onclick = () => go("second");
   const HINT = { kiwisdr: "http://empfaenger.example:8073", openwebrx: "http://empfaenger.example:8073/", rtltcp: "127.0.0.1:1234 (rtl_tcp)", hl2: "leer = automatisch suchen, sonst IP-Adresse" };
   api("/api/sdr/kinds").then(ks => { const sel = $(".sp-mtype", root); sel.innerHTML = ks.map(k => `<option value="${esc(k.kind)}">${esc(k.label)}</option>`).join("");
     sel.onchange = () => { $(".sp-url", root).placeholder = HINT[sel.value] || ""; }; sel.onchange(); }).catch(() => { });

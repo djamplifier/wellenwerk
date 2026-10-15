@@ -14,7 +14,7 @@ function createFreedv(root) {
     <div class="ctl-row"><button class="fd-ptt" disabled>PTT – Sprechen</button><label class="chk"><input type="checkbox" class="fd-latch" ${st.latch ? "checked" : ""}> PTT rastet ein</label><span class="hint fd-txinfo"></span></div>
     <p class="hint">FreeDV-Signale liegen meist im USB auf eigenen Frequenzen (z. B. 14,236 MHz, 7,177 MHz, 3,625 MHz). Funkgerät auf USB, NF-Pegel so einstellen, dass die Pegelanzeige etwa zur Hälfte ausschlägt.</p></div>`;
   const fill = async () => { const ds = await fdvDevices(), o = (kind, sel, extra = "") => `<option value="">Standard</option>${extra}` + ds.filter(d => d.kind === kind && d.deviceId !== "default").map(d => `<option value="${esc(d.deviceId)}" ${d.deviceId === sel ? "selected" : ""}>${esc(d.label || kind)}</option>`).join("");
-    $(".fd-inp", root).innerHTML = o("audioinput", st.inp, `<option value="__sdr" ${st.inp === "__sdr" ? "selected" : ""}>Empfänger (WebSDR/KiwiSDR/SDR)</option>`);
+    $(".fd-inp", root).innerHTML = o("audioinput", st.inp, `<option value="__sdr" ${st.inp === "__sdr" || !navigator.mediaDevices?.getUserMedia ? "selected" : ""}>Empfänger (WebSDR/KiwiSDR/SDR)</option>`);
     $(".fd-spk", root).innerHTML = o("audiooutput", st.spk); $(".fd-mic", root).innerHTML = o("audioinput", st.mic); $(".fd-out", root).innerHTML = o("audiooutput", st.out); };
   api("/api/freedv").then(r => { $(".fd-avail", root).textContent = r.available ? "" : "codec2 fehlt (macOS: brew install codec2 · Linux: libcodec2-1.2)"; $(".fd-run", root).disabled = !r.available; }).catch(() => { });
   root.addEventListener("change", e => { const c = e.target.classList; const map = { "fd-mode": "mode", "fd-inp": "inp", "fd-spk": "spk", "fd-mic": "mic", "fd-out": "out" };
@@ -24,13 +24,18 @@ function createFreedv(root) {
   $(".fd-vol", root).oninput = e => { st.vol = +e.target.value; store.set("fdv", st); if (FDV.gain) FDV.gain.gain.value = st.vol; };
   const status = () => { $(".fd-run", root).textContent = FDV.on ? "■ Stopp" : "▶ Empfang"; $(".fd-ptt", root).disabled = !FDV.on; $(".fd-ptt", root).classList.toggle("on", FDV.tx); };
   async function start() {
-    if (!navigator.mediaDevices?.getUserMedia && st.inp !== "__sdr") return toast("Soundkarte nur über https://…:8443 oder im Desktop-Programm", true);
+    if (!navigator.mediaDevices?.getUserMedia && st.inp !== "__sdr") {   // http: Soundkarte gesperrt – Empfaenger nehmen, falls verbunden
+      if (!(WW.radios || []).some(r => r.kind === "sdr" && r.connected)) return toast("Soundkarte nur über https://…:8443 oder im Desktop-Programm – oder einen Empfänger (WebSDR/KiwiSDR) verbinden", true);
+      st.inp = "__sdr"; store.set("fdv", st); $(".fd-inp", root).value = "__sdr";
+    }
     try {
       FDV.ctx = new AudioContext(); if (st.spk && FDV.ctx.setSinkId) await FDV.ctx.setSinkId(st.spk).catch(() => { });
       await FDV.ctx.audioWorklet.addModule("/static/digi-worklet.js"); await FDV.ctx.audioWorklet.addModule("/static/sdr-worklet.js");
-      FDV.in = st.inp === "__sdr" ? await rxStream() : await navigator.mediaDevices.getUserMedia({ audio: { deviceId: st.inp ? { exact: st.inp } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-      const src = FDV.ctx.createMediaStreamSource(FDV.in), lp = new BiquadFilterNode(FDV.ctx, { type: "lowpass", frequency: 3600 }), lp2 = new BiquadFilterNode(FDV.ctx, { type: "lowpass", frequency: 3600 });
-      FDV.tap = new AudioWorkletNode(FDV.ctx, "ww-tap"); src.connect(lp).connect(lp2).connect(FDV.tap);
+      if (st.inp !== "__sdr") {
+        FDV.in = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: st.inp ? { exact: st.inp } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+        const src = FDV.ctx.createMediaStreamSource(FDV.in), lp = new BiquadFilterNode(FDV.ctx, { type: "lowpass", frequency: 3600 }), lp2 = new BiquadFilterNode(FDV.ctx, { type: "lowpass", frequency: 3600 });
+        FDV.tap = new AudioWorkletNode(FDV.ctx, "ww-tap"); src.connect(lp).connect(lp2).connect(FDV.tap);
+      }
       FDV.play = new AudioWorkletNode(FDV.ctx, "ww-pcm-player", { outputChannelCount: [1] }); FDV.gain = FDV.ctx.createGain(); FDV.gain.gain.value = st.vol;
       FDV.play.connect(FDV.gain).connect(FDV.ctx.destination);
       const proto = location.protocol === "https:" ? "wss://" : "ws://";
@@ -41,13 +46,15 @@ function createFreedv(root) {
         const kind = new Uint8Array(e.data, 0, 1)[0], s = new Int16Array(e.data.slice(1)), f = new Float32Array(s.length); for (let i = 0; i < s.length; i++) f[i] = s[i] / 32768;
         if (kind === 1 && !FDV.tx) FDV.play.port.postMessage({ pcm: f, rate: 8000 }, [f.buffer]);
         if (kind === 2 && FDV.txPlay) FDV.txPlay.port.postMessage({ pcm: f, rate: 8000 }, [f.buffer]); };
-      FDV.tap.port.onmessage = e => { const x = e.data.samples; const el = $(".fd-lvl", root); if (el) el.style.width = Math.min(100, e.data.peak * 100) + "%";
+      const feed = (x, peak) => { const el = $(".fd-lvl", root); if (el) el.style.width = Math.min(100, peak * 100) + "%";
         if (FDV.tx || FDV.ws?.readyState !== 1) return; const out = new DataView(new ArrayBuffer(1 + x.length * 2)); out.setUint8(0, 1);
         for (let i = 0; i < x.length; i++) out.setInt16(1 + i * 2, Math.max(-32767, Math.min(32767, x[i] * 32767)), true); FDV.ws.send(out.buffer); };
+      if (FDV.tap) FDV.tap.port.onmessage = e => feed(e.data.samples, e.data.peak);
+      else FDV.unPcm = await rxPcm(null, rxTo8k(feed));   // Empfaenger: Ton direkt aus dem Datenstrom
       FDV.on = true; status();
     } catch (e) { toast("FreeDV: " + e.message, true); stop(); }
   }
-  function stop() { pttOff(); FDV.on = false; try { FDV.ws?.close(); if (st.inp !== "__sdr") FDV.in?.getTracks().forEach(t => t.stop()); FDV.ctx?.close(); } catch { } FDV.ws = FDV.ctx = null; status(); }
+  function stop() { pttOff(); FDV.on = false; try { FDV.unPcm?.(); } catch { } FDV.unPcm = FDV.tap = null; try { FDV.ws?.close(); if (st.inp !== "__sdr") FDV.in?.getTracks().forEach(t => t.stop()); FDV.ctx?.close(); } catch { } FDV.ws = FDV.ctx = null; status(); }
   async function pttOn() {
     if (!FDV.on || FDV.tx) return;
     try {

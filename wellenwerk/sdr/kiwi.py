@@ -141,6 +141,9 @@ class KiwiRig(SdrRig):
         await self._send(s, "SET gen=0 mix=-1")
         await self._send(s, "SET compression=0")
         await self._send(s, f"SET ident_user={self._user()}")
+        if not (0 <= self.state["freq"] <= self.bandwidth):   # Wunschfrequenz (z. B. 2 m vom Funkgeraet) hier nicht empfangbar
+            self.say(f"{self.state['freq'] / 1e6:.3f} MHz nicht empfangbar (0–{self.bandwidth / 1e6:.0f} MHz) – stelle 7,074 MHz ein")
+            self.state.update(freq=7074000, mode="USB")
         await self.tune()
         await self.apply_level("AGC", self.state["levels"]["AGC"])
         self.state.update(connected=True, error="")

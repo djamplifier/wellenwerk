@@ -17,6 +17,8 @@
 <main id="workspaces"></main>
 <footer id="statusbar" class="statusbar"></footer>
 <div id="toast"></div>
+<script src="/static/js/i18n.js?v=__V__"></script>
+<script src="/static/js/audio-compat.js?v=__V__"></script>
 <script src="/static/vendor/leaflet.min.js"></script>
 <script src="/static/vendor/dockview.min.js"></script>
 <script src="/static/js/core.js?v=__V__"></script>
@@ -39,6 +41,6 @@
 <script src="/static/js/plugins.js?v=__V__"></script>
 <script src="/static/js/apps2.js?v=__V__"></script>
 <script src="/static/js/ctx.js?v=__V__"></script>
-<script>setInterval(() => { const n = new Date(); document.getElementById("tb-clock").textContent = n.toISOString().slice(11, 19) + " UTC · " + n.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }); }, 1000);</script>
+<script>setInterval(() => { const n = new Date(); document.getElementById("tb-clock").textContent = n.toISOString().slice(11, 19) + " UTC · " + n.toLocaleTimeString(I18N.locale, { hour: "2-digit", minute: "2-digit" }); }, 1000);</script>
 </body>
 </html>

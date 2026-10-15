@@ -61,7 +61,8 @@ Wellenwerk.register("meine-erweiterung", {
 
 | `ctx.…` | Bedeutung |
 |---|---|
-| `station()` | Stationsdaten: `callsign`, `home_callsign`, `operator`, `locator`, `lat`, `lon`, `tx_pwr`, `profile`, `my_pota_ref`, `my_sota_ref`, `my_wwff_ref`, `winlink_call` |
+| `station()` | Stationsdaten: `callsign`, `home_callsign`, `operator`, `locator`, `lat`, `lon`, `tx_pwr`, `profile`, `my_pota_ref`, `my_sota_ref`, `my_wwff_ref`, `winlink_call`, `lang` (Sprache der Station) |
+| `lang`, `locale()`, `t(text)` | Sprache der Oberfläche in diesem Browser (`de`, `en`), passendes Gebietsschema für Datum/Zahlen, Übersetzung eines deutschen Textes |
 | `settings` | eigene Einstellungen (aktuelle Werte) |
 | `rig()` | Zustand des aktuellen Funkgeräts (`freq` in Hz, `mode`, `ptt`, `meters` …) |
 | `on(ereignis, fn)` | Ereignisse: `rig`, `station`, `spot`, `qso`, `decode`, `cluster`, `rotor`, `winlink`, `radios`, `spectrum`, `settings`, `plugin-settings` sowie eigene Meldungen des Server-Teils (über ihren `type`). Wird beim Ausschalten automatisch abgemeldet. |
@@ -73,6 +74,16 @@ Wellenwerk.register("meine-erweiterung", {
 | `addMenuItem(text, fn, register?)` | Punkt im Menü „Erweiterungen“ |
 | `storage.get/set` | kleine Ablage im Browser |
 | `toast`, `esc`, `icon`, `dialog` | Hilfsfunktionen der Oberfläche |
+
+### Mehrsprachigkeit
+
+Die Oberfläche übersetzt alle sichtbaren Texte selbst anhand von `static/i18n/<sprache>.json`. Eigene Texte einer Erweiterung schreibst du deutsch und lieferst die Übersetzungen mit:
+
+```js
+Wellenwerk.addTranslations("en", { "Meine Liste": "My list", "{} QSOs heute": "{} QSOs today" });
+```
+
+`{}` steht für einen beliebigen Teil (Zahl, Rufzeichen …). Bereiche, die nicht übersetzt werden sollen (empfangene Texte, Daten), bekommen `translate="no"`. Weitere Sprachen für das ganze Programm: eine Datei `static/i18n/<sprache>.json` nach dem Muster von `en.json` anlegen und in `static/js/i18n.js` bei `LANGS`/`LOCALES` eintragen.
 
 ## Server-Teil (Python)
 
