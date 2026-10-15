@@ -34,6 +34,7 @@ from . import programs
 from . import wsjtx
 from .winlink.client import Winlink
 from .catemu import CatEmu
+from .chat import Chat
 from .access import Access, AccessMiddleware, COOKIE, LOGIN_HTML
 from .plugins import PluginHost, PluginError
 from .winlink.message import Message as WlMessage
@@ -2178,6 +2179,40 @@ def _wl_notify(msg: dict):
 winlink = Winlink(DATA / "winlink", cfg, lambda on: rig.set_ptt(on), _wl_notify, lambda hz: rig.set_freq(hz), VERSION, identity=station_identity)
 
 
+chat = Chat(cfg, station_identity, lambda on: rig.set_ptt(on), _wl_notify, lambda hz: rig.set_freq(hz),
+            lambda: bool(winlink.state.get("busy")))
+
+
+@app.get("/api/chat/state", tags=["Chat"])
+async def chat_state():
+    return chat.snapshot()
+
+
+@app.post("/api/chat/connect", tags=["Chat"])
+async def chat_connect(body: dict):
+    """Chat starten: method ardop|vara|packet|telnet, target (Rufzeichen bzw. host:port), listen (auf Anrufe warten), freq (kHz)."""
+    try:
+        chat.start(body.get("method", "ardop"), body.get("target", ""), bool(body.get("listen")), str(body.get("freq") or ""))
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    return chat.snapshot()
+
+
+@app.post("/api/chat/send", tags=["Chat"])
+async def chat_send(body: dict):
+    try:
+        await chat.send(str(body.get("text", ""))[:2000])
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
+@app.post("/api/chat/stop", tags=["Chat"])
+async def chat_stop():
+    await chat.stop()
+    return chat.snapshot()
+
+
 @app.get("/api/winlink/state")
 async def wl_state():
     return winlink.snapshot()
@@ -2256,6 +2291,8 @@ async def wl_delete(folder: str, mid: str):
 
 @app.post("/api/winlink/connect")
 async def wl_connect(body: dict):
+    if chat.state.get("phase"):
+        raise HTTPException(400, "Das Modem wird gerade vom Chat benutzt")
     try:
         winlink.start(body.get("method", "telnet"), body.get("target", ""), body)
     except RuntimeError as e:
@@ -2495,7 +2532,7 @@ _TAGS = {"rig": "Funkgerät", "radios": "Funkgerät", "snapshots": "Funkgerät",
          "services": "Online-Dienste", "decodes": "WSJT-X", "favorites": "Funkgerät", "hamlib": "Funkgerät", "swdb": "Funkgerät",
          "recordings": "Digitalbetrieb", "sstv": "Digitalbetrieb", "bearing": "Karten & Ausbreitung", "map": "Karten & Ausbreitung",
          "solar": "Karten & Ausbreitung", "calendar": "Karten & Ausbreitung", "state": "Programm", "shutdown": "Programm", "store": "Programm",
-         "access": "Zugang", "login": "Zugang", "logout": "Zugang", "plugins": "Erweiterungen"}
+         "access": "Zugang", "login": "Zugang", "logout": "Zugang", "plugins": "Erweiterungen", "chat": "Chat"}
 for _r in app.routes:
     _p = getattr(_r, "path", "")
     if _p.startswith("/api/") and not getattr(_r, "tags", None):

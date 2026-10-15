@@ -3,6 +3,7 @@ eine async write()-Funktion und close(). Funkmodems werden ueber ihre TCP-Schnit
 ARDOP (ardopcf u. a., Befehl+Daten), VARA (Programm des Nutzers, Befehl 8300/Daten 8301), AGW (z. B. Direwolf)."""
 import asyncio
 import logging
+import re
 import struct
 
 log = logging.getLogger("ww.winlink")
@@ -169,6 +170,36 @@ class ArdopLink(Link):
             await self._shutdown()
             raise
 
+    @classmethod
+    async def listen(cls, host, port, mycall, bw="2000MAX", locator="", ptt=None, status=None, stop: asyncio.Event | None = None):
+        """Auf Anrufe warten; kehrt zurueck, sobald eine Gegenstation verbunden ist."""
+        self = cls(ptt, status)
+        await self._open(host, port)
+        try:
+            await self.cmd("INITIALIZE")
+            await self.cmd(f"MYCALL {mycall.upper()}")
+            if locator:
+                try:
+                    await self.cmd(f"GRIDSQUARE {locator[:6].upper()}")
+                except LinkError:
+                    pass
+            await self.cmd("PROTOCOLMODE ARQ")
+            await self.cmd(f"ARQBW {bw}")
+            await self.cmd("LISTEN TRUE")
+            while True:
+                get = asyncio.create_task(self.lines.get())
+                waits = [get] + ([asyncio.create_task(stop.wait())] if stop else [])
+                done, pend = await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
+                for t in pend:
+                    t.cancel()
+                if get not in done:
+                    raise LinkError("Warten beendet")
+                if get.result().upper().startswith("CONNECTED"):
+                    return self
+        except BaseException:
+            await self._shutdown()
+            raise
+
     async def write(self, data: bytes):
         for i in range(0, len(data), 4096):
             chunk = data[i:i + 4096]
@@ -307,6 +338,37 @@ class VaraLink(Link):
             await self._shutdown()
             raise
 
+    @classmethod
+    async def listen(cls, host, port, mycall, bw="2300", ptt=None, status=None, stop: asyncio.Event | None = None):
+        self = cls(ptt, status)
+        try:
+            self.cr, self.cw = await asyncio.wait_for(asyncio.open_connection(host, port), 5)
+            self.dr, self.dw = await asyncio.wait_for(asyncio.open_connection(host, port + 1), 5)
+        except (OSError, asyncio.TimeoutError):
+            raise LinkError(f"VARA-Modem auf {host}:{port} nicht erreichbar – läuft VARA?")
+        self.tasks = [asyncio.create_task(self._ctrl()), asyncio.create_task(self._data())]
+        try:
+            await self.cmd(f"MYCALL {mycall.upper()}")
+            if bw:
+                try:
+                    await self.cmd(f"BW{bw}")
+                except LinkError:
+                    pass
+            await self.cmd("LISTEN ON")
+            while True:
+                get = asyncio.create_task(self.lines.get())
+                waits = [get] + ([asyncio.create_task(stop.wait())] if stop else [])
+                done, pend = await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
+                for t in pend:
+                    t.cancel()
+                if get not in done:
+                    raise LinkError("Warten beendet")
+                if get.result().upper().startswith("CONNECTED"):
+                    return self
+        except BaseException:
+            await self._shutdown()
+            raise
+
     async def write(self, data: bytes):
         self.dw.write(data)
         await self.dw.drain()
@@ -425,6 +487,35 @@ class AgwLink(Link):
                     return self
                 if kind == "d":
                     raise LinkError(f"{self.target} antwortet nicht (Packet)")
+        except BaseException:
+            await self._shutdown()
+            raise
+
+    @classmethod
+    async def listen(cls, host, port, radio_port, mycall, status=None, stop: asyncio.Event | None = None):
+        self = cls(status)
+        self.mycall, self.rport = mycall.upper(), int(radio_port)
+        try:
+            self.r, self.w = await asyncio.wait_for(asyncio.open_connection(host, port), 5)
+        except (OSError, asyncio.TimeoutError):
+            raise LinkError(f"AGW-Schnittstelle {host}:{port} nicht erreichbar – läuft Direwolf (AGWPORT)?")
+        self.tasks = [asyncio.create_task(self._rx())]
+        try:
+            self.w.write(_agw(b"X", frm=self.mycall))
+            await self.w.drain()
+            while True:
+                get = asyncio.create_task(self.events.get())
+                waits = [get] + ([asyncio.create_task(stop.wait())] if stop else [])
+                done, pend = await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
+                for t in pend:
+                    t.cancel()
+                if get not in done:
+                    raise LinkError("Warten beendet")
+                kind, data = get.result()
+                if kind == "C":
+                    m = re.search(rb"Station\s+([A-Z0-9/\-]+)", data or b"")
+                    self.target = self.remote = (m.group(1).decode() if m else "")
+                    return self
         except BaseException:
             await self._shutdown()
             raise

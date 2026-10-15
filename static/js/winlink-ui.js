@@ -81,6 +81,34 @@ function createWlConn(root) {
 ctxRegister(".wl-t tr[data-mid]", tr => { WL.sel = tr.dataset.mid; $$(".wl-t tr").forEach(r => r.classList.toggle("sel", r === tr)); WW.emit("wl-sel"); return wlMsgMenu(WL.folder, tr.dataset.mid); });
 ctxRegister(".wl-f[data-f]", el => [{ label: "Neue Nachricht …", act: () => wlCompose() }, { label: "Ordner öffnen", act: () => el.click() }]);
 
+// ---------- Chat (Tastatur-QSO) ----------
+const CHAT = { lines: [], state: {} };
+WW.on("chat", m => { if (m.state) CHAT.state = m.state; if (m.line) { CHAT.lines.push(m.line); CHAT.lines = CHAT.lines.slice(-1000); } WW.emit("chat-ui", m); });
+function createWlChat(root) {
+  const st = store.get("chat.conn", { method: "ardop", target: "", freq: "" });
+  root.innerHTML = `<div class="ch-wrap"><div class="ctl-row ch-top"><select class="ch-m">${[["ardop", "ARDOP"], ["vara", "VARA"], ["packet", "Packet"], ["telnet", "Telnet (host:port)"]].map(([k, l]) => `<option value="${k}" ${k === st.method ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <input class="ch-t" placeholder="Rufzeichen der Gegenstation" value="${esc(st.target)}" style="width:150px"><input class="ch-f" placeholder="kHz (optional)" value="${esc(st.freq)}" style="width:90px">
+      <button class="ch-call primary">Anrufen</button><button class="ch-listen">Auf Anrufe warten</button><button class="ch-stop danger">Trennen</button><span class="ch-st hint"></span><i class="grow"></i><button class="ch-log" title="Gegenstation ins Logbuch">${icon("i-book")} Loggen</button></div>
+    <div class="ch-log-area"></div>
+    <form class="ch-in"><input class="ch-text grow" placeholder="Text eingeben, Enter sendet" autocomplete="off"><button class="primary">Senden</button></form></div>`;
+  const area = $(".ch-log-area", root);
+  const line = l => `<div class="ch-l ${l.kind}"><span>${esc(l.t)}</span> ${l.kind === "tx" ? "<b>&gt;</b> " : l.kind === "rx" ? "<b>&lt;</b> " : ""}${esc(l.text)}</div>`;
+  const stat = () => { const s = CHAT.state || {}; $(".ch-st", root).textContent = s.phase ? `${s.phase}${s.peer ? " – " + s.peer : ""}` : "";
+    const busy = !!s.phase; $(".ch-call", root).disabled = busy; $(".ch-listen", root).disabled = busy; $(".ch-stop", root).disabled = !busy;
+    $(".ch-text", root).disabled = s.phase !== "verbunden"; };
+  const all = () => { area.innerHTML = CHAT.lines.map(line).join(""); area.scrollTop = area.scrollHeight; stat(); };
+  const go = async listen => { Object.assign(st, { method: $(".ch-m", root).value, target: $(".ch-t", root).value.trim().toUpperCase(), freq: $(".ch-f", root).value.trim() }); store.set("chat.conn", st);
+    try { await post("/api/chat/connect", { ...st, listen }); } catch (e) { toast(e.message, true); } };
+  $(".ch-call", root).onclick = () => go(false); $(".ch-listen", root).onclick = () => go(true);
+  $(".ch-stop", root).onclick = () => post("/api/chat/stop").catch(e => toast(e.message, true));
+  $(".ch-in", root).onsubmit = async e => { e.preventDefault(); const t = $(".ch-text", root); if (!t.value.trim()) return; try { await post("/api/chat/send", { text: t.value }); t.value = ""; } catch (err) { toast(err.message, true); } };
+  $(".ch-log", root).onclick = () => { const peer = CHAT.state.peer || $(".ch-t", root).value.trim(); if (!peer) return toast("Keine Gegenstation", true);
+    switchApp("log"); setTimeout(() => WW.emit("prefill", { call: peer.split("-")[0], mode: { ardop: "ARDOP", vara: "VARA", packet: "PKT", telnet: "" }[st.method] || "" }), 300); };
+  api("/api/chat/state").then(s => { CHAT.state = s; CHAT.lines = s.lines || []; all(); }).catch(() => { });
+  const offs = [WW.on("chat-ui", m => { if (m.line) { area.insertAdjacentHTML("beforeend", line(m.line)); area.scrollTop = area.scrollHeight; } stat(); })];
+  all(); return () => offs.forEach(f => f());
+}
+
 // ---------- Verfassen ----------
 async function wlCompose(pre = null, editMid = null) {
   let p = pre || {};
@@ -115,14 +143,15 @@ async function wlForward(folder, mid) {
 
 APPS.wl = {
   title: "Winlink", icon: "i-mail",
-  panels: { wlfolders: { title: "Ordner", create: createWlFolders }, wllist: { title: "Nachrichten", create: createWlList }, wlread: { title: "Lesen", create: createWlRead }, wlconn: { title: "Verbindung", create: createWlConn } },
+  panels: { wlfolders: { title: "Ordner", create: createWlFolders }, wllist: { title: "Nachrichten", create: createWlList }, wlread: { title: "Lesen", create: createWlRead }, wlconn: { title: "Verbindung", create: createWlConn }, wlchat: { title: "Chat", create: createWlChat } },
   layout(dv) { const f = dv.addPanel({ id: "wlfolders", component: "wlfolders", title: "Ordner" });
     dv.addPanel({ id: "wllist", component: "wllist", title: "Nachrichten", position: { referencePanel: "wlfolders", direction: "right" } });
     dv.addPanel({ id: "wlconn", component: "wlconn", title: "Verbindung", position: { referencePanel: "wllist", direction: "right" } });
     dv.addPanel({ id: "wlread", component: "wlread", title: "Lesen", position: { referencePanel: "wllist", direction: "below" } });
+    dv.addPanel({ id: "wlchat", component: "wlchat", title: "Chat", position: { referencePanel: "wlread", direction: "within" }, inactive: true });
     setTimeout(() => { try { f.group.api.setSize({ width: 200 }); dv.getPanel("wlconn").group.api.setSize({ width: 440 }); dv.getPanel("wllist").group.api.setSize({ height: 300 }); } catch { } }, 60); },
   menus: [{ label: "Datei", items: [{ label: "Neue Nachricht …", icon: "i-plus", act: () => wlCompose() }, { label: "Winlink-Einstellungen …", icon: "i-gear", act: () => openOptions("winlink") }] },
-    { label: "Ansicht", items: Object.entries({ wlfolders: "Ordner", wllist: "Nachrichten", wlread: "Lesen", wlconn: "Verbindung" }).map(([k, l]) => ({ label: l, check: () => panelOpen("wl", k), act: () => togglePanel("wl", k) })) },
+    { label: "Ansicht", items: Object.entries({ wlfolders: "Ordner", wllist: "Nachrichten", wlread: "Lesen", wlconn: "Verbindung", wlchat: "Chat (Tastatur-QSO)" }).map(([k, l]) => ({ label: l, check: () => panelOpen("wl", k), act: () => togglePanel("wl", k) })) },
     MENU_WINDOW("wl"), MENU_HELP],
   toolbar: [{ label: "Neu", icon: "i-plus", act: () => wlCompose() }, { label: "Einstellungen", icon: "i-gear", act: () => openOptions("winlink") }, "|", { label: "Gerätesteuerung", icon: "i-radio", act: () => switchApp("rig") }, { label: "Logbuch", icon: "i-book", act: () => switchApp("log") }, { label: "Vollbild", icon: "i-full", act: fullScreen }],
 };

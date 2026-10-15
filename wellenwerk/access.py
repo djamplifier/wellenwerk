@@ -14,7 +14,7 @@ COOKIE = "ww_session"
 OPEN_PATHS = ("/login", "/api/login", "/static/logo.svg", "/static/style.css", "/favicon.ico")
 # Wege, die den Sender einschalten koennen – fuer MCP-Clients nur mit Erlaubnis
 TX_PATHS = ("/api/rig/ptt", "/api/rig/morse", "/api/rig/raw", "/api/rig/op", "/api/winkey/send", "/api/winkey/text",
-            "/api/winlink/connect", "/api/wsjtx/reply", "/api/wsjtx/text", "/api/programs/selfspot")
+            "/api/winlink/connect", "/api/wsjtx/reply", "/api/wsjtx/text", "/api/programs/selfspot", "/api/chat/connect", "/api/chat/send")
 
 
 class Access:
