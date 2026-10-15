@@ -240,6 +240,8 @@ async function openConnect(editId) {
     <div class="dtabs"><button class="on" data-t="new">Neu</button><button data-t="preset">Gespeichert</button><button data-t="ports">Serielle Ports</button><button data-t="help">Hilfe</button></div>
     <div class="dtab" data-t="new"><div class="cn-grid"><div>
       <input type="hidden" id="cn-id">
+      <div class="ctl-row cn-tpl"><span class="hint">Vorlage:</span><button type="button" data-tpl="wfview">wfview (Icom-Remote)</button><button type="button" data-tpl="flrig">FLRig</button><button type="button" data-tpl="ww">andere Wellenwerk-Station</button></div>
+      <p class="hint cn-tplhint hidden"></p>
       <label>Hersteller<select id="cn-mfg">${mfgs.map(m => `<option>${esc(m)}</option>`).join("")}</select></label>
       <label>Funkgerät<select id="cn-model"></select></label>
       <label>Name<input id="cn-name" placeholder="z. B. IC-7300 Shack"></label>
@@ -283,6 +285,14 @@ async function openConnect(editId) {
     $("#cn-name", d).value = p.name || ""; if (p.device) { if (![...$("#cn-dev", d).options].some(o => o.value === p.device)) { $("#cn-dev", d).value = "__other"; $("#cn-dev2", d).value = p.device; $("#cn-dev2", d).classList.remove("hidden"); } else $("#cn-dev", d).value = p.device; }
     $("#cn-speed", d).value = p.speed || "auto"; $("#cn-civ", d).value = p.civaddr || ""; $("#cn-cts", d).checked = p.handshake === "hardware"; $("#cn-dtr", d).checked = p.dtr_state === "on"; $("#cn-rts", d).checked = p.rts_state === "on";
     $("#cn-ptt", d).value = p.ptt_type || "RIG"; $("#cn-pttdev", d).value = p.ptt_device || ""; $("#cn-host", d).value = p.host || ""; $("#cn-conf", d).value = p.conf || ""; $("#cn-auto", d).checked = !!p.autoconnect; $("#cn-share", d).checked = !!p.share; $("#cn-scope", d).checked = p.scope ?? /icom/i.test(p.mfg || ""); };
+  const TPL = {
+    wfview: { mfg: "Hamlib", model: 2, name: "wfview Remote", host: "127.0.0.1:4533", hint: "In wfview: <i>Einstellungen → External Control → Enable RigCtld</i> (Port 4533). wfview verbindet sich selbst mit der entfernten Icom-Station (LAN/Internet) und stellt Gerät und Ton bereit; Wellenwerk steuert über diesen Port. Läuft wfview auf einem anderen Rechner, dessen Adresse eintragen. Ton: wfview-Audio als Soundkarte im Digitalbetrieb bzw. Fernbetrieb-Audio wählen." },
+    flrig: { mfg: "FLRig", model: 4, name: "FLRig", host: "127.0.0.1:12345", hint: "FLRig muss laufen (XML-RPC, Standardport 12345)." },
+    ww: { mfg: "Hamlib", model: 2, name: "Wellenwerk-Station", host: "192.168.1.20:4600", hint: "Auf der anderen Wellenwerk-Station das Gerät für andere Rechner freigeben; Adresse aus „Gespeichert → Für andere Programme“ eintragen." } };
+  $(".cn-tpl", d).onclick = e => { const t = TPL[e.target.dataset.tpl]; if (!t) return;
+    const mf = $("#cn-mfg", d); mf.value = [...mf.options].some(o => o.value === t.mfg) ? t.mfg : mf.value; mf.dispatchEvent(new Event("change"));
+    const md = $("#cn-model", d); md.value = String(t.model); md.dispatchEvent(new Event("change"));
+    $("#cn-name", d).value = t.name; $("#cn-host", d).value = t.host; const h = $(".cn-tplhint", d); h.innerHTML = t.hint; h.classList.remove("hidden"); };
   const save = async () => { const p = collect(); if (!p.model) throw new Error("Funkgerät wählen"); const r = await post("/api/radios", p); $("#cn-id", d).value = r.id; return r; };
   $("#cn-save", d).onclick = async () => { try { const r = await save(); status(`Gespeichert: ${r.name}`); drawPresets(); } catch (e) { status(e.message, true); } };
   $("#cn-go", d).onclick = async () => { try { const r = await save(); status(`Verbinde mit ${r.name} …`);
