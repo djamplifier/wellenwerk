@@ -52,9 +52,10 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 wl_call="", wl_password="", wl_telnet_host="server.winlink.org", wl_telnet_port=8772, wl_ptt="rig",
                 ardop_host="127.0.0.1", ardop_port=8515, ardop_bw="2000MAX", vara_host="127.0.0.1", vara_port=8300, vara_bw="2300",
                 agw_host="127.0.0.1", agw_port=8000, agw_radio_port=0, rtc_stun="",
+                sync_on=False, sync_master="", sync_slave="", sync_offset=0, sync_mode=True,
                 callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False)
 SECRETS = ("wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
-BOOLS = ("rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
+BOOLS = ("sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
 MASK = "••••••"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("ww")
@@ -220,9 +221,35 @@ def active_station() -> dict | None:
 
 
 # ---------- Hintergrunddienste ----------
+SYNC = {"last": None, "busy": False}
+
+
 async def on_rig(radio_id, state):
     state["band"] = band_for(state.get("freq"))
     await broadcast({"type": "rig", "radio": radio_id, "current": radio_id == radios.current, "rig": state})
+    if cfg.get("sync_on") and radio_id == cfg.get("sync_master") and state.get("connected") and state.get("freq"):
+        want = (int(state["freq"]) + int(cfg.get("sync_offset") or 0), state.get("mode") if cfg.get("sync_mode") else None)
+        if want != SYNC["last"] and not SYNC["busy"]:
+            asyncio.create_task(_sync_slave(want))
+
+
+async def _sync_slave(want):
+    """Synchronisierung: zweites Geraet folgt Frequenz (+Versatz) und ggf. Betriebsart des ersten."""
+    slave = radios.rig(cfg.get("sync_slave")) if cfg.get("sync_slave") != cfg.get("sync_master") else None
+    if not slave or not slave.state.get("connected"):
+        return
+    SYNC["busy"] = True
+    try:
+        hz, mode = want
+        if slave.state.get("freq") != hz:
+            await slave.set_freq(hz)
+        if mode and slave.state.get("mode") != mode:
+            await slave.set_mode(mode)
+        SYNC["last"] = want
+    except Exception as e:
+        log.warning("Synchronisierung: %s", e)
+    finally:
+        SYNC["busy"] = False
 
 
 async def on_spot(sp):
@@ -458,7 +485,7 @@ async def put_settings(new: dict):
     if new.get("locator") and not geo.valid_grid(new["locator"]):
         raise HTTPException(400, "Locator ungueltig (z. B. JO31ab)")
     for k in ("cluster_port", "wsjtx_port", "rot_port", "rot_model", "rig_poll_ms", "winkey_wpm", "n1mm_port", "backup_keep",
-              "wl_telnet_port", "ardop_port", "vara_port", "agw_port", "agw_radio_port"):
+              "wl_telnet_port", "ardop_port", "vara_port", "agw_port", "agw_radio_port", "sync_offset"):
         if k in new:
             new[k] = int(new[k])
     for k in BOOLS:
@@ -1805,6 +1832,88 @@ def _backup_to(name: str, dst: Path):
     with out:
         logbooks.get(name).db.backup(out)
     out.close()
+
+
+# ---------- Schnappschuesse (kompletter Geraetezustand) ----------
+SNAP_PATH = DATA / "snapshots.json"
+# nie in Schnappschuesse: Einmal-Aktionen (wuerden senden, abstimmen oder scannen) und Werte, die die Frequenz verstellen
+SNAP_SKIP_LEVELS = {"BAND_SELECT", "METER"}
+SNAP_SKIP_FUNCS = {"TUNER", "TBURST", "SEND_MORSE", "SEND_VOICE_MEM", "RESUME", "SYNC", "OVF_STATUS", "SCOPE", "TRANSCEIVE"}
+
+
+def _snaps() -> list:
+    try:
+        return json.loads(SNAP_PATH.read_text())
+    except (OSError, ValueError):
+        return []
+
+
+@app.get("/api/snapshots")
+async def snapshots_list():
+    return _snaps()
+
+
+@app.post("/api/snapshots")
+async def snapshot_take(body: dict):
+    r = radios.rig()
+    if not r or not r.state.get("connected"):
+        raise HTTPException(400, "Kein Funkgerät verbunden")
+    st, caps = r.state, r.caps
+    keep_l = set(caps.get("levels_set", [])) - SNAP_SKIP_LEVELS
+    snap = dict(id=os.urandom(4).hex(), name=(body.get("name") or "").strip()[:60] or datetime.now().strftime("%d.%m. %H:%M"),
+                created=datetime.now(timezone.utc).isoformat(timespec="seconds"), model=f"{caps.get('mfg', '')} {caps.get('model', '')}".strip(),
+                state=dict(freq=st.get("freq"), mode=st.get("mode"), passband=st.get("passband"), split=st.get("split"),
+                           vfob_freq=st.get("vfob_freq"), vfob_mode=st.get("vfob_mode"), rit=st.get("rit"), xit=st.get("xit"),
+                           levels={k: v for k, v in (st.get("levels") or {}).items() if k in keep_l},
+                           funcs={k: v for k, v in (st.get("funcs") or {}).items() if k in set(caps.get("funcs_set", [])) - SNAP_SKIP_FUNCS}))
+    lst = _snaps() + [snap]
+    SNAP_PATH.write_text(json.dumps(lst, indent=1))
+    return snap
+
+
+@app.post("/api/snapshots/{sid}/apply")
+async def snapshot_apply(sid: str):
+    snap = next((x for x in _snaps() if x["id"] == sid), None)
+    if not snap:
+        raise HTTPException(404, "Schnappschuss nicht gefunden")
+    r = radios.rig()
+    if not r or not r.state.get("connected"):
+        raise HTTPException(400, "Kein Funkgerät verbunden")
+    st, done, skipped = snap["state"], [], []
+
+    async def step(label, coro):
+        try:
+            await coro
+            done.append(label)
+        except Exception as e:
+            skipped.append(f"{label} ({e})")
+    # Reihenfolge: Regler und Schalter, dann Betriebsart/Frequenz (damit nichts sie wieder verstellt), Sperre zuletzt
+    for k, v in (st.get("levels") or {}).items():
+        if k not in SNAP_SKIP_LEVELS:
+            await step(k, r.set_level(k, float(v)))
+    funcs = {k: v for k, v in (st.get("funcs") or {}).items() if k not in SNAP_SKIP_FUNCS}
+    lock = funcs.pop("LOCK", None)
+    for k, v in funcs.items():
+        await step(k, r.set_func(k, bool(v)))
+    if st.get("mode"):
+        await step("Betriebsart", r.set_mode(st["mode"], int(st.get("passband") or 0)))
+    if st.get("freq"):
+        await step("Frequenz", r.set_freq(int(st["freq"])))
+    if st.get("split") is not None:
+        await step("Split", r.set_split(bool(st["split"])))
+        if st.get("split") and st.get("vfob_freq"):
+            await step("Sendefrequenz", r.set_split_freq(int(st["vfob_freq"])))
+    if st.get("rit"):
+        await step("RIT", r.set_rit(int(st["rit"])))
+    if lock is not None:
+        await step("Sperre", r.set_func("LOCK", bool(lock)))
+    return dict(done=done, skipped=skipped)
+
+
+@app.delete("/api/snapshots/{sid}")
+async def snapshot_delete(sid: str):
+    SNAP_PATH.write_text(json.dumps([x for x in _snaps() if x["id"] != sid], indent=1))
+    return {"ok": True}
 
 
 # ---------- Winlink ----------

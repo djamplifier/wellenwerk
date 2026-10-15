@@ -117,3 +117,32 @@ function createRemoteAudio(root) {
   const offs = [WW.on("ra", draw), WW.on("audio-station", draw)]; return () => { offs.forEach(f => f()); lvlSt?.(); lvlRx?.(); };
 }
 APPS.rig.panels.remoteaudio = { title: "Fernbetrieb-Audio", create: createRemoteAudio, dock: { ref: "face", dir: "right" }, size: { width: 420 } };
+
+// ---------- Schnappschuesse und Synchronisierung (Menue Funkgeraet) ----------
+async function snapshotsDialog() {
+  const d = dialog({ title: "Schnappschüsse – kompletter Gerätezustand", icon: "i-save", wide: true, body: `
+    <div class="ctl-row"><input class="sn-name grow" placeholder="Name, z. B. „40 m FT8“ oder „Contest SSB“"><button type="button" class="sn-take primary">Aktuellen Zustand speichern</button></div>
+    <div class="tablewrap" style="max-height:340px"><table class="grid sn-t"><thead><tr><th>Name</th><th>Frequenz</th><th>Mode</th><th>Regler/Schalter</th><th>Gerät</th><th></th></tr></thead><tbody></tbody></table></div>
+    <p class="hint">Gespeichert werden Frequenz, Betriebsart und Bandbreite, Split mit Sendefrequenz, RIT sowie alle Regler und Schalter, die das Funkgerät setzen kann.</p><div class="sn-res hint"></div>` });
+  const draw = async () => { const l = await api("/api/snapshots");
+    $("tbody", d).innerHTML = l.map(x => `<tr data-id="${x.id}"><td>${esc(x.name)}</td><td>${fmtMHz(x.state.freq || 0)}</td><td>${esc(x.state.mode || "")}${x.state.split ? " · Split" : ""}</td><td>${Object.keys(x.state.levels || {}).length + Object.keys(x.state.funcs || {}).length}</td><td>${esc(x.model)}</td>
+      <td><button type="button" data-a="apply">Abrufen</button><button type="button" data-a="del">×</button></td></tr>`).join("") || `<tr><td colspan="6" class="hint">noch keine</td></tr>`; };
+  $(".sn-take", d).onclick = async () => { try { await post("/api/snapshots", { name: $(".sn-name", d).value }); $(".sn-name", d).value = ""; draw(); toast("Schnappschuss gespeichert"); } catch (e) { toast(e.message, true); } };
+  $("tbody", d).onclick = async e => { const b = e.target.closest("button[data-a]"); if (!b) return; const id = b.closest("tr").dataset.id;
+    if (b.dataset.a === "del") { await api("/api/snapshots/" + id, { method: "DELETE" }); draw(); return; }
+    try { const r = await post(`/api/snapshots/${id}/apply`); $(".sn-res", d).textContent = `Übernommen: ${r.done.length} Einstellungen${r.skipped.length ? ` · nicht möglich: ${r.skipped.join(", ")}` : ""}`; } catch (err) { toast(err.message, true); } };
+  draw();
+}
+function syncDialog() {
+  const s = WW.settings, rs = WW.radios || [];
+  const opts = sel => rs.map(r => `<option value="${esc(r.id)}" ${r.id === sel ? "selected" : ""}>${esc(r.name || r.id)}${r.connected ? "" : " (nicht verbunden)"}</option>`).join("");
+  const d = dialog({ title: "Funkgeräte synchronisieren", icon: "i-radio", buttons: [["Abbrechen", "close"], ["Speichern", "ok", "primary"]], body: `<div class="grid2">
+    <label>Führendes Gerät<select class="sy-m">${opts(s.sync_master || WW.current)}</select></label><label>Folgendes Gerät<select class="sy-s">${opts(s.sync_slave)}</select></label>
+    <label>Versatz (Hz, z. B. 0 oder −1500)<input class="sy-o" type="number" value="${+s.sync_offset || 0}"></label><span></span>
+    <label class="chkrow wide"><input type="checkbox" class="sy-mo" ${s.sync_mode !== false ? "checked" : ""}> Betriebsart mitnehmen</label>
+    <label class="chkrow wide"><input type="checkbox" class="sy-on" ${s.sync_on ? "checked" : ""}> Synchronisierung eingeschaltet</label>
+    <p class="hint wide">Das folgende Gerät stellt sich bei jeder Änderung auf die Frequenz des führenden (plus Versatz) – z. B. Empfänger/Skimmer, Transverter-ZF oder SDR-Panadapter. Beide Geräte müssen verbunden sein.</p>${rs.length < 2 ? `<p class="err wide">Dafür werden zwei eingerichtete Funkgeräte gebraucht (Datei → Verbinden …).</p>` : ""}</div>` });
+  d.querySelector('[value="ok"]').onclick = async e => { e.preventDefault();
+    if ($(".sy-on", d).checked && $(".sy-m", d).value === $(".sy-s", d).value) return toast("Führendes und folgendes Gerät müssen verschieden sein", true);
+    try { WW.settings = await api("/api/settings", { method: "PUT", body: { sync_on: $(".sy-on", d).checked, sync_master: $(".sy-m", d).value, sync_slave: $(".sy-s", d).value, sync_offset: $(".sy-o", d).value || "0", sync_mode: $(".sy-mo", d).checked } }); d.close(); toast($(".sy-on", d).checked ? "Synchronisierung ein" : "Synchronisierung aus"); } catch (err) { toast(err.message, true); } };
+}
