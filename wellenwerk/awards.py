@@ -1,4 +1,5 @@
-"""Diplom-Auswertung: DXCC, WAZ, WAS, WPX, WAC, DOK, IOTA - gearbeitet und bestaetigt."""
+"""Diplom-Auswertung: DXCC, WAZ, ITU, WAS, WPX, WAC, Europa, DOK, IOTA, VUCC, Locatorfelder, US-Counties, CQ DX Marathon, DXCC-Challenge."""
+from datetime import datetime, timezone
 import re
 
 US_DXCC = {291, 6, 110}           # USA, Alaska, Hawaii
@@ -8,6 +9,11 @@ CONTINENTS = {"AF": "Afrika", "AN": "Antarktis", "AS": "Asien", "EU": "Europa", 
               "OC": "Ozeanien", "SA": "Südamerika"}
 AWARD_BANDS = ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm"]
 PHONE = {"SSB", "USB", "LSB", "AM", "FM", "DIGITALVOICE"}
+
+
+VUCC_BANDS = ("6m", "2m", "70cm", "23cm", "13cm", "4m")
+VUCC_NEED = {"6m": 100, "2m": 100, "70cm": 50, "23cm": 25, "13cm": 10, "4m": 100}
+CHALLENGE_BANDS = ("160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m")
 
 
 def mode_class(mode: str) -> str:
@@ -53,6 +59,11 @@ def compute(qsos: list[dict], cty_names: dict[int, str], eqsl_counts: bool = Fal
         return {"worked": set(), "confirmed": set()}
     dxcc, dxcc_band, dxcc_mode = new(), {}, {}
     waz, was, wpx, wac, dok, iota = new(), new(), new(), new(), new(), new()
+    itu, wae, grids, counties = new(), new(), new(), new()
+    vucc: dict = {}
+    year = str(datetime.now(timezone.utc).year)
+    marathon_dx, marathon_z = set(), set()
+    challenge = set()
     for q in qsos:
         c = confirmed(q, eqsl_counts)
         band, mc = (q.get("band") or "").lower(), mode_class(q.get("mode"))
@@ -77,6 +88,23 @@ def compute(qsos: list[dict], cty_names: dict[int, str], eqsl_counts: bool = Fal
         if dx == 230 and q.get("darc_dok"):
             add(dok, q["darc_dok"].upper())
         add(iota, (q.get("iota") or "").upper() or None)
+        add(itu, q.get("ituz"))
+        if q.get("cont") == "EU":
+            add(wae, dx)
+        g4 = (q.get("gridsquare") or "")[:4].upper()
+        if len(g4) == 4:
+            add(grids, g4)
+            if band in VUCC_BANDS and (q.get("prop_mode") or "").upper() not in ("RPT",):
+                add(vucc.setdefault(band, new()), g4)
+        if dx in US_DXCC and q.get("cnty"):
+            add(counties, q["cnty"].upper().replace(" ", ""))
+        if (q.get("qso_date") or "").startswith(year):      # CQ DX Marathon: gearbeitet genuegt
+            if dx:
+                marathon_dx.add(dx)
+            if q.get("cqz"):
+                marathon_z.add(q.get("cqz"))
+        if dx and band in CHALLENGE_BANDS:
+            challenge.add((dx, band))
 
     def summary(b, total=None):
         return dict(worked=len(b["worked"]), confirmed=len(b["confirmed"]), total=total)
@@ -103,4 +131,9 @@ def compute(qsos: list[dict], cty_names: dict[int, str], eqsl_counts: bool = Fal
         wac_list=[dict(cont=k, name=v, worked=k in wac["worked"], confirmed=k in wac["confirmed"])
                   for k, v in CONTINENTS.items() if k != "AN"],
         dok_list=sorted(dok["worked"]), iota_list=sorted(iota["worked"]),
+        itu=summary(itu, 75), wae=summary(wae), grids=summary(grids), counties=summary(counties, 3077),
+        vucc={b: summary(vucc[b], VUCC_NEED[b]) for b in VUCC_BANDS if b in vucc},
+        marathon=dict(year=year, countries=len(marathon_dx), zones=len(marathon_z), total=len(marathon_dx) + len(marathon_z)),
+        challenge=dict(worked=len(challenge)),
+        itu_list=[dict(zone=z, worked=z in itu["worked"], confirmed=z in itu["confirmed"]) for z in range(1, 76)],
     )

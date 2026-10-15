@@ -9,11 +9,14 @@ function createAwards(root) {
     const grid = (list, key, label) => `<div class="awgrid">${list.map(i => `<span class="${i.confirmed ? "c" : i.worked ? "w" : ""}" title="${esc(i.name || i[key])}">${esc(label ? i[label] : i[key])}</span>`).join("")}</div>`;
     const cols = [...a.bands, ...a.modes];
     root.innerHTML = `<div class="awards"><p class="hint">${WW.settings.eqsl_counts ? "Bestätigt = Papier-QSL, LoTW oder eQSL." : "Bestätigt = Papier-QSL oder LoTW (eQSL in den Optionen zuschaltbar)."} Logbuch: ${esc(WW.logbook)}</p>
-      <div class="kpis">${k("DXCC", a.dxcc, 340)}${k("WAZ", a.waz, 40)}${k("WAS", a.was, 50)}${k("WAC", a.wac, 6)}${k("WPX", a.wpx)}${k("DOK", a.dok)}${k("IOTA", a.iota)}</div>
+      <div class="kpis">${k("DXCC", a.dxcc, 340)}${k("WAZ", a.waz, 40)}${k("ITU-Zonen", a.itu, 75)}${k("WAS", a.was, 50)}${k("WAC", a.wac, 6)}${k("WPX", a.wpx)}${k("Europa (EU-Länder)", a.wae)}${k("DOK", a.dok)}${k("IOTA", a.iota)}
+        ${k("Locatorfelder", a.grids)}${k("US-Counties", a.counties, 3077)}${Object.entries(a.vucc).map(([b, x]) => k(`VUCC ${b}`, x, x.total)).join("")}
+        <div class="kpi"><div>CQ DX Marathon ${esc(a.marathon.year)}</div><b>${a.marathon.total}</b><span class="cf">${a.marathon.countries} Länder + ${a.marathon.zones} Zonen</span></div>
+        <div class="kpi"><div>DXCC-Challenge</div><b>${a.challenge.worked}</b><span class="cf">Land-Band-Punkte 160–6 m</span></div></div>
       <div class="awsec"><h3>DXCC nach Band und Mode</h3><div class="tablewrap mx"><table class="matrix"><thead><tr><th>Land</th>${cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr>
         <tr class="sum"><td>Summe</td>${a.bands.map(b => `<td>${a.dxcc_bands[b].worked}/${a.dxcc_bands[b].confirmed}</td>`).join("")}${a.modes.map(m => `<td>${a.dxcc_modes[m].worked}/${a.dxcc_modes[m].confirmed}</td>`).join("")}</tr></thead>
         <tbody>${a.matrix.map(r => `<tr><td class="${r.confirmed ? "c" : ""}">${esc(r.country)}</td>${cols.map(c => `<td class="${r.cells[c] === "C" ? "c" : r.cells[c] === "W" ? "w" : ""}">${r.cells[c] || ""}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${cols.length + 1}">Noch keine Länder.</td></tr>`}</tbody></table></div></div>
-      <div class="awsec"><h3>WAZ – CQ-Zonen</h3>${grid(a.waz_list, "zone")}</div><div class="awsec"><h3>WAC – Kontinente</h3>${grid(a.wac_list, "cont", "name")}</div>
+      <div class="awsec"><h3>WAZ – CQ-Zonen</h3>${grid(a.waz_list, "zone")}</div><div class="awsec"><h3>WAC – Kontinente</h3>${grid(a.wac_list, "cont", "name")}</div><div class="awsec"><h3>ITU-Zonen</h3>${grid(a.itu_list, "zone")}</div>
       <div class="awsec"><h3>WAS – US-Bundesstaaten</h3>${grid(a.was_list, "state")}</div>
       <div class="awsec"><h3>DOK (${a.dok_list.length})</h3><div class="taglist">${a.dok_list.map(d => `<span>${esc(d)}</span>`).join("") || "—"}</div></div>
       <div class="awsec"><h3>IOTA (${a.iota_list.length})</h3><div class="taglist">${a.iota_list.map(d => `<span>${esc(d)}</span>`).join("") || "—"}</div></div></div>`;
