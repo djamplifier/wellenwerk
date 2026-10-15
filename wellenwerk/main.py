@@ -912,11 +912,20 @@ async def fav_del(fid: int):
     return {"ok": True}
 
 
+def _mode_rst(mode: str) -> str:
+    """RST-Vorgabe aus der Betriebsarten-Liste der Programmoptionen, sonst Standard."""
+    for line in (cfg.get("mode_rst") or "").splitlines():
+        p = line.split()
+        if len(p) >= 2 and p[0].upper() == (mode or "").upper():
+            return p[1]
+    return default_rst(mode)
+
+
 @app.get("/api/lookup/{call:path}")
 async def lookup(call: str, band: str = "", mode: str = "", grid: str = ""):
     info = describe(call, grid)
     c = call.upper()
-    return dict(call=c, **info, worked=book.worked(call, info.get("dxcc"), band, mode), rst=default_rst(mode),
+    return dict(call=c, **info, worked=book.worked(call, info.get("dxcc"), band, mode), rst=_mode_rst(mode),
                 matrix_call=book.matrix("call=?", [c]),
                 matrix_dxcc=book.matrix("dxcc=?", [info["dxcc"]]) if info.get("dxcc") else {})
 

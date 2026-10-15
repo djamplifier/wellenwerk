@@ -218,10 +218,12 @@ async function satInitOnce() {
   setInterval(satTick, 1000);
 }
 const satObs = () => { const h = WW.home || [51, 10]; return { latitude: satellite.degreesToRadians(h[0]), longitude: satellite.degreesToRadians(h[1]), height: 0.02 }; };
-function satLook(rec, date) { const pv = satellite.propagate(rec, date); if (!pv || !pv.position) return null; const g = satellite.gstime(date), ecf = satellite.eciToEcf(pv.position, g), la = satellite.ecfToLookAngles(satObs(), ecf), gd = satellite.eciToGeodetic(pv.position, g);
+const satObsAt = (lat, lon) => ({ latitude: satellite.degreesToRadians(lat), longitude: satellite.degreesToRadians(lon), height: 0 });
+function satLook(rec, date, obs) { const pv = satellite.propagate(rec, date); if (!pv || !pv.position) return null; const g = satellite.gstime(date), ecf = satellite.eciToEcf(pv.position, g), la = satellite.ecfToLookAngles(obs || satObs(), ecf), gd = satellite.eciToGeodetic(pv.position, g);
   return { az: satellite.radiansToDegrees(la.azimuth), el: satellite.radiansToDegrees(la.elevation), range: la.rangeSat, lat: satellite.degreesLat(gd.latitude), lon: satellite.degreesLong(gd.longitude), alt: gd.height }; }
-function satPasses(rec, from, hours = 48, max = 12) {
-  const out = [], step = 20e3, end = from.getTime() + hours * 3600e3, el = t => { const l = satLook(rec, new Date(t)); return l ? l.el : -90; };
+// Ueberfluege; mit obs2 = gemeinsame Sichtbarkeit (Satellit bei beiden Stationen ueber dem Horizont)
+function satPasses(rec, from, hours = 48, max = 12, obs2 = null) {
+  const out = [], step = 20e3, end = from.getTime() + hours * 3600e3, el = t => { const d = new Date(t), l = satLook(rec, d); if (!l) return -90; if (!obs2) return l.el; const l2 = satLook(rec, d, obs2); return l2 ? Math.min(l.el, l2.el) : -90; };
   const edge = (a, b, rising) => { for (let i = 0; i < 12; i++) { const m = (a + b) / 2; (el(m) > 0) === rising ? (b = m) : (a = m); } return (a + b) / 2; };
   let t = from.getTime(), prev = el(t), cur = null;
   if (prev > 0) { let b = t; while (el(b - step) > 0 && t - b < 3 * 3600e3) b -= step; cur = { aos: edge(b - step, b, true), maxEl: prev, maxT: t }; }
@@ -229,6 +231,58 @@ function satPasses(rec, from, hours = 48, max = 12) {
     if (cur && e > cur.maxEl) { cur.maxEl = e; cur.maxT = t; } if (e <= 0 && prev > 0 && cur) { cur.los = edge(t - step, t, false); out.push(cur); cur = null; } prev = e; }
   return out.map(p => { let a = Math.max(p.aos, p.maxT - step), b = Math.min(p.los, p.maxT + step); for (let i = 0; i < 25; i++) { const m1 = a + (b - a) / 3, m2 = b - (b - a) / 3; el(m1) < el(m2) ? (a = m1) : (b = m2); }
     return { ...p, maxT: (a + b) / 2, maxEl: el((a + b) / 2), aosAz: satLook(rec, new Date(p.aos)).az, losAz: satLook(rec, new Date(p.los)).az }; });
+}
+function gridLatLon(g) {
+  g = (g || "").trim().toUpperCase(); if (!/^[A-R]{2}\d{2}([A-X]{2}(\d{2})?)?$/.test(g)) return null;
+  let lon = (g.charCodeAt(0) - 65) * 20 - 180 + +g[2] * 2, lat = (g.charCodeAt(1) - 65) * 10 - 90 + +g[3], w = 2, h = 1;
+  if (g.length >= 6) { lon += (g.charCodeAt(4) - 65) * 2 / 24; lat += (g.charCodeAt(5) - 65) / 24; w = 2 / 24; h = 1 / 24; }
+  if (g.length >= 8) { lon += +g[6] * 2 / 240; lat += +g[7] / 240; w = 2 / 240; h = 1 / 240; }
+  return [lat + h / 2, lon + w / 2];
+}
+const fmtDT = t => { const s = new Date(t).toISOString(); return `${s.slice(8, 10)}.${s.slice(5, 7)}. ${s.slice(11, 16)}`; };
+// Gemeinsame Sichtbarkeit mit einer anderen Station (Rufzeichen oder Locator)
+function createSatMutual(root) {
+  const st = store.get("sat.mutual", { dx: "", all: false, minEl: 0 });
+  root.innerHTML = `<div class="pane-tb"><input class="sm-dx" placeholder="Rufzeichen oder Locator der Gegenstation" value="${esc(st.dx)}" style="width:230px"><button class="sm-go">Berechnen</button>
+    <label class="chk"><input type="checkbox" class="sm-all" ${st.all ? "checked" : ""}> alle ausgewählten Satelliten</label><label class="chk">min. El <input type="number" class="sm-min" value="${st.minEl}" min="0" max="60" style="width:46px">°</label><span class="hint sm-info"></span></div>
+    <div class="tablewrap"><table class="grid sm-t"><thead><tr><th>Satellit</th><th>Beginn (UTC)</th><th>Ende</th><th>Dauer</th><th>max. El gemeinsam</th><th>El hier / dort</th></tr></thead><tbody></tbody></table></div>`;
+  const run = async () => {
+    const dx = $(".sm-dx", root).value.trim().toUpperCase(), all = $(".sm-all", root).checked, minEl = +$(".sm-min", root).value || 0; store.set("sat.mutual", { dx, all, minEl });
+    if (!dx) return; await satInit(); let pos = gridLatLon(dx), where = dx;
+    if (!pos) { try { const r = await api("/api/lookup/" + encodeURIComponent(dx)); if (r.lat == null) throw new Error(); pos = [r.lat, r.lon]; where = `${dx} (${r.country || ""}${r.pos_from === "dxcc" ? ", Landesmitte" : ""})`; } catch { $(".sm-info", root).textContent = "Rufzeichen/Locator unbekannt"; return; } }
+    const o2 = satObsAt(pos[0], pos[1]), sats = all ? SAT.list.filter(x => SAT.chosen.has(x.norad)) : (SAT.sel ? [SAT.sel] : []), rows = [], now = new Date();
+    $(".sm-info", root).textContent = "rechnet …"; await new Promise(r => setTimeout(r, 20));
+    for (const x of sats) for (const p of satPasses(x.rec, now, all ? 24 : 72, all ? 6 : 20, o2)) if (p.maxEl >= minEl) {
+      const a = satLook(x.rec, new Date(p.maxT)), b = satLook(x.rec, new Date(p.maxT), o2); rows.push({ x, p, here: a.el, there: b.el }); }
+    rows.sort((a, b) => a.p.aos - b.p.aos);
+    $(".sm-info", root).textContent = `${where} · ${pos[0].toFixed(1)}°, ${pos[1].toFixed(1)}° · ${rows.length} Fenster`;
+    const nowT = Date.now();
+    $("tbody", root).innerHTML = rows.map(({ x, p, here, there }) => `<tr data-n="${x.norad}" class="${p.aos <= nowT && p.los >= nowT ? "now" : ""}"><td>${esc(x.name)}</td><td>${fmtDT(p.aos)}</td><td>${hhmm(p.los)}</td><td>${Math.round((p.los - p.aos) / 60000)} min</td><td><b>${Math.round(p.maxEl)}°</b></td><td>${Math.round(here)}° / ${Math.round(there)}°</td></tr>`).join("")
+      || `<tr><td colspan="6" class="hint">Kein gemeinsames Fenster in ${all ? 24 : 72} h.</td></tr>`; };
+  root.addEventListener("click", e => { if (e.target.closest(".sm-go")) run(); const r = e.target.closest("tr[data-n]"); if (r) satSelect(+r.dataset.n); });
+  root.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.classList.contains("sm-dx")) run(); });
+  const off = WW.on("sat-sel", () => { if (!$(".sm-all", root).checked && $(".sm-dx", root).value) run(); });
+  satInit().then(() => st.dx && run()).catch(() => { }); return off;
+}
+// Zeitplan: alle ausgewaehlten Satelliten nach Beginn sortiert
+function createSatSchedule(root) {
+  const st = store.get("sat.sched", { hours: 12, minEl: 10, voice: true });
+  root.innerHTML = `<div class="pane-tb"><label class="chk">nächste <select class="ss-h">${[3, 6, 12, 24, 48].map(h => `<option ${h === st.hours ? "selected" : ""}>${h}</option>`).join("")}</select> h</label>
+    <label class="chk">min. El <input type="number" class="ss-min" value="${st.minEl}" min="0" max="80" style="width:46px">°</label><label class="chk"><input type="checkbox" class="ss-voice" ${st.voice ? "checked" : ""}> nur mit Sprechfunk/Transponder</label><span class="hint ss-info"></span></div>
+    <div class="tablewrap"><table class="grid ss-t"><thead><tr><th>Satellit</th><th>Beginn (UTC)</th><th>Az</th><th>max. El</th><th>Ende</th><th>Az</th><th>Dauer</th><th>Betrieb</th></tr></thead><tbody></tbody></table></div>`;
+  const draw = async () => {
+    await satInit(); const hours = +$(".ss-h", root).value, minEl = +$(".ss-min", root).value || 0, voice = $(".ss-voice", root).checked; store.set("sat.sched", { hours, minEl, voice });
+    const now = new Date(), rows = [];
+    for (const x of SAT.list.filter(s => SAT.chosen.has(s.norad) && (!voice || s.voice))) for (const p of satPasses(x.rec, now, hours, 50)) if (p.maxEl >= minEl) rows.push({ x, p });
+    rows.sort((a, b) => a.p.aos - b.p.aos); const t = Date.now();
+    const op = x => [...new Set(x.transmitters.filter(t => t.up_low).map(t => /transponder/i.test(t.type) || t.invert ? (t.invert ? "Lin. Transp. (inv.)" : "Lin. Transp.") : t.mode))].slice(0, 3).join(", ");
+    $(".ss-info", root).textContent = `${rows.length} Überflüge`;
+    $("tbody", root).innerHTML = rows.map(({ x, p }) => `<tr data-n="${x.norad}" class="${p.aos <= t && p.los >= t ? "now" : ""}${x.norad === SAT.sel?.norad ? " sel" : ""}"><td>${esc(x.name)}</td><td>${fmtDT(p.aos)}</td><td>${Math.round(p.aosAz)}°</td><td><b>${Math.round(p.maxEl)}°</b></td><td>${hhmm(p.los)}</td><td>${Math.round(p.losAz)}°</td><td>${Math.round((p.los - p.aos) / 60000)} min</td><td>${esc(op(x))}</td></tr>`).join("")
+      || '<tr><td colspan="8" class="hint">keine Überflüge</td></tr>'; };
+  root.addEventListener("change", e => { if (e.target.closest(".pane-tb")) draw(); });
+  root.addEventListener("click", e => { const r = e.target.closest("tr[data-n]"); if (r) satSelect(+r.dataset.n); });
+  draw().catch(e => root.innerHTML = `<div class="err">${esc(e.message)}</div>`);
+  const tm = setInterval(draw, 60000), offs = [WW.on("sat-chosen", draw)]; return () => { clearInterval(tm); offs.forEach(f => f()); };
 }
 const hhmm = t => new Date(t).toISOString().slice(11, 16);
 function satSelect(norad) { SAT.sel = SAT.list.find(x => x.norad === norad); if (!SAT.sel) return; store.set("sat", norad); SAT.txi = 0; SAT.lastDop = null; SAT.lastRot = null; SAT.passes = satPasses(SAT.sel.rec, new Date()); WW.emit("sat-sel"); }
@@ -261,7 +315,7 @@ function satChooser(cb) {
   d.addEventListener("click", e => { const m = e.target.dataset.m; if (!m) return; const mv = (from, to, all) => [...from.options].filter(o => all || o.selected).forEach(o => to.appendChild(o));
     if (m === "add") mv(av, ch); if (m === "all") mv(av, ch, true); if (m === "rm") mv(ch, av); if (m === "none") mv(ch, av, true); });
   av.ondblclick = () => [...av.selectedOptions].forEach(o => ch.appendChild(o)); ch.ondblclick = () => [...ch.selectedOptions].forEach(o => av.appendChild(o));
-  d.querySelector('[value="ok"]').onclick = e => { e.preventDefault(); SAT.chosen = new Set([...ch.options].slice(0, 100).map(o => +o.value)); store.set("sat.chosen", [...SAT.chosen]); d.close(); cb(); };
+  d.querySelector('[value="ok"]').onclick = e => { e.preventDefault(); SAT.chosen = new Set([...ch.options].slice(0, 100).map(o => +o.value)); store.set("sat.chosen", [...SAT.chosen]); d.close(); cb(); WW.emit("sat-chosen"); };
 }
 function createSatInfo(root) {
   const tr = store.get("sat.track", {});
@@ -307,15 +361,18 @@ function createSatMap(root) {
 APPS.sat = {
   title: "Satelliten", icon: "i-sat",
   panels: { satlist: { title: "Satelliten", create: createSatList }, satinfo: { title: "Position & Frequenzen", create: createSatInfo }, satpolar: { title: "Überflug", create: createSatPolar },
-    satmap: { title: "Karte", create: createSatMap }, satpasses: { title: "Überflüge", create: createSatPasses } },
+    satmap: { title: "Karte", create: createSatMap }, satpasses: { title: "Überflüge", create: createSatPasses },
+    satmutual: { title: "Gemeinsame Sichtbarkeit", create: createSatMutual }, satsched: { title: "Zeitplan", create: createSatSchedule } },
   layout(dv) { const l = dv.addPanel({ id: "satlist", component: "satlist", title: "Satelliten" });
     const m = dv.addPanel({ id: "satmap", component: "satmap", title: "Karte", position: { referencePanel: "satlist", direction: "right" } });
     dv.addPanel({ id: "satpolar", component: "satpolar", title: "Überflug", position: { referencePanel: "satmap", direction: "left" } });
     dv.addPanel({ id: "satinfo", component: "satinfo", title: "Position & Frequenzen", position: { referencePanel: "satmap", direction: "below" } });
     dv.addPanel({ id: "satpasses", component: "satpasses", title: "Überflüge", position: { referencePanel: "satinfo", direction: "right" } });
+    dv.addPanel({ id: "satsched", component: "satsched", title: "Zeitplan", position: { referencePanel: "satpasses", direction: "within" }, inactive: true });
+    dv.addPanel({ id: "satmutual", component: "satmutual", title: "Gemeinsame Sichtbarkeit", position: { referencePanel: "satpasses", direction: "within" }, inactive: true });
     setTimeout(() => { try { l.group.api.setSize({ width: 230 }); dv.getPanel("satpolar").group.api.setSize({ width: 300 }); dv.getPanel("satinfo").group.api.setSize({ height: 280 }); } catch { } }, 60); },
   menus: [{ label: "Datei", items: [{ label: "Satelliten auswählen …", act: () => satChooser(() => WW.emit("sat-sel")) }] },
-    { label: "Ansicht", items: Object.entries({ satlist: "Satelliten", satinfo: "Position & Frequenzen", satpolar: "Überflug", satmap: "Karte", satpasses: "Überflüge" }).map(([k, l]) => ({ label: l, check: () => panelOpen("sat", k), act: () => togglePanel("sat", k) })) },
+    { label: "Ansicht", items: Object.entries({ satlist: "Satelliten", satinfo: "Position & Frequenzen", satpolar: "Überflug", satmap: "Karte", satpasses: "Überflüge", satsched: "Zeitplan", satmutual: "Gemeinsame Sichtbarkeit" }).map(([k, l]) => ({ label: l, check: () => panelOpen("sat", k), act: () => togglePanel("sat", k) })) },
     MENU_WINDOW("sat"), MENU_HELP],
   toolbar: [{ label: "Auswahl", icon: "i-list", act: () => satChooser(() => WW.emit("sat-sel")) }, "|", { label: "Gerätesteuerung", icon: "i-radio", act: () => switchApp("rig") }, { label: "Rotor", icon: "i-compass", act: () => switchApp("rot") }, { label: "Logbuch", icon: "i-book", act: () => switchApp("log") }, { label: "Vollbild", icon: "i-full", act: fullScreen }],
 };
