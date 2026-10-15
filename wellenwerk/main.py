@@ -1852,6 +1852,25 @@ async def errors_send_now():
     return {"ok": True, "result": r}
 
 
+@app.post("/api/feedback")
+async def feedback(body: dict):
+    """Rueckmeldung des Nutzers (Problem, Wunsch). Mit Empfaengeradresse per E-Mail; Antwort enthaelt immer
+    Betreff und Text, damit die Oberflaeche sie alternativ als GitHub-Meldung oeffnen kann."""
+    kind = str(body.get("kind") or "Problem")[:30]
+    text = str(body.get("text") or "").strip()[:20000]
+    if len(text) < 5:
+        raise HTTPException(400, "Bitte das Problem kurz beschreiben")
+    contact = str(body.get("contact") or "")[:200]
+    subject, txt = errors.feedback_text(kind, text, contact, bool(body.get("attach", True)))
+    out = dict(subject=subject, text=txt, sent=False, result="")
+    if body.get("send", True) and (cfg.get("err_mail_to") or "").strip():
+        try:
+            out.update(sent=True, result=await errors.send_feedback(kind, text, contact, bool(body.get("attach", True))))
+        except Exception as e:
+            out["result"] = f"Senden fehlgeschlagen: {e}"
+    return out
+
+
 # ---------- Aktualisierung ----------
 async def update_loop():
     """Beim Start und danach taeglich nach einer neuen Version sehen; je nach Einstellung installieren oder Hinweis zeigen."""

@@ -119,8 +119,50 @@ async function notesHtml(md) {
 WW.on("version", async v => {
   if (!v || showWhatsNew.done) return; showWhatsNew.done = true;
   const last = store.get("seenVersion", ""); store.set("seenVersion", v);
+  await alphaNotice(v);
   if (last && last !== v) showWhatsNew(v);
 });
+
+// ---------- Hinweis beim Oeffnen: Alpha-Version ----------
+const ISSUES = "https://github.com/djamplifier/wellenwerk/issues";
+function alphaNotice(v = WW.version, force = false) {
+  if (!force && store.get("alphaHidden", "") === v) return Promise.resolve();
+  const d = dialog({ title: `Wellenwerk ${v} – Alpha-Version`, icon: "i-info", buttons: [["Problem melden …", "fb"], ["Verstanden", "close", "primary"]], body: `
+    <p><b>Wellenwerk ist eine experimentelle Alpha-Version.</b> Vieles funktioniert schon, aber noch nicht alles fehlerfrei – rechne mit Fehlern und ungewohntem Verhalten, besonders beim Senden.</p>
+    <p>Jeder Nutzer hilft mit, das Programm zu verbessern: einfach benutzen, ausprobieren und Probleme melden. Über <b>Hilfe → Feedback / Problem melden</b> beschreibst du ein Problem mit eigenen Worten; das Fehlerprotokoll und die Systemdaten können automatisch angehängt werden.</p>
+    <p class="hint">Bitte beim Senden immer die Funkvorschriften beachten und die Station beaufsichtigen. Nutzung auf eigene Verantwortung.</p>
+    <label class="chkrow"><input type="checkbox" class="al-hide"> Bis zur nächsten Version nicht mehr anzeigen</label>` });
+  d.querySelector('button[value="fb"]').addEventListener("click", e => { e.preventDefault(); d.close(); showFeedback(); });
+  return new Promise(res => d.addEventListener("close", () => { if (d.querySelector(".al-hide").checked) store.set("alphaHidden", v); res(); }));
+}
+
+// ---------- Feedback: Probleme selbst beschreiben und senden ----------
+function showFeedback(kind = "Problem") {
+  const s = WW.settings || {}, canMail = !!(s.err_mail_to || "").trim();
+  const d = dialog({ title: "Feedback / Problem melden", icon: "i-info", wide: true, buttons: [["Abbrechen", "close"], ["Auf GitHub melden", "gh"], ...(canMail ? [["Abschicken", "send", "primary"]] : [])], body: `
+    <div class="grid2">
+      <label>Art<select class="fb-kind">${[["Problem", "Problem / Fehler"], ["Vorschlag", "Verbesserungsvorschlag"], ["Frage", "Frage"], ["Lob", "Lob"], ["Sonstiges", "Sonstiges"]].map(([k, l]) => `<option value="${k}" ${k === kind ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label>Kontakt für Rückfragen (Rufzeichen oder E-Mail, freiwillig)<input class="fb-contact" value="${esc(store.get("fbContact", "") || s.callsign || "")}"></label>
+      <label class="wide">Was ist passiert? Was hast du gemacht, was hast du erwartet?<textarea class="fb-text" rows="9" placeholder="z. B. Empfänger Bremen, 14,175 MHz USB: nach 5 Minuten kein Ton mehr, Wasserfall steht. Seite neu geladen – dann ging es wieder."></textarea></label>
+      <label class="chkrow wide"><input type="checkbox" class="fb-attach" checked> Fehlerprotokoll und Systemdaten anhängen (Version, Betriebssystem, Rufzeichen – keine Passwörter)</label>
+      <p class="hint wide">${canMail ? `<span>„Abschicken“ schickt die Meldung per E-Mail an ${esc(s.err_mail_to)}.</span> ` : ""}<span>„Auf GitHub melden“ öffnet eine vorausgefüllte Meldung im öffentlichen Projekt (GitHub-Konto nötig) – dort sehen auch andere Nutzer das Problem und die Lösung.</span></p>
+      <p class="fb-st hint wide"></p></div>` });
+  const val = () => ({ kind: d.querySelector(".fb-kind").value, text: d.querySelector(".fb-text").value, contact: d.querySelector(".fb-contact").value.trim(), attach: d.querySelector(".fb-attach").checked });
+  const st = d.querySelector(".fb-st");
+  const go = async (send) => {
+    const v = val(); store.set("fbContact", v.contact);
+    if (v.text.trim().length < 5) { st.textContent = "Bitte das Problem kurz beschreiben."; return null; }
+    st.textContent = send ? "sende …" : "";
+    try { return await post("/api/feedback", { ...v, send }); } catch (e) { st.textContent = e.message; return null; }
+  };
+  const sb = d.querySelector('button[value="send"]');
+  if (sb) sb.addEventListener("click", async e => { e.preventDefault(); const r = await go(true); if (!r) return;
+    if (r.sent) { d.close(); toast("Danke! Deine Meldung wurde gesendet."); } else st.textContent = r.result || "Nicht gesendet – bitte „Auf GitHub melden“ benutzen."; });
+  d.querySelector('button[value="gh"]').addEventListener("click", async e => { e.preventDefault(); const r = await go(false); if (!r) return;
+    const body = r.text.length > 6000 ? r.text.slice(0, 6000) + "\n… (gekürzt)" : r.text;
+    window.open(`${ISSUES}/new?title=${encodeURIComponent(r.subject)}&body=${encodeURIComponent(body)}`, "_blank"); d.close(); toast("Danke! Bitte die Meldung auf GitHub noch absenden."); });
+  setTimeout(() => d.querySelector(".fb-text").focus(), 50);
+}
 async function showWhatsNew(v = WW.version) {
   let n; try { n = await api(`/api/update/notes?version=${encodeURIComponent(v)}`); } catch { return; }
   if (!n.notes) return;

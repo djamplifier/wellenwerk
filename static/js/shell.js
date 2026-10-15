@@ -180,9 +180,11 @@ const MENU_WINDOW = (appId) => ({ label: "Fenster", items: [
 const MENU_HELP = { label: "Hilfe", items: [
   { label: "Anleitung", icon: "i-info", act: () => window.open("/static/hilfe.html", "_blank", "width=1100,height=860") },
   { label: "Tastenkürzel", act: () => showKeys() },
+  { label: "Feedback / Problem melden …", act: () => showFeedback() },
   { label: "Fehlerprotokoll", act: () => showErrorLog() },
   { label: "Nach Updates suchen", act: () => checkUpdates(true) },
   { label: "Neuerungen dieser Version", act: () => showWhatsNew() },
+  { label: "Hinweis zur Alpha-Version", act: () => alphaNotice(WW.version, true) },
   { label: "Lizenzen und Fremdkomponenten", act: () => window.open("/static/hilfe.html?d=lizenzen", "_blank", "width=1000,height=800") },
   { label: "Über Wellenwerk", act: () => info("Über Wellenwerk", `<p><b>Wellenwerk</b> v${esc(WW.version)} – Stationssteuerung, Logbuch und Digitalbetrieb für Funkamateure.</p>
     <p>Freie Software unter der <b>GNU General Public License 3</b> (oder später). Verwendet u. a. <b>Hamlib</b> (LGPL), Zeichentabellen aus <b>fldigi</b> (GPL),
@@ -210,7 +212,7 @@ function renderStatus() {
     <span class="st ${ro.enabled ? (ro.connected ? "on" : "off") : ""}"><i></i><b>Rotor</b> ${ro.enabled ? (ro.connected ? Math.round(((ro.az % 360) + 360) % 360) + "°" : "getrennt") : "aus"}</span>
     <span class="cinfo" title="${esc(ci.ann || "")}">${esc(ci.ann ? "ANN: " + ci.ann : "")}</span>
     <span class="cinfo" title="${esc(ci.wcy || "")}">${esc(ci.wcy || "")}</span><span class="cinfo" title="${esc(ci.wwv || "")}">${esc(ci.wwv || "")}</span>
-    <i class="grow"></i><span>${esc(WW.settings.callsign || "")} · ${esc(WW.settings.locator || "")} · ${esc(WW.logbook)}</span><span>v${esc(WW.version)}</span>`;
+    <i class="grow"></i><span>${esc(WW.settings.callsign || "")} · ${esc(WW.settings.locator || "")} · ${esc(WW.logbook)}</span><span>v${esc(WW.version)}</span><button type="button" class="alpha-badge" title="Experimentelle Alpha-Version – Problem melden" onclick="showFeedback()">Alpha</button>`;
 }
 
 // ---------- Tastatur ----------

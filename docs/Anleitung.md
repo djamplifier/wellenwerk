@@ -415,6 +415,10 @@ Einstellungen unter **F8 → Zugang & API**.
 
 ## 19. Fehlerbericht und Aktualisierung
 
+**Wellenwerk ist eine experimentelle Alpha-Version** – nicht alles funktioniert schon fehlerfrei. Darauf weist ein Hinweis beim Öffnen hin (abschaltbar bis zur nächsten Version, wieder aufrufbar unter **Hilfe → Hinweis zur Alpha-Version**). Jeder Nutzer hilft, das Programm zu verbessern, indem er es testet und Probleme meldet.
+
+**Feedback / Problem melden** (Menü **Hilfe** oder das orange **Alpha**-Zeichen unten rechts): Art wählen, das Problem mit eigenen Worten beschreiben, auf Wunsch Fehlerprotokoll und Systemdaten anhängen (keine Passwörter). **Abschicken** sendet die Meldung per E-Mail an die unter *Fehler & Updates* eingetragene Adresse; **Auf GitHub melden** öffnet eine vorausgefüllte Meldung im öffentlichen Projekt (GitHub-Konto nötig).
+
 **F8 → Fehler & Updates.**
 
 **Fehlerbericht per E-Mail:** Wellenwerk sammelt Programmfehler aus Dienst, Oberfläche und Desktop-Programm im **Fehlerprotokoll** (**Hilfe → Fehlerprotokoll**). Mit *Fehler automatisch per E-Mail melden* geht etwa eine Minute nach einem Fehler eine Nachricht an die eingetragene Adresse – höchstens eine je eingestelltem Zeitraum (Vorgabe 30 Minuten) und höchstens 20 am Tag. Gleiche Fehler werden zusammengefasst, Passwörter und Schlüssel unkenntlich gemacht. Für den Versand ein E-Mail-Konto eintragen (SMTP-Server, Port, Benutzername, Passwort – z. B. bei freenet `mx.freenet.de`, Port 587, STARTTLS). Ohne Konto versucht Wellenwerk, die Nachricht direkt zuzustellen; das lehnen viele Anbieter ab. **Testnachricht senden** prüft die Einstellungen.

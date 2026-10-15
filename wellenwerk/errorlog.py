@@ -230,6 +230,41 @@ class ErrorLog:
         self.last_result = f"{datetime.now().strftime('%d.%m.%Y %H:%M')}: gesendet an {msg['To']} ({how})"
         return self.last_result
 
+    def feedback_text(self, kind: str, text: str, contact: str, attach: bool) -> tuple[str, str]:
+        """Betreff und Text einer Rueckmeldung (fuer E-Mail und GitHub)."""
+        si = self.system_info()
+        first = (text.strip().splitlines() or [""])[0][:80]
+        subject = f"[Wellenwerk {self.version} {kind}] {first}"
+        lines = [f"Art: {kind}", f"Kontakt: {contact or '–'}", "", text.strip(), "", "-" * 40]
+        lines += [f"{k:9}: {v}" for k, v in si.items()]
+        if attach:
+            recent = list(reversed(self.entries))[:15]
+            lines += ["", f"Fehlerprotokoll (letzte {len(recent)}):"] if recent else ["", "Fehlerprotokoll: leer"]
+            for e in recent:
+                lines += [f"- [{e['source']}] {e['count']}× {e['last']} {e['message'].splitlines()[0][:200]}" + (f" ({e['where'][:80]})" if e.get("where") else "")]
+                if e.get("detail"):
+                    lines += ["    " + x for x in e["detail"].strip().splitlines()[-6:]]
+        return subject, self.scrub("\n".join(lines))
+
+    async def send_feedback(self, kind: str, text: str, contact: str, attach: bool) -> str:
+        subject, body = self.feedback_text(kind, text, contact, attach)
+        to = (self.cfg.get("err_mail_to") or "").strip()
+        sender = (self.cfg.get("smtp_from") or self.cfg.get("smtp_user") or "").strip() if self.cfg.get("smtp_host") else ""
+        if not sender or "@" not in sender:
+            sender = to
+        m = EmailMessage()
+        m["Subject"], m["From"], m["To"], m["Date"] = subject, f"Wellenwerk <{sender}>", to, formatdate(localtime=True)
+        m["Message-ID"] = make_msgid(domain=sender.split("@")[-1])
+        if contact and "@" in contact and " " not in contact.strip():
+            m["Reply-To"] = contact.strip()
+        m.set_content(body)
+        self._busy = True
+        try:
+            how = await asyncio.to_thread(self._deliver, m)
+        finally:
+            self._busy = False
+        return f"gesendet an {to} ({how})"
+
     def _deliver(self, msg: EmailMessage) -> str:
         c = self.cfg
         host = (c.get("smtp_host") or "").strip()
@@ -237,7 +272,7 @@ class ErrorLog:
             port = int(c.get("smtp_port") or 587)
             sec = c.get("smtp_security") or ("ssl" if port == 465 else "starttls")
             ctx = ssl.create_default_context()
-            s = smtplib.SMTP_SSL(host, port, timeout=30, context=ctx) if sec == "ssl" else smtplib.SMTP(host, port, timeout=30)
+            s = smtplib.SMTP_SSL(host, port, timeout=30, context=ctx, local_hostname=_helo_name()) if sec == "ssl" else smtplib.SMTP(host, port, timeout=30, local_hostname=_helo_name())
             try:
                 s.ehlo()
                 if sec == "starttls":
@@ -299,7 +334,7 @@ def _short(e) -> str:
 
 
 def _helo_name() -> str:
-    n = socket.getfqdn()
+    n = socket.gethostname()      # nicht getfqdn(): das wartet im Heimnetz oft 30 s auf eine Rueckwaertsaufloesung
     return n if "." in n and not n.endswith((".local", ".lan", ".fritz.box", ".home", ".localdomain")) else "wellenwerk.invalid"
 
 
