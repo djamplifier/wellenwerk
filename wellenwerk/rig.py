@@ -357,6 +357,7 @@ class Rig:
 
     async def set_mode(self, mode: str, passband: int = 0):
         await self._cmd(f"M {mode} {int(passband)}")
+        self._mark(("mode",), mode)          # sofort sichtbar, nicht erst nach der naechsten Abfrage
 
     async def set_ptt(self, on: bool):
         await self._cmd(f"T {1 if on else 0}")

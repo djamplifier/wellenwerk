@@ -8,6 +8,7 @@ import subprocess
 import time
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +32,7 @@ from . import programs
 from . import wsjtx
 from .winlink.client import Winlink
 from .catemu import CatEmu
+from .access import Access, AccessMiddleware, COOKIE, LOGIN_HTML
 from .winlink.message import Message as WlMessage
 
 VERSION = "1.1.0"
@@ -54,10 +56,11 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 ardop_host="127.0.0.1", ardop_port=8515, ardop_bw="2000MAX", vara_host="127.0.0.1", vara_port=8300, vara_bw="2300",
                 agw_host="127.0.0.1", agw_port=8000, agw_radio_port=0, rtc_stun="",
                 sync_on=False, sync_master="", sync_slave="", sync_offset=0, sync_mode=True,
+                access_password="", api_token="", mcp_allow_tx=False,
                 catemu_on=False, catemu_kind="pty" if os.name != "nt" else "serial", catemu_port=4590, catemu_device="",
                 callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False)
-SECRETS = ("wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
-BOOLS = ("catemu_on", "sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
+SECRETS = ("access_password", "api_token", "wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
+BOOLS = ("mcp_allow_tx", "catemu_on", "sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
 MASK = "••••••"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("ww")
@@ -122,7 +125,24 @@ async def broadcast(msg: dict):
 
 
 def home() -> tuple[float, float] | None:
-    return geo.grid_to_latlon(cfg.get("locator", ""))
+    return geo.grid_to_latlon(station_identity()["locator"])
+
+
+def station_identity() -> dict:
+    """Zentrale Stationsdaten fuer alle Programmteile, API, MCP und Plugins:
+    Programmoptionen, ueberschrieben vom aktiven Stationsprofil (z. B. Portabelbetrieb)."""
+    st = active_station() or {}
+    call = (st.get("callsign") or cfg.get("callsign") or "").upper().strip()
+    loc = (st.get("locator") or cfg.get("locator") or "").strip()
+    ll = geo.grid_to_latlon(loc) if loc and geo.valid_grid(loc) else None
+    return dict(callsign=call, home_callsign=(cfg.get("callsign") or "").upper(), operator=(st.get("operator") or cfg.get("operator") or "").upper(),
+                locator=loc, lat=ll[0] if ll else None, lon=ll[1] if ll else None, tx_pwr=st.get("tx_pwr") or cfg.get("tx_pwr") or "",
+                profile=st.get("name", ""), profile_id=st.get("id", ""), my_pota_ref=st.get("my_pota_ref", ""), my_sota_ref=st.get("my_sota_ref", ""),
+                my_wwff_ref=st.get("my_wwff_ref", ""), winlink_call=(cfg.get("wl_call") or call).upper())
+
+
+async def identity_changed():
+    await broadcast({"type": "station_identity", "station": station_identity()})
 
 
 def describe(call: str, grid: str = "") -> dict:
@@ -409,7 +429,10 @@ async def lifespan(app):
         transport.close()
 
 
-app = FastAPI(title="Wellenwerk", version=VERSION, lifespan=lifespan)
+app = FastAPI(title="Wellenwerk", version=VERSION, lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None,
+              description="Schnittstelle von Wellenwerk – dieselbe, die auch die Oberfläche nutzt. Stationsdaten: `GET /api/station`, "
+                          "Ereignisse in Echtzeit: WebSocket `/ws`. Von anderen Rechnern mit `Authorization: Bearer <API-Schlüssel>`.")
+access = Access(DATA, cfg)
 
 
 @app.post("/api/wsjtx/reply")
@@ -461,12 +484,58 @@ class _LogbookParam:
 
 
 app.add_middleware(_LogbookParam)
+app.add_middleware(AccessMiddleware, access=access)
+
+
+@app.get("/login", include_in_schema=False)
+async def login_page():
+    return Response(LOGIN_HTML, media_type="text/html; charset=utf-8")
+
+
+@app.post("/api/login", tags=["Zugang"])
+async def login(body: dict):
+    if not access.check_password(str(body.get("password") or "")):
+        await asyncio.sleep(1.0)          # Ausprobieren bremsen
+        raise HTTPException(401, "Passwort falsch")
+    r = Response(json.dumps({"ok": True}), media_type="application/json")
+    r.set_cookie(COOKIE, access.session_value(), max_age=30 * 86400, httponly=True, samesite="lax")
+    return r
+
+
+@app.post("/api/logout", tags=["Zugang"])
+async def logout():
+    r = Response(json.dumps({"ok": True}), media_type="application/json")
+    r.delete_cookie(COOKIE)
+    return r
+
+
+@app.get("/api/access/mcp_config", tags=["Zugang"])
+async def mcp_config(request: Request):
+    """Fertiger Eintrag fuer KI-Programme mit MCP (z. B. Claude Desktop: claude_desktop_config.json)."""
+    url = f"http://127.0.0.1:{request.url.port or 8090}"
+    if getattr(sys, "frozen", False):
+        cmd, args = sys.executable, ["--mcp", "--url", url]
+    else:
+        cmd, args = sys.executable, ["-m", "wellenwerk", "--mcp", "--url", url]
+    entry = {"command": cmd, "args": args}
+    if cfg.get("api_token"):
+        entry["env"] = {"WW_TOKEN": cfg["api_token"]}
+    return {"mcpServers": {"wellenwerk": entry}}
+
+
+@app.post("/api/access/new_token", tags=["Zugang"])
+async def new_api_token():
+    """Erzeugt einen neuen API-Schluessel (der alte wird ungueltig) und zeigt ihn einmal an."""
+    import secrets as _s
+    cfg["api_token"] = _s.token_urlsafe(24)
+    CFG_PATH.write_text(json.dumps(cfg, indent=2))
+    return {"api_token": cfg["api_token"]}
 
 
 # ---------- API ----------
 @app.get("/api/state")
 async def state():
-    return dict(version=VERSION, rig={**rig.state, "band": band_for(rig.state.get("freq"))},
+    return dict(version=VERSION, station=station_identity(), rig={**rig.state, "band": band_for(rig.state.get("freq"))},
                 cluster=cluster.status, wsjtx=wsjtx_state, settings=public_cfg(), home=home(), rotor=rotor.state, winkey=winkey.state,
                 bands=[dict(name=n, lo=lo, hi=hi, start=s) for n, lo, hi, s in BANDS])
 
@@ -478,6 +547,12 @@ def public_cfg() -> dict:
 @app.get("/api/settings")
 async def get_settings():
     return public_cfg()
+
+
+@app.get("/api/station")
+async def get_station():
+    """Stationsdaten (Rufzeichen, Locator, Position, Operator, Leistung, aktives Profil) – fuer alle Programmteile und Erweiterungen."""
+    return station_identity()
 
 
 @app.put("/api/settings")
@@ -511,6 +586,7 @@ async def put_settings(new: dict):
     await rotor_spawn()
     rotor.reconfigure(cfg["rot_host"], int(cfg["rot_port"]), bool(cfg["rot_enabled"]))
     cluster.reconfigure(cfg["cluster_host"], int(cfg["cluster_port"]), cfg["callsign"], cfg.get("cluster_cmds", ""))
+    await identity_changed()
     return public_cfg()
 
 
@@ -1634,6 +1710,7 @@ async def stations_put(body: dict):
     data = {"active": active, "list": lst}
     STATIONS_PATH.write_text(json.dumps(data, indent=1, ensure_ascii=False))
     await broadcast({"type": "stations", "stations": data})
+    await identity_changed()
     return data
 
 
@@ -1966,7 +2043,7 @@ def _wl_notify(msg: dict):
     asyncio.get_event_loop().create_task(broadcast(msg))
 
 
-winlink = Winlink(DATA / "winlink", cfg, lambda on: rig.set_ptt(on), _wl_notify, lambda hz: rig.set_freq(hz), VERSION)
+winlink = Winlink(DATA / "winlink", cfg, lambda on: rig.set_ptt(on), _wl_notify, lambda hz: rig.set_freq(hz), VERSION, identity=station_identity)
 
 
 @app.get("/api/winlink/state")
@@ -2003,7 +2080,7 @@ async def wl_att(folder: str, mid: str, idx: int):
 @app.post("/api/winlink/compose")
 async def wl_compose(body: dict):
     import base64
-    mycall = (cfg.get("wl_call") or cfg.get("callsign") or "").upper()
+    mycall = station_identity()["winlink_call"]
     if not mycall:
         raise HTTPException(400, "Rufzeichen fehlt (Programmoptionen)")
     split = lambda v: [a for a in re.split(r"[,;\s]+", v or "") if a]
@@ -2214,3 +2291,20 @@ async def index():
     stamp = int(max(p.stat().st_mtime for p in [STATIC / "style.css", *(STATIC / "js").glob("*.js")]))
     html = (STATIC / "index.html").read_text().replace("__V__", f"{VERSION}-{stamp}")
     return Response(html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
+
+
+# Gruppen fuer die API-Beschreibung (/api/docs)
+_TAGS = {"rig": "Funkgerät", "radios": "Funkgerät", "snapshots": "Funkgerät", "catemu": "Funkgerät", "qso": "Logbuch", "logbooks": "Logbuch",
+         "adif": "Logbuch", "lookup": "Logbuch", "callbook": "Logbuch", "awards": "Logbuch", "upload": "Online-Dienste", "sync": "Online-Dienste",
+         "spots": "DX-Cluster", "cluster": "DX-Cluster", "wsjtx": "WSJT-X", "rotor": "Rotor", "winlink": "Winlink", "sat": "Satelliten",
+         "settings": "Einstellungen", "station": "Einstellungen", "stations": "Einstellungen", "programs": "POTA/SOTA/WWFF", "winkey": "CW",
+         "backups": "Logbuch", "cabrillo": "Logbuch", "kml": "Logbuch", "stats": "Logbuch", "countries": "Logbuch", "lotw": "Online-Dienste",
+         "services": "Online-Dienste", "decodes": "WSJT-X", "favorites": "Funkgerät", "hamlib": "Funkgerät", "swdb": "Funkgerät",
+         "recordings": "Digitalbetrieb", "sstv": "Digitalbetrieb", "bearing": "Karten & Ausbreitung", "map": "Karten & Ausbreitung",
+         "solar": "Karten & Ausbreitung", "calendar": "Karten & Ausbreitung", "state": "Programm", "shutdown": "Programm", "store": "Programm",
+         "access": "Zugang", "login": "Zugang", "logout": "Zugang"}
+for _r in app.routes:
+    _p = getattr(_r, "path", "")
+    if _p.startswith("/api/") and not getattr(_r, "tags", None):
+        _seg = _p.split("/")[2]
+        _r.tags = [_TAGS.get(_seg, "Sonstiges")]

@@ -30,6 +30,9 @@ def free(port: int) -> bool:
 
 
 def main():
+    if "--mcp" in sys.argv:            # MCP-Server fuer KI-Assistenten (stdio), braucht ein laufendes Wellenwerk
+        from wellenwerk.mcp import main as mcp_main
+        return mcp_main([x for x in sys.argv[1:] if x != "--mcp"])
     ap = argparse.ArgumentParser(prog="wellenwerk", description="Wellenwerk – Stationssteuerung und Logbuch")
     ap.add_argument("--port", type=int, default=8090)
     ap.add_argument("--lan", action="store_true", help="auch aus dem Heimnetz erreichbar (sonst nur dieser Rechner)")

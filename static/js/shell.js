@@ -234,7 +234,7 @@ function runAccel(a) {
 function openOptions(tab = "station") {
   const s = WW.settings, o = store.get("opts", {});
   const d = dialog({ title: "Programmoptionen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Speichern", "save", "primary"]], body: `
-    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
+    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
       .map(([k, l]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${l}</button>`).join("")}</div>
     <div class="dtab ${tab === "station" ? "" : "hidden"}" data-t="station"><div class="grid2">
       <label>Rufzeichen<input name="callsign" value="${esc(s.callsign)}"></label><label>Locator<input name="locator" value="${esc(s.locator)}"></label>
@@ -291,6 +291,14 @@ function openOptions(tab = "station") {
       <label>Packet: AGW-Host (Direwolf)<input name="agw_host" value="${esc(s.agw_host || "127.0.0.1")}"></label><label>AGW-Port<input name="agw_port" type="number" value="${s.agw_port || 8000}"></label>
       <label>Funkkanal am Packet-Modem<input name="agw_radio_port" type="number" min="0" max="15" value="${s.agw_radio_port || 0}"></label><span></span>
       <p class="hint wide">ARDOP: das freie Modem <i>ardopcf</i> starten (z. B. <code>ardopcf 8515 Soundkarte Soundkarte</code>). Packet: <i>Direwolf</i> mit AGWPORT 8000. VARA ist ein eigenständiges Programm mit eigener Lizenz; Wellenwerk spricht nur seine TCP-Schnittstelle an. Wellenwerk tastet das Funkgerät, wenn das Modem PTT anfordert.</p></div></div>
+    <div class="dtab ${tab === "access" ? "" : "hidden"}" data-t="access"><div class="grid2">
+      <label>Passwort für Zugriffe von anderen Rechnern (leer = keins)<input name="access_password" type="password" autocomplete="new-password" value="${esc(s.access_password || "")}"></label><span></span>
+      <p class="hint wide">An diesem Rechner ist keine Anmeldung nötig. Von Tablet, Handy oder einem anderen PC aus fragt Wellenwerk dann einmal nach dem Passwort. Unbedingt setzen, bevor Wellenwerk aus dem Internet erreichbar ist.</p>
+      <label class="wide">API-Schlüssel für Programme und Erweiterungen<div class="ctl-row"><input class="ac-tok grow" readonly value="${s.api_token ? "•••••• (gesetzt)" : "– keiner –"}"><button type="button" class="ac-new">Neuen Schlüssel erzeugen</button><button type="button" class="ac-del">Löschen</button></div></label>
+      <p class="hint wide">Programme schicken ihn als <code>Authorization: Bearer …</code>. Beschreibung aller Funktionen: <a href="/api/docs" target="_blank">API-Dokumentation</a> · Stationsdaten für Erweiterungen: <code>GET /api/station</code>, Ereignisse: WebSocket <code>/ws</code>.</p>
+      <label class="chkrow wide"><input type="checkbox" name="mcp_allow_tx" ${s.mcp_allow_tx ? "checked" : ""}> KI-Assistenten (MCP) dürfen senden – PTT, CW, Winlink über Funk</label>
+      <label class="wide">MCP-Eintrag für KI-Programme (z. B. Claude Desktop → claude_desktop_config.json)<textarea class="ac-mcp" rows="7" readonly spellcheck="false" style="font-family:monospace"></textarea></label>
+      <div class="ctl-row wide"><button type="button" class="ac-copy">Kopieren</button></div></div></div>
     <div class="dtab ${tab === "cw" ? "" : "hidden"}" data-t="cw"><div class="grid2">
       <label>CW senden über<select name="cw_out"><option value="rig" ${s.cw_out !== "winkey" ? "selected" : ""}>Funkgerät (CAT, Hamlib send_morse)</option><option value="winkey" ${s.cw_out === "winkey" ? "selected" : ""}>K1EL WinKeyer</option></select></label>
       <label>WinKeyer-Port<select name="winkey_device" class="wk-dev"><option value="${esc(s.winkey_device || "")}">${esc(s.winkey_device || "– wählen –")}</option></select></label>
@@ -323,6 +331,11 @@ function openOptions(tab = "station") {
     } });
   const wkSt = () => { const w = WW.winkey || {}; d.querySelector(".wk-st").textContent = w.connected ? `verbunden an ${w.device}${w.version ? ", Firmware " + w.version : ""}` : (w.error || "nicht verbunden"); };
   api("/api/hamlib/ports").then(ps => { const sel = d.querySelector(".wk-dev"), cur = sel.value; sel.innerHTML = `<option value="">– wählen –</option>` + ps.map(p => `<option value="${esc(p.device)}" ${p.device === cur ? "selected" : ""}>${esc(p.device)}${p.desc ? " – " + esc(p.desc) : ""}</option>`).join("") + (cur && !ps.some(p => p.device === cur) ? `<option selected>${esc(cur)}</option>` : ""); }).catch(() => { });
+  const mcpCfg = () => api("/api/access/mcp_config").then(c => { d.querySelector(".ac-mcp").value = JSON.stringify(c, null, 2); }).catch(() => { });
+  mcpCfg();
+  d.querySelector(".ac-new").onclick = async () => { if (WW.settings.api_token && !confirm("Neuen Schlüssel erzeugen? Der alte wird ungültig.")) return; const r = await post("/api/access/new_token"); d.querySelector(".ac-tok").value = r.api_token; WW.settings.api_token = "••••••"; mcpCfg(); toast("Neuer API-Schlüssel – jetzt kopieren, er wird später nicht mehr angezeigt"); };
+  d.querySelector(".ac-del").onclick = async () => { WW.settings = await api("/api/settings", { method: "PUT", body: { api_token: "" } }); d.querySelector(".ac-tok").value = "– keiner –"; mcpCfg(); };
+  d.querySelector(".ac-copy").onclick = () => { navigator.clipboard?.writeText(d.querySelector(".ac-mcp").value); toast("Kopiert"); };
   d.querySelector(".mr-def").onclick = () => { d.querySelector('[name="mode_rst"]').value = MODE_RST_DEFAULT; };
   d.querySelector(".wk-con").onclick = async () => { try { WW.winkey = await post("/api/winkey/connect", { device: d.querySelector(".wk-dev").value, wpm: +d.querySelector('[name="winkey_wpm"]').value }); } catch (e) { WW.winkey = { error: e.message }; } wkSt(); };
   d.querySelector(".wk-dis").onclick = async () => { WW.winkey = await post("/api/winkey/disconnect", {}); wkSt(); };

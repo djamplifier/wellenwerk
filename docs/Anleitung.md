@@ -22,7 +22,8 @@ Wellenwerk ist ein Programm für die Funkstation: Funkgerät steuern, Logbuch f�
 15. [Karten](#15-karten)
 16. [Tastenkürzel](#16-tastenkürzel)
 17. [Daten, Sicherung und Umzug](#17-daten-sicherung-und-umzug)
-18. [Probleme lösen](#18-probleme-lösen)
+18. [Zugang, API und KI-Assistenten](#18-zugang-api-und-ki-assistenten)
+19. [Probleme lösen](#19-probleme-lösen)
 
 ---
 
@@ -353,7 +354,21 @@ Alle Daten (Logbücher, Einstellungen, Favoriten, SSTV-Bilder) liegen im Benutze
 
 **Sichern:** **Sicherung** (Werkzeugleiste des Logbuchs) legt eine Kopie des aktuellen Logbuchs an; **Mehr … → Sicherungen** stellt wieder her. Für einen Rechnerwechsel den ganzen Ordner kopieren oder das Logbuch als ADIF exportieren und auf dem neuen Rechner importieren. Das Layout der Gerätesteuerung überträgt **Layout anpassen → Layout als Datei speichern / laden**.
 
-## 18. Probleme lösen
+## 18. Zugang, API und KI-Assistenten
+
+Einstellungen unter **F8 → Zugang & API**.
+
+**Passwort:** Am Rechner, auf dem Wellenwerk läuft, ist nie eine Anmeldung nötig. Ist ein Passwort gesetzt, fragt Wellenwerk bei Zugriffen von anderen Geräten (Tablet, Handy, zweiter PC – auch über `https://…:8443`) einmal danach. **Vor jedem Zugriff aus dem Internet unbedingt setzen.**
+
+**Stationsdaten an einer Stelle:** Rufzeichen, Locator, Operator und Leistung kommen aus **Station** bzw. dem aktiven **Stationsprofil** und gelten für alle Programmteile (Logbuch, Winlink, Karten, Rotor, Satelliten …), für die Schnittstelle und für Erweiterungen. Wechselt das Profil, wissen es sofort alle.
+
+**API:** Alles, was die Oberfläche kann, geht auch über die Schnittstelle. Die Beschreibung aller Funktionen zum Ausprobieren: **API-Dokumentation** (Adresse `/api/docs`). Programme auf anderen Rechnern brauchen einen **API-Schlüssel** (**Neuen Schlüssel erzeugen**) und schicken ihn als `Authorization: Bearer <Schlüssel>`. Ereignisse (Frequenz, Spots, QSOs, Stationsdaten …) kommen in Echtzeit über den WebSocket `/ws`.
+
+**KI-Assistenten (MCP):** Wellenwerk bringt einen MCP-Server mit. Damit können z. B. Claude Desktop oder andere KI-Programme die Station abfragen und bedienen: Frequenz und Betriebsart, Rufzeichen nachschlagen, im Logbuch suchen, QSOs eintragen, DX-Spots, Rotor, Winlink-Nachrichten. Den fertigen Eintrag zeigt das Feld **MCP-Eintrag** – **Kopieren** und in die Konfiguration des KI-Programms einfügen (bei Claude Desktop: *Einstellungen → Entwickler → Konfiguration bearbeiten*). Wellenwerk muss dabei laufen.
+
+> **Senden** (PTT, CW, Winlink über Funk) dürfen Assistenten nur, wenn **„KI-Assistenten dürfen senden“** eingeschaltet ist. Für alles, was ausgesendet wird, bleibt die Funkamateurin bzw. der Funkamateur verantwortlich.
+
+## 19. Probleme lösen
 
 | Problem | Lösung |
 |---|---|

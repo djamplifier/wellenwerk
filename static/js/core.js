@@ -131,6 +131,7 @@ function connectWs() {
       case "wsjtx": WW.wsjtx = m.wsjtx; WW.emit("wsjtx", m.wsjtx); break;
       case "decode": WW.decodes.unshift(m.decode); if (WW.decodes.length > 500) WW.decodes.pop(); WW.emit("decode", m.decode); break;
       case "winlink": WW.emit("winlink", m); break;
+      case "station_identity": WW.station = m.station; if (m.station.lat != null) WW.home = [m.station.lat, m.station.lon]; WW.emit("station", m.station); break;
       case "hello": WW.wsId = m.id; WW.audioStation = { available: m.audio_station, name: m.audio_station_name }; WW.emit("audio-station"); break;
       case "audio_station": WW.audioStation = m; WW.emit("audio-station"); break;
       case "rtc": WW.emit("rtc", m); break;
@@ -163,7 +164,7 @@ async function loadLogbooks() {
 }
 async function refreshState() {
   const st = await api("/api/state");
-  Object.assign(WW, { settings: st.settings, home: st.home, rotor: st.rotor, winkey: st.winkey || {}, cluster: st.cluster, wsjtx: st.wsjtx, bands: st.bands, version: st.version });
+  Object.assign(WW, { settings: st.settings, station: st.station || {}, home: st.home, rotor: st.rotor, winkey: st.winkey || {}, cluster: st.cluster, wsjtx: st.wsjtx, bands: st.bands, version: st.version });
   WW.rig = st.rig;
   await loadRadios();
   if (st.rig.connected && st.rig.model !== WW.capsModel) await loadCaps();

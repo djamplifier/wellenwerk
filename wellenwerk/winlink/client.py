@@ -12,8 +12,9 @@ CMS_HOST, CMS_PORT = "server.winlink.org", 8772
 
 
 class Winlink:
-    def __init__(self, root, cfg, ptt, notify, set_freq=None, version="1.1"):
+    def __init__(self, root, cfg, ptt, notify, set_freq=None, version="1.1", identity=None):
         self.box = Mailbox(root)
+        self.identity = identity or (lambda: dict(winlink_call=(cfg.get("wl_call") or cfg.get("callsign") or "").upper(), locator=cfg.get("locator", "")))
         self.cfg, self.ptt, self.notify, self.set_freq, self.version = cfg, ptt, notify, set_freq, version
         self.task: asyncio.Task | None = None
         self.link = None
@@ -32,7 +33,7 @@ class Winlink:
     def start(self, method: str, target: str, opts: dict):
         if self.task and not self.task.done():
             raise RuntimeError("Es läuft schon eine Winlink-Verbindung")
-        mycall = (self.cfg.get("wl_call") or self.cfg.get("callsign") or "").upper().strip()
+        mycall = self.identity()["winlink_call"].strip()
         if not mycall:
             raise RuntimeError("Rufzeichen fehlt (Programmoptionen → Station oder Winlink)")
         if method != "telnet" and not target:
@@ -75,7 +76,7 @@ class Winlink:
             elif method == "ardop":
                 self._say(f"ARDOP-Anruf an {target} ({c.get('ardop_bw') or '2000MAX'}) …")
                 self.link = await ArdopLink.open(c.get("ardop_host") or "127.0.0.1", int(c.get("ardop_port") or 8515), mycall, target,
-                                                 c.get("ardop_bw") or "2000MAX", c.get("locator", ""), self._ptt, st)
+                                                 c.get("ardop_bw") or "2000MAX", self.identity()["locator"], self._ptt, st)
                 tcall = target
             elif method == "vara":
                 self._say(f"VARA-Anruf an {target} …")
@@ -95,7 +96,7 @@ class Winlink:
             outbox = self.box.outbox()
             if opts.get("receive_only"):
                 outbox = []
-            sess = Session(self.link.reader, self.link.write, mycall, tcall or target, password, c.get("locator", ""), outbox,
+            sess = Session(self.link.reader, self.link.write, mycall, tcall or target, password, self.identity()["locator"], outbox,
                            on_received=self._received, on_sent=self._sent, status=st, ua=("Wellenwerk", self.version))
             res = await sess.run()
             self._say(f"fertig: {len(res['received'])} empfangen, {len(res['sent'])} gesendet", "ok")
