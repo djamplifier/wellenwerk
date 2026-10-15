@@ -234,7 +234,7 @@ function runAccel(a) {
 function openOptions(tab = "station") {
   const s = WW.settings, o = store.get("opts", {});
   const d = dialog({ title: "Programmoptionen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Speichern", "save", "primary"]], body: `
-    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
+    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
       .map(([k, l]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${l}</button>`).join("")}</div>
     <div class="dtab ${tab === "station" ? "" : "hidden"}" data-t="station"><div class="grid2">
       <label>Rufzeichen<input name="callsign" value="${esc(s.callsign)}"></label><label>Locator<input name="locator" value="${esc(s.locator)}"></label>
@@ -269,6 +269,10 @@ function openOptions(tab = "station") {
       <label class="wide chkrow"><input type="checkbox" name="o_single" ${o.single ? "checked" : ""} data-local> Favoriten-Ordner mit Einfachklick öffnen</label></div></div>
     <div class="dtab ${tab === "oob" ? "" : "hidden"}" data-t="oob"><div class="grid2">
       <label class="wide chkrow"><input type="checkbox" name="o_oob" ${o.oob ? "checked" : ""} data-local> Ton beim Verlassen und Betreten eines Amateurfunkbandes</label></div></div>
+    <div class="dtab ${tab === "modes" ? "" : "hidden"}" data-t="modes"><div class="grid2">
+      <label class="wide">Betriebsarten und RST-Vorgabe (eine Zeile je Mode: <code>MODE RST</code>)<textarea name="mode_rst" rows="14" spellcheck="false" style="font-family:monospace">${esc(s.mode_rst || MODE_RST_DEFAULT)}</textarea></label>
+      <div class="ctl-row wide"><button type="button" class="mr-def">Standard wiederherstellen</button></div>
+      <p class="hint wide">Die Liste erscheint als Auswahl im Feld „Mode“ des Logbuch-Eintrags. Beim Wechsel der Betriebsart werden „Gesendet“ und „Empfangen“ mit der Vorgabe gefüllt.</p></div></div>
     <div class="dtab ${tab === "cw" ? "" : "hidden"}" data-t="cw"><div class="grid2">
       <label>CW senden über<select name="cw_out"><option value="rig" ${s.cw_out !== "winkey" ? "selected" : ""}>Funkgerät (CAT, Hamlib send_morse)</option><option value="winkey" ${s.cw_out === "winkey" ? "selected" : ""}>K1EL WinKeyer</option></select></label>
       <label>WinKeyer-Port<select name="winkey_device" class="wk-dev"><option value="${esc(s.winkey_device || "")}">${esc(s.winkey_device || "– wählen –")}</option></select></label>
@@ -300,6 +304,7 @@ function openOptions(tab = "station") {
     } });
   const wkSt = () => { const w = WW.winkey || {}; d.querySelector(".wk-st").textContent = w.connected ? `verbunden an ${w.device}${w.version ? ", Firmware " + w.version : ""}` : (w.error || "nicht verbunden"); };
   api("/api/hamlib/ports").then(ps => { const sel = d.querySelector(".wk-dev"), cur = sel.value; sel.innerHTML = `<option value="">– wählen –</option>` + ps.map(p => `<option value="${esc(p.device)}" ${p.device === cur ? "selected" : ""}>${esc(p.device)}${p.desc ? " – " + esc(p.desc) : ""}</option>`).join("") + (cur && !ps.some(p => p.device === cur) ? `<option selected>${esc(cur)}</option>` : ""); }).catch(() => { });
+  d.querySelector(".mr-def").onclick = () => { d.querySelector('[name="mode_rst"]').value = MODE_RST_DEFAULT; };
   d.querySelector(".wk-con").onclick = async () => { try { WW.winkey = await post("/api/winkey/connect", { device: d.querySelector(".wk-dev").value, wpm: +d.querySelector('[name="winkey_wpm"]').value }); } catch (e) { WW.winkey = { error: e.message }; } wkSt(); };
   d.querySelector(".wk-dis").onclick = async () => { WW.winkey = await post("/api/winkey/disconnect", {}); wkSt(); };
   wkSt();

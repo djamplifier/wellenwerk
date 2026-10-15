@@ -23,16 +23,29 @@ function createLogbook(root, params) {
     <button data-a="filter">${icon("i-filter")}<span>Filter</span></button><button data-a="qsl">${icon("i-cloud")}<span>QSL</span></button>
     <button data-a="lotwup">${icon("i-upload")}<span>LoTW hoch</span></button><button data-a="lotwdown">${icon("i-download")}<span>LoTW holen</span></button></div>
     <div class="lb-find hidden"><input class="lb-q" placeholder="Suchen: Rufzeichen, Land, Name, Locator, DOK …"><select class="lb-band"><option value="">Band</option>${WW.bands.map(b => `<option>${b.name}</option>`).join("")}</select>
-      <select class="lb-mode"><option value="">Mode</option>${["SSB", "CW", "FT8", "FT4", "RTTY", "FM", "AM", "PSK31"].map(m => `<option>${m}</option>`).join("")}</select>
+      <select class="lb-mode"><option value="">Mode</option>${Object.keys(modeTable()).map(m => `<option>${esc(m)}</option>`).join("")}</select>
       <select class="lb-qsl"><option value="">alle QSOs</option><option value="confirmed">bestätigt</option><option value="unconfirmed">unbestätigt</option><option value="lotw">LoTW bestätigt</option><option value="eqsl">eQSL bestätigt</option><option value="paper">Papier-QSL erhalten</option><option value="queued">QSL vorgemerkt</option><option value="to_send">QSL nicht gesendet</option><option value="no_qrz">nicht bei QRZ</option><option value="no_lotw">nicht bei LoTW</option><option value="no_eqsl">nicht bei eQSL</option><option value="no_clublog">nicht bei Club Log</option></select>
-      <input type="date" class="lb-from"><input type="date" class="lb-to"><button class="lb-clear">×</button></div>
+      <input type="date" class="lb-from"><input type="date" class="lb-to"><input class="lb-cond" placeholder="Bedingung, z. B. cqz=14; iota nicht leer" title="Feld-Bedingungen mit ; trennen. Vergleich: = != < > <= >=, ~ enthält, !~ enthält nicht, „leer“, „nicht leer“. Felder: call, band, mode, country, cqz, ituz, dxcc, state, cnty, iota, darc_dok, comment, qso_date (JJJJMMTT) …">
+      <select class="lb-view" title="Gespeicherte Ansichten (Filter, Spalten, Sortierung)"></select><button class="lb-clear" title="Filter zurücksetzen">×</button></div>
     <div class="tablewrap lb-wrap"><table class="grid lb-grid"><thead></thead><tbody></tbody></table></div>
     <div class="lb-foot"><span class="lb-info"></span><i class="grow"></i><span>${esc(name)}</span><span>SQLite</span><span class="lb-count"></span><span class="lb-selc"></span></div>`;
   const cols = () => store.get("log.cols", LOG_DEFAULT_COLS);
-  const q = () => { const p = new URLSearchParams({ log: name, limit: 2000, q: $(".lb-q", root).value.trim(), band: $(".lb-band", root).value, mode: $(".lb-mode", root).value, qsl: $(".lb-qsl", root).value, date_from: $(".lb-from", root).value, date_to: $(".lb-to", root).value }); return p; };
+  const q = () => { const p = new URLSearchParams({ log: name, limit: 2000, q: $(".lb-q", root).value.trim(), band: $(".lb-band", root).value, mode: $(".lb-mode", root).value, qsl: $(".lb-qsl", root).value, date_from: $(".lb-from", root).value, date_to: $(".lb-to", root).value, cond: $(".lb-cond", root).value.trim() }); return p; };
+  const VF = ["q", "band", "mode", "qsl", "from", "to", "cond"];
+  const views = () => { const v = store.get("log.views", []), sel = $(".lb-view", root);
+    sel.innerHTML = `<option value="">Ansicht …</option>${v.map((x, i) => `<option value="${i}">${esc(x.name)}</option>`).join("")}<option value="save">Aktuelle Ansicht speichern …</option>${v.length ? `<option value="del">Ansicht löschen …</option>` : ""}`; };
+  const applyView = x => { for (const k of VF) $(".lb-" + k, root).value = x.f?.[k] ?? ""; if (x.cols) { store.set("log.cols", x.cols); } if (x.sort) { LOGB.sort = x.sort; store.set("log.sort", x.sort); } $(".lb-find", root).classList.remove("hidden"); load(); };
+  $(".lb-view", root).addEventListener("change", e => { e.stopPropagation(); const v = store.get("log.views", []), val = e.target.value; e.target.value = "";
+    if (val === "save") { const n = prompt("Name der Ansicht (Filter, Spalten und Sortierung werden gespeichert):"); if (!n) return;
+      const f = Object.fromEntries(VF.map(k => [k, $(".lb-" + k, root).value])), i = v.findIndex(x => x.name === n.trim()), rec = { name: n.trim(), f, cols: cols(), sort: LOGB.sort };
+      if (i >= 0) v[i] = rec; else v.push(rec); store.set("log.views", v); WW.emit("log-views"); toast(`Ansicht „${rec.name}“ gespeichert`); }
+    else if (val === "del") { const n = prompt("Welche Ansicht löschen? Name:\n" + v.map(x => x.name).join("\n")); const i = v.findIndex(x => x.name === (n || "").trim()); if (i < 0) return; v.splice(i, 1); store.set("log.views", v); WW.emit("log-views"); }
+    else if (val !== "") applyView(v[+val]); });
+  views();
   let rows = [];
   const load = async () => {
-    const r = await api("/api/qso?" + q()); rows = r.qsos;
+    let r; try { r = await api("/api/qso?" + q()); $(".lb-cond", root).classList.remove("bad"); } catch (err) { $(".lb-cond", root).classList.add("bad"); $(".lb-info", root).textContent = err.message; return; }
+    $(".lb-info", root).textContent = ""; rows = r.qsos;
     const [sk, sd] = LOGB.sort; rows.sort((a, b) => { const x = sk === "qso_date" ? (a.qso_date + a.time_on) : a[sk] ?? "", y = sk === "qso_date" ? (b.qso_date + b.time_on) : b[sk] ?? ""; return (x > y ? 1 : x < y ? -1 : 0) * sd; });
     const C = cols(), wid = store.get("log.widths", {});
     $("thead", root).innerHTML = `<tr><th class="rh"></th>${C.map(k => `<th data-k="${k}" style="${wid[k] ? `width:${wid[k]}px` : ""}">${esc((LOG_COLS.find(c => c[0] === k) || [k, k])[1])}${sk === k ? (sd > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr>`;
@@ -82,7 +95,7 @@ function createLogbook(root, params) {
     else if (a === "lotwdown") { toast("LoTW-Abgleich läuft …"); try { const r = await post("/api/sync/confirmations?" + logq(), { service: "lotw" }); toast(`LoTW: ${r.received} empfangen, ${r.matched} zugeordnet`); load(); } catch (err) { toast(err.message, true); } }
   });
   root.addEventListener("dblclick", e => { const tr = e.target.closest("tr[data-id]"); if (tr) openAle(rows.find(r => r.id === +tr.dataset.id)); });
-  root.addEventListener("input", e => { if (e.target.classList.contains("lb-q")) { clearTimeout(root._t); root._t = setTimeout(load, 250); } });
+  root.addEventListener("input", e => { if (e.target.classList.contains("lb-q") || e.target.classList.contains("lb-cond")) { clearTimeout(root._t); root._t = setTimeout(load, 250); } });
   root.addEventListener("change", e => { if (e.target.closest(".lb-find")) load(); });
   $(".lb-clear", root).onclick = () => { $$(".lb-find input, .lb-find select", root).forEach(i => i.value = ""); load(); };
   // Spaltenbreite per Ziehen am Kopf
@@ -90,7 +103,7 @@ function createLogbook(root, params) {
     const x0 = e.clientX, w0 = th.offsetWidth, mv = ev => th.style.width = Math.max(30, w0 + ev.clientX - x0) + "px",
       up = () => { const w = store.get("log.widths", {}); w[th.dataset.k] = th.offsetWidth; store.set("log.widths", w); window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
     window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up); });
-  const offs = [WW.on("qso", load), WW.on("reload", load), WW.on("log-cols", load)]; load();
+  const offs = [WW.on("qso", load), WW.on("reload", load), WW.on("log-cols", load), WW.on("log-views", views)]; load();
   return () => offs.forEach(f => f());
 }
 async function bulkAct(ids, action, cb) { if (!ids.length) return toast("Erst QSOs auswählen", true); const r = await post("/api/qso/bulk?" + logq(), { ids, action }); toast(`${r.changed} geändert`); cb && cb(); }
@@ -176,11 +189,13 @@ function createAle(root) {
     <div class="dtab hidden" data-t="station"><div class="ale-grid"><label>Mein Rufzeichen<input id="ale-mycall"></label><label>Operator<input id="ale-op"></label><label>Mein Locator<input id="ale-myloc"></label><label>Logbuch<select id="ale-log"></select></label></div></div>
     <div class="ale-prev"></div>
     <div class="actions"><button type="button" id="ale-clear">Leeren (Esc)</button><button type="button" id="ale-del" class="danger hidden">Löschen</button><i class="grow"></i><button type="submit" class="primary" id="ale-save">Hinzufügen ⏎</button></div>
-    <datalist id="ale-modes">${["SSB", "CW", "FT8", "FT4", "RTTY", "PSK31", "FM", "AM", "JS8", "SSTV", "OLIVIA", "MFSK"].map(m => `<option>${m}</option>`).join("")}</datalist></form>`;
+    <datalist id="ale-modes"></datalist></form>`;
   tabsIn(root);
+  const modes = () => { $("#ale-modes", root).innerHTML = Object.keys(modeTable()).map(m => `<option>${esc(m)}</option>`).join(""); };
+  modes();
   const form = $("form", root);
   const set = (id, v, force) => { if (force || !ALE.dirty.has(id)) F(id).value = v ?? ""; };
-  const rst = m => ["CW", "RTTY", "PSK31"].includes((m || "").toUpperCase()) ? "599" : ["FT8", "FT4", "JT65", "JT9", "Q65"].includes((m || "").toUpperCase()) ? "-10" : "59";
+  const rst = rstFor;
   const logs = () => { F("log").innerHTML = WW.logbooks.map(l => `<option ${l.name === WW.logbook ? "selected" : ""}>${esc(l.name)}</option>`).join(""); };
   const sync = () => { if (ALE.editing || F("lock").checked || !WW.rig.connected || !WW.rig.freq) return;
     set("freq", fmtMHz(WW.rig.freq)); set("band", bandFor(WW.rig.freq));
@@ -258,7 +273,7 @@ function createAle(root) {
       clear();
     } catch (err) { toast(err.message, true); }
   });
-  const offs = [WW.on("rig", sync), WW.on("ale-open", q => q ? fill(q) : clear()), WW.on("prefill", p => { clear(); F("call").value = p.call; if (p.mode) { F("mode").value = p.mode; ALE.dirty.add("mode"); set("rsts", rst(p.mode), true); set("rstr", rst(p.mode), true); }
+  const offs = [WW.on("settings", modes), WW.on("rig", sync), WW.on("ale-open", q => q ? fill(q) : clear()), WW.on("prefill", p => { clear(); F("call").value = p.call; if (p.mode) { F("mode").value = p.mode; ALE.dirty.add("mode"); set("rsts", rst(p.mode), true); set("rstr", rst(p.mode), true); }
     if (p.freq) { F("freq").value = (p.freq / 1e6).toFixed(4); F("band").value = bandFor(p.freq); }
     for (const k of ["pota", "sota", "wwff"]) if (p[k]) { F(k).value = p[k]; prgName(k, p[k]); root.querySelector('.dtabs [data-t="prg"]')?.click(); } lookup(); }), WW.on("logbooks", logs), WW.on("contest", () => { if (LOGB.contest && !F("stx").value) F("stx").value = String(LOGB.serial).padStart(3, "0"); })];
   const tk = setInterval(tick, 1000); clear();

@@ -227,6 +227,7 @@ fieldset { border: 1px solid var(--line2); border-radius: 3px; margin: 0 0 6px; 
 .lb-tb button { flex-direction: column; gap: 0; min-width: 46px; padding: 1px 4px; background: none; border-color: transparent; font-size: 10.5px; }
 .lb-tb button .ic { width: 18px; height: 18px; color: var(--accent); } .lb-tb .sep { width: 1px; background: var(--line); margin: 3px 3px; }
 .lb-find { display: flex; gap: 4px; padding: 3px; background: var(--panel2); border-bottom: 1px solid var(--line2); flex-wrap: wrap; flex: none; } .lb-find .lb-q { flex: 1; min-width: 160px; }
+.lb-find .lb-cond { flex: 1; min-width: 200px; font-family: var(--mono, monospace); } .lb-find .lb-cond.bad { border-color: var(--bad); }
 .lb-grid th[data-k] { cursor: pointer; } .lb-grid .rh { width: 14px; padding: 0 2px; color: var(--accent); background: var(--panel2); }
 .lb-foot { display: flex; gap: 10px; padding: 1px 6px; font-size: 11px; color: var(--muted); background: var(--panel2); border-top: 1px solid var(--line2); flex: none; }
 .ale2 { display: flex; flex-direction: column; gap: 4px; padding: 6px; height: 100%; }

@@ -21,7 +21,7 @@ import contextvars
 from .bands import BANDS, band_for, default_rst
 from .cluster import Cluster
 from .cty import Cty
-from .logbook import Logbook
+from .logbook import Logbook, FIELDS as QSO_FIELDS, INT_FIELDS as QSO_INTS
 from .rig import POLL, Rig, RigError
 from .rotor import Rotor, RotorError
 from . import radios as radmod
@@ -40,7 +40,7 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 wsjtx_port=2237,
                 rot_enabled=False, rot_host="127.0.0.1", rot_port=4533, rot_park=0,
                 rot_model=0, rot_device="", rot_speed="", rot_offset=0, rot_stop="north", rot_min_az="", rot_max_az="", rot_log=False,
-                rig_poll_ms=250, rig_dualvfo=False,
+                rig_poll_ms=250, rig_dualvfo=False, mode_rst="",
                 cw_out="rig", winkey_device="", winkey_wpm=22,
                 fwd_targets="", fwd_format="adif", wsjtx_forward="", n1mm_port=0, backup_dir="", backup_keep=30,
                 # Online-Dienste
@@ -923,8 +923,8 @@ async def lookup(call: str, band: str = "", mode: str = "", grid: str = ""):
 
 @app.get("/api/qso")
 async def qso_list(q: str = "", limit: int = 500, offset: int = 0, band: str = "", mode: str = "", qsl: str = "",
-                   date_from: str = "", date_to: str = ""):
-    w, a = _filter(q, band, mode, qsl, date_from, date_to)
+                   date_from: str = "", date_to: str = "", cond: str = ""):
+    w, a = _filter(q, band, mode, qsl, date_from, date_to, cond)
     rows, total = book.query(" AND ".join(w), a, limit=min(limit, 5000), offset=offset)
     return dict(total=total, qsos=rows)
 
@@ -940,8 +940,39 @@ QSL_FILTERS = {
 }
 
 
-def _filter(q="", band="", mode="", qsl="", date_from="", date_to=""):
+COND_RE = re.compile(r"^\s*([a-z_]+)\s*(!=|<>|>=|<=|=|~|!~|<|>|\s+(?:leer|nicht leer))\s*(.*?)\s*$", re.I)
+
+
+def _cond(text: str) -> tuple[list, list]:
+    """Feld-Bedingungen fuer gespeicherte Ansichten, mit ';' getrennt: call~DL, cqz=14, band!=20m,
+    qso_date>=20260101, iota nicht leer, comment leer. Nur bekannte Logbuch-Felder."""
     w, a = [], []
+    for part in filter(None, (p.strip() for p in (text or "").split(";"))):
+        m = COND_RE.match(part)
+        if not m or m.group(1).lower() not in QSO_FIELDS:
+            raise HTTPException(400, f"Bedingung nicht verstanden: {part} (Beispiel: cqz=14; country~Japan; iota nicht leer)")
+        f, op, v = m.group(1).lower(), m.group(2).strip().lower(), m.group(3)
+        if op in ("leer", "nicht leer"):
+            w.append(f"IFNULL({f},'') {'=' if op == 'leer' else '<>'} ''"); continue
+        if f == "call":
+            v = v.upper()
+        elif f in ("band",):
+            v = v.lower()
+        elif f == "qso_date":
+            v = v.replace("-", "")
+        if op in ("~", "!~"):
+            w.append(f"IFNULL({f},'') {'NOT ' if op == '!~' else ''}LIKE ?"); a.append(f"%{v}%")
+        elif f in QSO_INTS and re.fullmatch(r"-?\d+", v):
+            w.append(f"{f} {'<>' if op == '!=' else op} ?"); a.append(int(v))
+        elif op in ("=", "!=", "<>"):
+            w.append(f"UPPER(IFNULL({f},'')) {'=' if op == '=' else '<>'} ?"); a.append(v.upper())
+        else:
+            w.append(f"{f} {op} ?"); a.append(v)
+    return w, a
+
+
+def _filter(q="", band="", mode="", qsl="", date_from="", date_to="", cond=""):
+    w, a = _cond(cond)
     if q:
         w.append("(call LIKE ? OR country LIKE ? OR name LIKE ? OR gridsquare LIKE ? OR comment LIKE ? OR qth LIKE ? "
                  "OR darc_dok LIKE ? OR iota LIKE ?)")
@@ -1192,17 +1223,17 @@ def _esc(v) -> str:
     return str(v if v is not None else "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _sel_qsos(ids: str, q="", band="", mode="", qsl="", date_from="", date_to="") -> list[dict]:
+def _sel_qsos(ids: str, q="", band="", mode="", qsl="", date_from="", date_to="", cond="") -> list[dict]:
     if ids:
         return book.by_ids([int(i) for i in ids.split(",") if i.strip().isdigit()])
-    w, a = _filter(q, band, mode, qsl, date_from, date_to)
+    w, a = _filter(q, band, mode, qsl, date_from, date_to, cond)
     rows, _ = book.query(" AND ".join(w), a, order="qso_date, time_on, id", limit=20000)
     return rows
 
 
 @app.get("/print/log")
-async def print_log(ids: str = "", q: str = "", band: str = "", mode: str = "", qsl: str = "", date_from: str = "", date_to: str = ""):
-    rows = _sel_qsos(ids, q, band, mode, qsl, date_from, date_to)
+async def print_log(ids: str = "", q: str = "", band: str = "", mode: str = "", qsl: str = "", date_from: str = "", date_to: str = "", cond: str = ""):
+    rows = _sel_qsos(ids, q, band, mode, qsl, date_from, date_to, cond)
     cols = [("qso_date", "Datum"), ("time_on", "UTC"), ("call", "Rufzeichen"), ("freq", "MHz"), ("band", "Band"), ("mode", "Mode"),
             ("rst_sent", "S"), ("rst_rcvd", "R"), ("name", "Name"), ("qth", "QTH"), ("gridsquare", "Loc"), ("country", "Land"),
             ("qsl_sent", "QSL s"), ("qsl_rcvd", "QSL r"), ("comment", "Bemerkung")]

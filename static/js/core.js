@@ -232,3 +232,14 @@ function beep(freq, sec = 0.2, vol = 0.12) {
     const c = _beepCtx, o = c.createOscillator(), g = c.createGain(); o.frequency.value = freq; g.gain.value = vol; o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime + sec); o.onended = () => { o.disconnect(); g.disconnect(); };
   } catch { }
 }
+
+// Betriebsarten mit RST-Vorgabe (Programmoptionen -> Betriebsarten); eine Zeile je Mode: "MODE RST"
+const MODE_RST_DEFAULT = "SSB 59\nCW 599\nFT8 -10\nFT4 -10\nRTTY 599\nPSK31 599\nFM 59\nAM 59\nJS8 -10\nJT65 -10\nJT9 -10\nQ65 -10\nSSTV 595\nOLIVIA 599\nMFSK 599\nDIGITALVOICE 59";
+function modeTable() {
+  const t = {};
+  for (const line of String((WW.settings && WW.settings.mode_rst) || MODE_RST_DEFAULT).split(/\r?\n/)) {
+    const [m, r] = line.trim().split(/\s+/); if (m) t[m.toUpperCase()] = r || "";
+  }
+  return t;
+}
+function rstFor(mode) { const t = modeTable(), m = (mode || "").toUpperCase(); return m in t ? t[m] : (["CW", "RTTY", "PSK31"].includes(m) ? "599" : "59"); }
