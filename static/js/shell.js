@@ -234,7 +234,7 @@ function runAccel(a) {
 function openOptions(tab = "station") {
   const s = WW.settings, o = store.get("opts", {});
   const d = dialog({ title: "Programmoptionen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Speichern", "save", "primary"]], body: `
-    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["cw", "CW / WinKeyer"], ["theme", "Darstellung"]]
+    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
       .map(([k, l]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${l}</button>`).join("")}</div>
     <div class="dtab ${tab === "station" ? "" : "hidden"}" data-t="station"><div class="grid2">
       <label>Rufzeichen<input name="callsign" value="${esc(s.callsign)}"></label><label>Locator<input name="locator" value="${esc(s.locator)}"></label>
@@ -275,6 +275,14 @@ function openOptions(tab = "station") {
       <label>Tempo (WpM)<input name="winkey_wpm" type="number" min="5" max="99" value="${s.winkey_wpm || 22}"></label>
       <div class="ctl-row wide"><button type="button" class="wk-con">WinKeyer verbinden</button><button type="button" class="wk-dis">Trennen</button><span class="wk-st hint"></span></div>
       <p class="hint wide">Makros im Digitalbetrieb (Betriebsart CW) und der CW-Keyer gehen dann über den WinKeyer (wie gewohnt). Der WinKeyer tastet das Funkgerät über seine Key- und PTT-Leitung.</p></div></div>
+    <div class="dtab ${tab === "links" ? "" : "hidden"}" data-t="links"><div class="grid2">
+      <label class="wide">Neue QSOs weiterleiten an (UDP, host:port, mehrere mit Komma)<input name="fwd_targets" value="${esc(s.fwd_targets || "")}" placeholder="z. B. 127.0.0.1:2333, 192.168.1.20:12060"></label>
+      <label>Format der Weiterleitung<select name="fwd_format">${[["adif", "ADIF-Text"], ["wsjtx", "WSJT-X „Logged ADIF“ (z. B. GridTracker, Log4OM)"], ["n1mm", "N1MM <contactinfo>"]].map(([k, l]) => `<option value="${k}" ${(s.fwd_format || "adif") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label>N1MM Logger+ empfangen (UDP-Port, 0 = aus)<input name="n1mm_port" type="number" min="0" max="65535" value="${s.n1mm_port || 0}" placeholder="12060"></label>
+      <label class="wide">WSJT-X/JTDX-Pakete weiterreichen an (host:port, mehrere mit Komma)<input name="wsjtx_forward" value="${esc(s.wsjtx_forward || "")}" placeholder="z. B. 127.0.0.1:2238 für GridTracker oder JTAlert"></label>
+      <label class="wide">Automatische tägliche Sicherung in Ordner (z. B. Dropbox-, OneDrive- oder Google-Drive-Ordner)<input name="backup_dir" value="${esc(s.backup_dir || "")}" placeholder="leer = aus"></label>
+      <label>Sicherungen behalten (Tage)<input name="backup_keep" type="number" min="1" max="3650" value="${s.backup_keep || 30}"></label>
+      <p class="hint wide">N1MM: in N1MM unter <i>Config → WSJT/JTDX and Broadcast Data</i> „Contacts“ an diesen Rechner und Port senden. Weitergeleitet wird jedes neue QSO – auch aus WSJT-X und N1MM.</p></div></div>
     <div class="dtab ${tab === "smeter" ? "" : "hidden"}" data-t="smeter"><div class="grid2">
       <label>Versatz (dB)<input name="o_soff" type="number" value="${o.soff || 0}" data-local></label><label>Faktor<input name="o_sscale" type="number" step="0.05" value="${o.sscale || 1}" data-local></label>
       <p class="hint wide">Gleicht die S-Meter-Anzeige an das Gerät an. Angezeigt wird Faktor × Messwert + Versatz.</p></div></div>

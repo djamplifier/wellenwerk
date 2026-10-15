@@ -81,6 +81,9 @@ class _Proto(asyncio.DatagramProtocol):
         self.transport.sendto(packet, addr)
 
     def datagram_received(self, buf, addr):
+        if FORWARD["spec"]:          # unveraendert an weitere Programme weiterreichen
+            from . import links
+            links.send_raw(buf, FORWARD["spec"])
         try:
             mtype, ident, data = parse(buf)
         except Exception:
@@ -105,6 +108,7 @@ async def listen(port: int, on_adif, on_status, on_decode=None):
 
 
 PROTO: _Proto | None = None
+FORWARD = {"spec": ""}
 
 
 def send(ident: str, packet: bytes):

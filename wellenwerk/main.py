@@ -26,6 +26,7 @@ from .rig import POLL, Rig, RigError
 from .rotor import Rotor, RotorError
 from . import radios as radmod
 from . import winkey as wkmod
+from . import links
 from . import programs
 from . import wsjtx
 
@@ -41,6 +42,7 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 rot_model=0, rot_device="", rot_speed="",
                 rig_poll_ms=250, rig_dualvfo=False,
                 cw_out="rig", winkey_device="", winkey_wpm=22,
+                fwd_targets="", fwd_format="adif", wsjtx_forward="", n1mm_port=0, backup_dir="", backup_keep=30,
                 # Online-Dienste
                 hamqth_user="", hamqth_pass="", qrz_user="", qrz_pass="", qrz_logbook_key="",
                 eqsl_user="", eqsl_pass="", lotw_user="", lotw_pass="", lotw_location="Wellenwerk", lotw_cert_pass="",
@@ -63,12 +65,17 @@ def load_cfg() -> dict:
 cfg = load_cfg()
 
 
+def apply_links():
+    wsjtx.FORWARD["spec"] = cfg.get("wsjtx_forward") or ""
+
+
 def apply_poll():
     POLL["interval"] = min(max(int(cfg.get("rig_poll_ms") or 250), 100), 2000) / 1000
     POLL["dual"] = bool(cfg.get("rig_dualvfo"))
 
 
 apply_poll()
+apply_links()
 cty = Cty(DATA)
 logbooks = extras.Logbooks(DATA)
 _LOG_CTX = contextvars.ContextVar("logbook", default="")
@@ -341,7 +348,8 @@ async def lifespan(app):
             await winkey.connect(cfg["winkey_device"], int(cfg.get("winkey_wpm") or 22))
         except ConnectionError as e:
             log.warning("WinKeyer: %s", e)
-    tasks = [asyncio.create_task(cluster.run_forever()), asyncio.create_task(rotor.run_forever())]
+    tasks = [asyncio.create_task(cluster.run_forever()), asyncio.create_task(rotor.run_forever()), asyncio.create_task(auto_backup_loop())]
+    await restart_n1mm()
     transport = None
     try:
         transport = await wsjtx.listen(int(cfg["wsjtx_port"]), on_wsjtx_adif, on_wsjtx_status, on_wsjtx_decode)
@@ -435,7 +443,7 @@ async def put_settings(new: dict):
         raise HTTPException(400, f"unbekannte Einstellungen: {', '.join(sorted(unknown))}")
     if new.get("locator") and not geo.valid_grid(new["locator"]):
         raise HTTPException(400, "Locator ungueltig (z. B. JO31ab)")
-    for k in ("cluster_port", "wsjtx_port", "rot_port", "rot_model", "rig_poll_ms", "winkey_wpm"):
+    for k in ("cluster_port", "wsjtx_port", "rot_port", "rot_model", "rig_poll_ms", "winkey_wpm", "n1mm_port", "backup_keep"):
         if k in new:
             new[k] = int(new[k])
     for k in BOOLS:
@@ -448,6 +456,10 @@ async def put_settings(new: dict):
     cfg["callsign"] = cfg["callsign"].upper().strip()
     CFG_PATH.write_text(json.dumps(cfg, indent=2))
     apply_poll()
+    apply_links()
+    await restart_n1mm()
+    if "backup_dir" in new:
+        BACKUP_WAKE.set()
     await rotor_spawn()
     rotor.reconfigure(cfg["rot_host"], int(cfg["rot_port"]), bool(cfg["rot_enabled"]))
     cluster.reconfigure(cfg["cluster_host"], int(cfg["cluster_port"]), cfg["callsign"], cfg.get("cluster_cmds", ""))
@@ -957,6 +969,23 @@ async def qso_bulk(body: dict):
         n = book.set_fields(ids, {"qsl_rcvd": "Y", "qsl_rdate": _today()})
     elif act == "qsl_reset":
         n = book.set_fields(ids, {"qsl_sent": "N", "qsl_sdate": "", "qsl_rcvd": "N", "qsl_rdate": ""})
+    elif act == "callbook":       # leere Felder aus dem Callbook fuellen (hoechstens 300 auf einmal, mit Pause)
+        if not (cfg.get("hamqth_user") or cfg.get("qrz_user")):
+            raise HTTPException(400, "Kein Callbook eingerichtet (Optionen → Online-Dienste)")
+        n = 0
+        for qid in ids[:300]:
+            q = book.get(qid)
+            if not q:
+                continue
+            try:
+                cb = await asyncio.to_thread(callbook.lookup, cfg, q["call"])
+            except Exception as e:
+                log.info("Callbook %s: %s", q["call"], e)
+                cb = None
+            upd = {k: cb[k] for k in ("name", "qth", "gridsquare", "state", "cnty", "iota", "email", "qsl_via", "address") if cb and cb.get(k) and not q.get(k)}
+            if upd:
+                n += book.set_fields([qid], upd)
+            await asyncio.sleep(0.3)
     else:
         raise HTTPException(400, f"unbekannte Aktion {act}")
     await broadcast({"type": "reload"})
@@ -1046,6 +1075,10 @@ async def upload(body: dict):
 
 
 def auto_upload(qid: int):
+    if cfg.get("fwd_targets"):
+        q = book.get(qid)
+        if q:
+            links.forward_qso(q, cfg["fwd_targets"], cfg.get("fwd_format") or "adif")
     for svc, flag in (("qrz", "auto_qrz"), ("clublog", "auto_clublog"), ("eqsl", "auto_eqsl")):
         if cfg.get(flag):
             async def run(svc=svc):
@@ -1192,6 +1225,29 @@ async def print_labels(ids: str = "", skip: int = 0, q: str = "", qsl: str = "to
       @media screen{.lab{outline:1px dashed #bbb}}"""
     body = f"<p class='noprint'>{len(labels)} Etiketten für {len(rows)} QSOs. Bogen 2×7 (z. B. Avery L7163).</p><div class='sheet'>{''.join(cells)}</div>"
     return _print_page("QSL-Etiketten", body, css)
+
+
+@app.get("/print/address")
+async def print_address(ids: str = "", skip: int = 0):
+    """Adressetiketten (Bogen 3x8, z. B. Avery L7160, 63,5 x 38,1 mm) aus Name und Anschrift (Callbook)."""
+    rows = _sel_qsos(ids)
+    seen, labels, missing = set(), [], []
+    for r in rows:
+        if r["call"] in seen:
+            continue
+        seen.add(r["call"])
+        adr = [p.strip() for p in (r.get("address") or "").split(",") if p.strip()]
+        if not adr:
+            missing.append(r["call"])
+            continue
+        lines = [f"<b>{_esc(r.get('name') or '')} {_esc(r['call'])}</b>"] + [_esc(a) for a in adr]
+        labels.append(f"<div class='lab'>{'<br>'.join(lines)}</div>")
+    cells = ["<div class='lab'></div>"] * max(0, skip) + labels
+    css = """@page{size:A4;margin:15.15mm 7.2mm} body{margin:0} .sheet{display:grid;grid-template-columns:repeat(3,63.5mm);column-gap:2.5mm;
+      grid-auto-rows:38.1mm} .lab{padding:5mm 5mm;overflow:hidden;font-size:10pt;line-height:1.35} @media screen{.lab{outline:1px dashed #bbb}}"""
+    hint = f" Ohne Anschrift (erst „Callbook für Auswahl“): {', '.join(missing[:30])}" if missing else ""
+    body = f"<p class='noprint'>{len(labels)} Adressetiketten. Bogen 3×8 (z. B. Avery L7160).{_esc(hint)}</p><div class='sheet'>{''.join(cells)}</div>"
+    return _print_page("Adressetiketten", body, css)
 
 
 @app.get("/api/cabrillo")
@@ -1579,6 +1635,120 @@ async def program_selfspot(body: dict):
         return await asyncio.to_thread(programs.post_pota_spot, call, call, freq, ref, mode, str(body.get("comment", ""))[:100])
     except Exception as e:
         raise HTTPException(502, f"POTA-Spot nicht gesendet: {e}")
+
+
+# ---------- N1MM Logger+ ----------
+N1MM = {"tr": None}
+
+
+async def on_n1mm(tag: str, rec: dict):
+    # ADIF-konform: USB/LSB sind Submodes von SSB; Band aus der Frequenz
+    if rec.get("mode") in ("USB", "LSB"):
+        rec["submode"], rec["mode"] = rec["mode"], "SSB"
+    if rec.get("freq") and not rec.get("band"):
+        rec["band"] = band_for(float(rec["freq"]) * 1e6)
+    m = book.find_match(rec.get("call", ""), rec.get("qso_date", ""), rec.get("time_on", ""), rec.get("band", ""), rec.get("mode", ""))
+    if tag == "contactdelete":
+        if m:
+            book.delete(m["id"])
+            await broadcast({"type": "reload"})
+        return
+    if tag == "contactreplace" and m:
+        q = book.update(m["id"], complete_qso({**m, **rec}))
+        await broadcast({"type": "qso_changed", "qso": q})
+        return
+    if m:
+        return
+    q = book.add(complete_qso(await enrich_callbook(rec)))
+    log.info("N1MM: %s %s %s geloggt", q["call"], q.get("band"), q.get("mode"))
+    await broadcast({"type": "qso", "qso": q, "source": "N1MM"})
+    auto_upload(q["id"])
+
+
+async def restart_n1mm():
+    if N1MM["tr"]:
+        N1MM["tr"].close()
+        N1MM["tr"] = None
+    port = int(cfg.get("n1mm_port") or 0)
+    if port:
+        try:
+            N1MM["tr"] = await links.listen_n1mm(port, on_n1mm)
+        except OSError as e:
+            log.warning("N1MM-Port %d nicht verfügbar: %s", port, e)
+
+
+# ---------- Google-Earth-Export (KML) ----------
+@app.get("/api/kml")
+async def kml_export(ids: str = "", q: str = ""):
+    rows = _sel_qsos(ids, q) if ids or q else book.all()
+    marks = []
+    for r in rows:
+        ll = geo.grid_to_latlon(r.get("gridsquare", "")) if r.get("gridsquare") else None
+        if not ll:
+            info = describe(r.get("call", ""))
+            ll = (info.get("lat"), info.get("lon")) if info.get("lat") is not None else None
+        if not ll:
+            continue
+        d = r.get("qso_date", "")
+        desc = f"{d[6:8]}.{d[4:6]}.{d[:4]} {(r.get('time_on') or '')[:4]} UTC · {r.get('band', '')} {r.get('mode', '')} · {r.get('name', '')} {r.get('qth', '')} · {r.get('country', '')}"
+        marks.append(f"<Placemark><name>{_esc(r.get('call'))}</name><description>{_esc(desc)}</description>"
+                     f"<Point><coordinates>{ll[1]:.5f},{ll[0]:.5f},0</coordinates></Point></Placemark>")
+    home = geo.grid_to_latlon(cfg.get("locator", "")) if cfg.get("locator") else None
+    if home:
+        marks.insert(0, f"<Placemark><name>{_esc(cfg.get('callsign') or 'Station')}</name><Point><coordinates>{home[1]:.5f},{home[0]:.5f},0</coordinates></Point></Placemark>")
+    doc = ('<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Wellenwerk-Logbuch</name>'
+           + "".join(marks) + "</Document></kml>")
+    return Response(doc, media_type="application/vnd.google-earth.kml+xml", headers={"Content-Disposition": 'attachment; filename="wellenwerk.kml"'})
+
+
+# ---------- Datenbank pruefen, automatische Sicherung ----------
+@app.post("/api/logbooks/check")
+async def logbook_check(body: dict | None = None):
+    name = (body or {}).get("name") or current_logbook()
+    db = logbooks.get(name).db
+    def run():
+        res = db.execute("PRAGMA integrity_check").fetchall()
+        db.execute("VACUUM")
+        return [r[0] for r in res]
+    res = await asyncio.to_thread(run)
+    return {"ok": res == ["ok"], "result": res[:20]}
+
+
+BACKUP_WAKE = asyncio.Event()
+
+
+async def auto_backup_loop():
+    """Taeglich alle Logbuecher in den gewaehlten Ordner sichern (z. B. Dropbox-, OneDrive- oder Google-Drive-Ordner)."""
+    while True:
+        BACKUP_WAKE.clear()
+        target = (cfg.get("backup_dir") or "").strip()
+        if target:
+            try:
+                d = Path(target).expanduser()
+                d.mkdir(parents=True, exist_ok=True)
+                stamp = datetime.now().strftime("%Y%m%d")
+                for name in logbooks.names():
+                    dst = d / f"Wellenwerk_{name}_{stamp}.sqlite"
+                    if not dst.exists():
+                        await asyncio.to_thread(_backup_to, name, dst)
+                keep = int(cfg.get("backup_keep") or 30)
+                files = sorted(d.glob("Wellenwerk_*.sqlite"), key=lambda p: p.stat().st_mtime, reverse=True)
+                for old in files[keep * max(1, len(logbooks.names())):]:
+                    old.unlink()
+            except Exception as e:
+                log.warning("Automatische Sicherung: %s", e)
+        try:
+            await asyncio.wait_for(BACKUP_WAKE.wait(), 3600)
+        except asyncio.TimeoutError:
+            pass
+
+
+def _backup_to(name: str, dst: Path):
+    import sqlite3
+    out = sqlite3.connect(dst)
+    with out:
+        logbooks.get(name).db.backup(out)
+    out.close()
 
 
 @app.get("/api/calendar")
