@@ -262,6 +262,12 @@ function openOptions(tab = "station") {
       <input id="acc-target" placeholder="z. B. NB, 20m, USB, logbook" style="width:180px"><button type="button" id="acc-add">Hinzufügen</button></div></div>
     <div class="dtab ${tab === "comms" ? "" : "hidden"}" data-t="comms"><div class="grid2">
       <label>Anzeige-Aktualisierung (ms)<input name="rig_poll_ms" type="number" min="100" max="2000" value="${s.rig_poll_ms || 250}"></label>
+      <fieldset class="wide"><legend>Funkgerät für andere Programme (CAT-Emulation Kenwood TS-2000)</legend><div class="grid2">
+        <label class="chkrow wide"><input type="checkbox" name="catemu_on" ${s.catemu_on ? "checked" : ""}> einschalten – Fremdprogramm als „Kenwood TS-2000“ einrichten</label>
+        <label>Weg<select name="catemu_kind">${[["pty", "virtuelle serielle Schnittstelle (macOS/Linux)"], ["serial", "serielle Schnittstelle / com0com-Paar (Windows)"], ["tcp", "TCP-Port"]].map(([k, l]) => `<option value="${k}" ${(s.catemu_kind || "pty") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label>TCP-Port<input name="catemu_port" type="number" value="${s.catemu_port || 4590}"></label>
+        <label class="wide">Serielle Schnittstelle (Windows: das eine Ende des com0com-Paars, z. B. COM11 – das Fremdprogramm nimmt COM12)<input name="catemu_device" value="${esc(s.catemu_device || "")}"></label>
+        <p class="hint wide catemu-st"></p></div></fieldset>
       <label class="wide">STUN-Server für Fernbetrieb-Audio außerhalb des Heimnetzes (leer = nur Heimnetz)<input name="rtc_stun" value="${esc(s.rtc_stun || "")}" placeholder="z. B. stun:stun.l.google.com:19302"></label>
       <label class="wide chkrow"><input type="checkbox" name="rig_dualvfo" ${s.rig_dualvfo ? "checked" : ""}> Beide VFOs bei jeder Aktualisierung lesen (Satellitenbetrieb)</label>
       <p class="hint wide">PTT über DTR/RTS eines COM-Ports, Handshake und CI-V-Adresse stellst du je Funkgerät im Verbinden-Dialog ein.</p></div></div>
@@ -295,10 +301,11 @@ function openOptions(tab = "station") {
       <label class="wide">Neue QSOs weiterleiten an (UDP, host:port, mehrere mit Komma)<input name="fwd_targets" value="${esc(s.fwd_targets || "")}" placeholder="z. B. 127.0.0.1:2333, 192.168.1.20:12060"></label>
       <label>Format der Weiterleitung<select name="fwd_format">${[["adif", "ADIF-Text"], ["wsjtx", "WSJT-X „Logged ADIF“ (z. B. GridTracker, Log4OM)"], ["n1mm", "N1MM <contactinfo>"]].map(([k, l]) => `<option value="${k}" ${(s.fwd_format || "adif") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label>N1MM Logger+ empfangen (UDP-Port, 0 = aus)<input name="n1mm_port" type="number" min="0" max="65535" value="${s.n1mm_port || 0}" placeholder="12060"></label>
+      <label>ADIF per UDP empfangen – VarAC, JTAlert, GridTracker … (Port, 0 = aus)<input name="adif_udp_port" type="number" min="0" max="65535" value="${s.adif_udp_port || 0}" placeholder="2333"></label>
       <label class="wide">WSJT-X/JTDX-Pakete weiterreichen an (host:port, mehrere mit Komma)<input name="wsjtx_forward" value="${esc(s.wsjtx_forward || "")}" placeholder="z. B. 127.0.0.1:2238 für GridTracker oder JTAlert"></label>
       <label class="wide">Automatische tägliche Sicherung in Ordner (z. B. Dropbox-, OneDrive- oder Google-Drive-Ordner)<input name="backup_dir" value="${esc(s.backup_dir || "")}" placeholder="leer = aus"></label>
       <label>Sicherungen behalten (Tage)<input name="backup_keep" type="number" min="1" max="3650" value="${s.backup_keep || 30}"></label>
-      <p class="hint wide">N1MM: in N1MM unter <i>Config → WSJT/JTDX and Broadcast Data</i> „Contacts“ an diesen Rechner und Port senden. Weitergeleitet wird jedes neue QSO – auch aus WSJT-X und N1MM.</p></div></div>
+      <p class="hint wide">VarAC: <i>Settings → Log</i> „Send ADIF via UDP“ an diesen Rechner und Port. JTAlert: <i>Logging → Last QSO API / ADIF UDP</i>. N1MM: in N1MM unter <i>Config → WSJT/JTDX and Broadcast Data</i> „Contacts“ an diesen Rechner und Port senden. Weitergeleitet wird jedes neue QSO – auch aus WSJT-X und N1MM.</p></div></div>
     <div class="dtab ${tab === "smeter" ? "" : "hidden"}" data-t="smeter"><div class="grid2">
       <label>Versatz (dB)<input name="o_soff" type="number" value="${o.soff || 0}" data-local></label><label>Faktor<input name="o_sscale" type="number" step="0.05" value="${o.sscale || 1}" data-local></label>
       <p class="hint wide">Gleicht die S-Meter-Anzeige an das Gerät an. Angezeigt wird Faktor × Messwert + Versatz.</p></div></div>
@@ -320,6 +327,7 @@ function openOptions(tab = "station") {
   d.querySelector(".wk-con").onclick = async () => { try { WW.winkey = await post("/api/winkey/connect", { device: d.querySelector(".wk-dev").value, wpm: +d.querySelector('[name="winkey_wpm"]').value }); } catch (e) { WW.winkey = { error: e.message }; } wkSt(); };
   d.querySelector(".wk-dis").onclick = async () => { WW.winkey = await post("/api/winkey/disconnect", {}); wkSt(); };
   wkSt();
+  api("/api/catemu").then(c => { const el = d.querySelector(".catemu-st"); if (el) el.innerHTML = c.on ? `Aktiv: <b>${esc(c.where)}</b>${c.link ? ` (auch erreichbar als <code>${esc(c.link)}</code>)` : ""} – diesen Port im Fremdprogramm eintragen, 9600 Baud.` : c.error ? `<span class="err">${esc(c.error)}</span>` : "aus"; }).catch(() => { });
   d.querySelector('button[value="save"]').addEventListener("click", async e => {
     e.preventDefault();
     const body = {}, loc = store.get("opts", {});

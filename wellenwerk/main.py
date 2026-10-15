@@ -30,6 +30,7 @@ from . import links
 from . import programs
 from . import wsjtx
 from .winlink.client import Winlink
+from .catemu import CatEmu
 from .winlink.message import Message as WlMessage
 
 VERSION = "1.0.2"
@@ -44,7 +45,7 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 rot_model=0, rot_device="", rot_speed="", rot_offset=0, rot_stop="north", rot_min_az="", rot_max_az="", rot_log=False,
                 rig_poll_ms=250, rig_dualvfo=False, mode_rst="",
                 cw_out="rig", winkey_device="", winkey_wpm=22,
-                fwd_targets="", fwd_format="adif", wsjtx_forward="", n1mm_port=0, backup_dir="", backup_keep=30,
+                fwd_targets="", fwd_format="adif", wsjtx_forward="", n1mm_port=0, adif_udp_port=0, backup_dir="", backup_keep=30,
                 # Online-Dienste
                 hamqth_user="", hamqth_pass="", qrz_user="", qrz_pass="", qrz_logbook_key="",
                 eqsl_user="", eqsl_pass="", lotw_user="", lotw_pass="", lotw_location="Wellenwerk", lotw_cert_pass="",
@@ -53,9 +54,10 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 ardop_host="127.0.0.1", ardop_port=8515, ardop_bw="2000MAX", vara_host="127.0.0.1", vara_port=8300, vara_bw="2300",
                 agw_host="127.0.0.1", agw_port=8000, agw_radio_port=0, rtc_stun="",
                 sync_on=False, sync_master="", sync_slave="", sync_offset=0, sync_mode=True,
+                catemu_on=False, catemu_kind="pty" if os.name != "nt" else "serial", catemu_port=4590, catemu_device="",
                 callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False)
 SECRETS = ("wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
-BOOLS = ("sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
+BOOLS = ("catemu_on", "sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
 MASK = "••••••"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("ww")
@@ -391,6 +393,7 @@ async def lifespan(app):
             log.warning("WinKeyer: %s", e)
     tasks = [asyncio.create_task(cluster.run_forever()), asyncio.create_task(rotor.run_forever()), asyncio.create_task(auto_backup_loop())]
     await restart_n1mm()
+    await apply_catemu()
     transport = None
     try:
         transport = await wsjtx.listen(int(cfg["wsjtx_port"]), on_wsjtx_adif, on_wsjtx_status, on_wsjtx_decode)
@@ -485,7 +488,7 @@ async def put_settings(new: dict):
     if new.get("locator") and not geo.valid_grid(new["locator"]):
         raise HTTPException(400, "Locator ungueltig (z. B. JO31ab)")
     for k in ("cluster_port", "wsjtx_port", "rot_port", "rot_model", "rig_poll_ms", "winkey_wpm", "n1mm_port", "backup_keep",
-              "wl_telnet_port", "ardop_port", "vara_port", "agw_port", "agw_radio_port", "sync_offset"):
+              "wl_telnet_port", "ardop_port", "vara_port", "agw_port", "agw_radio_port", "sync_offset", "catemu_port", "adif_udp_port"):
         if k in new:
             new[k] = int(new[k])
     for k in BOOLS:
@@ -501,6 +504,8 @@ async def put_settings(new: dict):
     apply_links()
     apply_rotor_opts()
     await restart_n1mm()
+    if any(k.startswith("catemu_") for k in new):
+        await apply_catemu()
     if "backup_dir" in new:
         BACKUP_WAKE.set()
     await rotor_spawn()
@@ -1748,16 +1753,33 @@ async def on_n1mm(tag: str, rec: dict):
     auto_upload(q["id"])
 
 
-async def restart_n1mm():
-    if N1MM["tr"]:
-        N1MM["tr"].close()
-        N1MM["tr"] = None
-    port = int(cfg.get("n1mm_port") or 0)
-    if port:
+async def on_adif_udp(rec: dict):
+    if rec.get("freq") and not rec.get("band"):
         try:
-            N1MM["tr"] = await links.listen_n1mm(port, on_n1mm)
-        except OSError as e:
-            log.warning("N1MM-Port %d nicht verfügbar: %s", port, e)
+            rec["band"] = band_for(float(rec["freq"]) * 1e6)
+        except ValueError:
+            pass
+    if rec.get("mode") in ("USB", "LSB"):
+        rec["submode"], rec["mode"] = rec["mode"], "SSB"
+    if book.find_match(rec.get("call", ""), rec.get("qso_date", ""), rec.get("time_on", ""), rec.get("band", ""), rec.get("mode", "")):
+        return
+    q = book.add(complete_qso(await enrich_callbook(rec)))
+    log.info("ADIF-UDP: %s %s %s geloggt", q["call"], q.get("band"), q.get("mode"))
+    await broadcast({"type": "qso", "qso": q, "source": "UDP-ADIF"})
+    auto_upload(q["id"])
+
+
+async def restart_n1mm():
+    for key, port, fn, cb in (("tr", int(cfg.get("n1mm_port") or 0), links.listen_n1mm, on_n1mm),
+                              ("adif", int(cfg.get("adif_udp_port") or 0), links.listen_adif_udp, on_adif_udp)):
+        if N1MM.get(key):
+            N1MM[key].close()
+            N1MM[key] = None
+        if port:
+            try:
+                N1MM[key] = await fn(port, cb)
+            except OSError as e:
+                log.warning("UDP-Port %d nicht verfügbar: %s", port, e)
 
 
 # ---------- Google-Earth-Export (KML) ----------
@@ -1832,6 +1854,29 @@ def _backup_to(name: str, dst: Path):
     with out:
         logbooks.get(name).db.backup(out)
     out.close()
+
+
+# ---------- CAT-Emulation (TS-2000) fuer Fremdprogramme ----------
+def _catemu_notify(st):
+    try:
+        asyncio.get_event_loop().create_task(broadcast(dict(type="catemu", catemu=st)))
+    except RuntimeError:
+        pass
+
+
+catemu = CatEmu(rig, _catemu_notify)
+
+
+async def apply_catemu():
+    if cfg.get("catemu_on"):
+        await catemu.start(cfg.get("catemu_kind") or "pty", int(cfg.get("catemu_port") or 4590), cfg.get("catemu_device") or "")
+    else:
+        await catemu.stop()
+
+
+@app.get("/api/catemu")
+async def catemu_status():
+    return catemu.status
 
 
 # ---------- Schnappschuesse (kompletter Geraetezustand) ----------

@@ -110,3 +110,28 @@ async def listen_n1mm(port: int, cb):
     tr, _ = await asyncio.get_running_loop().create_datagram_endpoint(lambda: _N1mmProto(cb), local_addr=("0.0.0.0", port))
     log.info("N1MM-Empfang auf UDP %d", port)
     return tr
+
+
+class _AdifUdpProto(asyncio.DatagramProtocol):
+    """Allgemeiner ADIF-Empfang: ein oder mehrere ADIF-Datensaetze als Text je UDP-Paket
+    (VarAC, JTAlert, GridTracker, Log4OM-Weiterleitung u. a.)."""
+    def __init__(self, cb):
+        self.cb = cb
+
+    def datagram_received(self, data, addr):
+        from . import adif
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            text = data.decode("latin-1")
+        if "<" not in text:
+            return
+        for rec in adif.parse(text):
+            if rec.get("call"):
+                asyncio.ensure_future(self.cb(rec))
+
+
+async def listen_adif_udp(port: int, cb):
+    tr, _ = await asyncio.get_running_loop().create_datagram_endpoint(lambda: _AdifUdpProto(cb), local_addr=("0.0.0.0", port))
+    log.info("ADIF-Empfang auf UDP %d", port)
+    return tr
