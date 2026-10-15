@@ -382,7 +382,7 @@ async function boot() {
   applyChrome();
   await refreshState();
   await loadLogbooks();
-  const ORDER = ["rig", "log", "dm", "sat", "rot", "map"];
+  const ORDER = ["rig", "log", "dm", "wl", "sat", "rot", "map"];
   $("#apptabs").innerHTML = ORDER.filter(k => APPS[k]).map(k => [k, APPS[k]]).map(([k, a]) => `<button data-app="${k}">${icon(a.icon)}${esc(a.title)}</button>`).join("");
   $("#apptabs").addEventListener("click", e => { const b = e.target.closest("[data-app]"); if (b) switchApp(b.dataset.app); });
   const h0 = new URLSearchParams(location.search).get("app") || location.hash.slice(1);

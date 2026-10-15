@@ -354,3 +354,14 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .prg-suggest button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 8px; font: inherit; color: inherit; }
 .prg-suggest button:hover { background: var(--accent, #1f5fae); color: #fff; }
 .prg-suggest small { opacity: .7; }
+/* Winlink */
+.wl-fold { flex: 1; overflow: auto; } .wl-f { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; border-bottom: 1px solid var(--line2); }
+.wl-f:hover { background: var(--sel); } .wl-f.sel { background: #3d82d4; color: #fff; } .wl-f span { flex: 1; } .wl-f b { font-weight: 600; font-size: 12px; } .wl-f svg { width: 16px; height: 16px; }
+.wl-t tr.unread td { font-weight: 700; }
+.wl-read { flex: 1; overflow: auto; display: flex; flex-direction: column; } .wl-hd { padding: 8px 10px; border-bottom: 1px solid var(--line2); display: flex; flex-direction: column; gap: 3px; }
+.wl-subj { font-size: 15px; font-weight: 700; } .wl-att { display: flex; flex-wrap: wrap; gap: 10px; } .wl-att a { color: inherit; }
+.wl-body { flex: 1; margin: 0; padding: 10px; white-space: pre-wrap; word-break: break-word; font-family: "Share Tech Mono", ui-monospace, monospace; font-size: 13px; }
+.wl-conn { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 8px; overflow: hidden; } .wl-conn .grid2 { flex: none; }
+.wl-log { flex: 1; min-height: 120px; overflow: auto; border: 1px solid var(--line2); background: var(--panel2); padding: 4px 6px; font-family: "Share Tech Mono", ui-monospace, monospace; font-size: 12px; }
+.wl-l span { opacity: .6; } .wl-l.ok { color: var(--ok); } .wl-l.err { color: var(--bad); } .wl-l.warn { color: #d08a00; }
+.wl-comp textarea { font-family: "Share Tech Mono", ui-monospace, monospace; } .chip { display: inline-flex; gap: 4px; align-items: center; border: 1px solid var(--line2); border-radius: 10px; padding: 1px 6px; }

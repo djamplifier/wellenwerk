@@ -29,6 +29,8 @@ from . import winkey as wkmod
 from . import links
 from . import programs
 from . import wsjtx
+from .winlink.client import Winlink
+from .winlink.message import Message as WlMessage
 
 VERSION = "1.0.2"
 BASE = Path(__file__).resolve().parent.parent
@@ -47,8 +49,11 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 hamqth_user="", hamqth_pass="", qrz_user="", qrz_pass="", qrz_logbook_key="",
                 eqsl_user="", eqsl_pass="", lotw_user="", lotw_pass="", lotw_location="Wellenwerk", lotw_cert_pass="",
                 clublog_email="", clublog_pass="", clublog_api="",
+                wl_call="", wl_password="", wl_telnet_host="server.winlink.org", wl_telnet_port=8772, wl_ptt="rig",
+                ardop_host="127.0.0.1", ardop_port=8515, ardop_bw="2000MAX", vara_host="127.0.0.1", vara_port=8300, vara_bw="2300",
+                agw_host="127.0.0.1", agw_port=8000, agw_radio_port=0,
                 callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False)
-SECRETS = ("hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
+SECRETS = ("wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
 BOOLS = ("rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
 MASK = "••••••"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -452,7 +457,8 @@ async def put_settings(new: dict):
         raise HTTPException(400, f"unbekannte Einstellungen: {', '.join(sorted(unknown))}")
     if new.get("locator") and not geo.valid_grid(new["locator"]):
         raise HTTPException(400, "Locator ungueltig (z. B. JO31ab)")
-    for k in ("cluster_port", "wsjtx_port", "rot_port", "rot_model", "rig_poll_ms", "winkey_wpm", "n1mm_port", "backup_keep"):
+    for k in ("cluster_port", "wsjtx_port", "rot_port", "rot_model", "rig_poll_ms", "winkey_wpm", "n1mm_port", "backup_keep",
+              "wl_telnet_port", "ardop_port", "vara_port", "agw_port", "agw_radio_port"):
         if k in new:
             new[k] = int(new[k])
     for k in BOOLS:
@@ -1799,6 +1805,105 @@ def _backup_to(name: str, dst: Path):
     with out:
         logbooks.get(name).db.backup(out)
     out.close()
+
+
+# ---------- Winlink ----------
+def _wl_notify(msg: dict):
+    asyncio.get_event_loop().create_task(broadcast(msg))
+
+
+winlink = Winlink(DATA / "winlink", cfg, lambda on: rig.set_ptt(on), _wl_notify, lambda hz: rig.set_freq(hz), VERSION)
+
+
+@app.get("/api/winlink/state")
+async def wl_state():
+    return winlink.snapshot()
+
+
+@app.get("/api/winlink/folder/{folder}")
+async def wl_folder(folder: str):
+    if folder not in ("in", "out", "sent", "archive"):
+        raise HTTPException(404, "Ordner unbekannt")
+    return winlink.box.list(folder)
+
+
+@app.get("/api/winlink/msg/{folder}/{mid}")
+async def wl_msg(folder: str, mid: str):
+    try:
+        m = winlink.box.get(folder, mid)
+    except (ValueError, OSError):
+        raise HTTPException(404, "Nachricht nicht gefunden")
+    return dict(m.summary(), text=m.text(), headers=m.headers)
+
+
+@app.get("/api/winlink/att/{folder}/{mid}/{idx}")
+async def wl_att(folder: str, mid: str, idx: int):
+    try:
+        name, data = winlink.box.get(folder, mid, mark_read=False).files[idx]
+    except (ValueError, OSError, IndexError):
+        raise HTTPException(404, "Anhang nicht gefunden")
+    from urllib.parse import quote
+    return Response(data, media_type="application/octet-stream", headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
+
+
+@app.post("/api/winlink/compose")
+async def wl_compose(body: dict):
+    import base64
+    mycall = (cfg.get("wl_call") or cfg.get("callsign") or "").upper()
+    if not mycall:
+        raise HTTPException(400, "Rufzeichen fehlt (Programmoptionen)")
+    split = lambda v: [a for a in re.split(r"[,;\s]+", v or "") if a]
+    files = []
+    for f in body.get("files") or []:
+        try:
+            files.append((str(f["name"])[:200], base64.b64decode(f["data"])))
+        except (KeyError, ValueError):
+            raise HTTPException(400, "Anhang unlesbar")
+    if sum(len(d) for _, d in files) > 2_000_000:
+        raise HTTPException(400, "Anhänge zu groß (Funkbetrieb: möglichst unter 100 kB)")
+    m = WlMessage.compose(mycall, split(body.get("to")), split(body.get("cc")), (body.get("subject") or "").strip(),
+                          body.get("text") or "", files)
+    err = m.validate()
+    if err:
+        raise HTTPException(400, err)
+    winlink.box.store("out", m)
+    await broadcast(dict(type="winlink", state=winlink.state, counts=winlink.box.counts()))
+    return m.summary()
+
+
+@app.post("/api/winlink/move")
+async def wl_move(body: dict):
+    try:
+        winlink.box.move(body["src"], body["dst"], body["mid"])
+    except (KeyError, ValueError, OSError) as e:
+        raise HTTPException(400, f"Verschieben nicht möglich: {e}")
+    await broadcast(dict(type="winlink", state=winlink.state, counts=winlink.box.counts()))
+    return {"ok": True}
+
+
+@app.delete("/api/winlink/msg/{folder}/{mid}")
+async def wl_delete(folder: str, mid: str):
+    try:
+        winlink.box.delete(folder, mid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    await broadcast(dict(type="winlink", state=winlink.state, counts=winlink.box.counts()))
+    return {"ok": True}
+
+
+@app.post("/api/winlink/connect")
+async def wl_connect(body: dict):
+    try:
+        winlink.start(body.get("method", "telnet"), body.get("target", ""), body)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    return winlink.snapshot()
+
+
+@app.post("/api/winlink/abort")
+async def wl_abort():
+    await winlink.abort()
+    return winlink.snapshot()
 
 
 @app.get("/api/rotor/log")

@@ -130,6 +130,7 @@ function connectWs() {
       case "cluster_line": if (m.key) { WW.clusterInfo[m.key] = m.line; WW.emit("cluster-info", WW.clusterInfo); } WW.emit("cluster-line", m.line); break;
       case "wsjtx": WW.wsjtx = m.wsjtx; WW.emit("wsjtx", m.wsjtx); break;
       case "decode": WW.decodes.unshift(m.decode); if (WW.decodes.length > 500) WW.decodes.pop(); WW.emit("decode", m.decode); break;
+      case "winlink": WW.emit("winlink", m); break;
       case "rotor": WW.rotor = m.rotor; WW.emit("rotor", m.rotor); break;
       case "winkey": WW.winkey = m.winkey; WW.emit("winkey", m.winkey); break;
       case "stations": if (window.PRG) PRG.stations = m.stations; WW.emit("stations", m.stations); break;

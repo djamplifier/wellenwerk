@@ -234,7 +234,7 @@ function runAccel(a) {
 function openOptions(tab = "station") {
   const s = WW.settings, o = store.get("opts", {});
   const d = dialog({ title: "Programmoptionen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Speichern", "save", "primary"]], body: `
-    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
+    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
       .map(([k, l]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${l}</button>`).join("")}</div>
     <div class="dtab ${tab === "station" ? "" : "hidden"}" data-t="station"><div class="grid2">
       <label>Rufzeichen<input name="callsign" value="${esc(s.callsign)}"></label><label>Locator<input name="locator" value="${esc(s.locator)}"></label>
@@ -273,6 +273,17 @@ function openOptions(tab = "station") {
       <label class="wide">Betriebsarten und RST-Vorgabe (eine Zeile je Mode: <code>MODE RST</code>)<textarea name="mode_rst" rows="14" spellcheck="false" style="font-family:monospace">${esc(s.mode_rst || MODE_RST_DEFAULT)}</textarea></label>
       <div class="ctl-row wide"><button type="button" class="mr-def">Standard wiederherstellen</button></div>
       <p class="hint wide">Die Liste erscheint als Auswahl im Feld „Mode“ des Logbuch-Eintrags. Beim Wechsel der Betriebsart werden „Gesendet“ und „Empfangen“ mit der Vorgabe gefüllt.</p></div></div>
+    <div class="dtab ${tab === "winlink" ? "" : "hidden"}" data-t="winlink"><div class="grid2">
+      <label>Winlink-Rufzeichen (leer = Stationsrufzeichen)<input name="wl_call" value="${esc(s.wl_call || "")}"></label><label>Winlink-Passwort<input name="wl_password" type="password" value="${esc(s.wl_password || "")}"></label>
+      <label>Winlink-Server (Telnet)<input name="wl_telnet_host" value="${esc(s.wl_telnet_host || "server.winlink.org")}"></label><label>Port<input name="wl_telnet_port" type="number" value="${s.wl_telnet_port || 8772}"></label>
+      <label>PTT bei ARDOP/VARA<select name="wl_ptt"><option value="rig" ${s.wl_ptt !== "none" ? "selected" : ""}>über das Funkgerät (CAT)</option><option value="none" ${s.wl_ptt === "none" ? "selected" : ""}>macht das Modem selbst / VOX</option></select></label><span></span>
+      <label>ARDOP-Modem Host<input name="ardop_host" value="${esc(s.ardop_host || "127.0.0.1")}"></label><label>ARDOP Port (Daten = Port+1)<input name="ardop_port" type="number" value="${s.ardop_port || 8515}"></label>
+      <label>ARDOP Bandbreite<select name="ardop_bw">${["200MAX", "500MAX", "1000MAX", "2000MAX", "200FORCED", "500FORCED", "1000FORCED", "2000FORCED"].map(v => `<option ${v === (s.ardop_bw || "2000MAX") ? "selected" : ""}>${v}</option>`).join("")}</select></label><span></span>
+      <label>VARA-Modem Host<input name="vara_host" value="${esc(s.vara_host || "127.0.0.1")}"></label><label>VARA Port (Daten = Port+1)<input name="vara_port" type="number" value="${s.vara_port || 8300}"></label>
+      <label>VARA Bandbreite (HF)<select name="vara_bw">${[["500", "500 Hz"], ["2300", "2300 Hz"], ["2750", "2750 Hz"], ["", "nicht setzen (VARA FM)"]].map(([v, l]) => `<option value="${v}" ${v === String(s.vara_bw ?? "2300") ? "selected" : ""}>${l}</option>`).join("")}</select></label><span></span>
+      <label>Packet: AGW-Host (Direwolf)<input name="agw_host" value="${esc(s.agw_host || "127.0.0.1")}"></label><label>AGW-Port<input name="agw_port" type="number" value="${s.agw_port || 8000}"></label>
+      <label>Funkkanal am Packet-Modem<input name="agw_radio_port" type="number" min="0" max="15" value="${s.agw_radio_port || 0}"></label><span></span>
+      <p class="hint wide">ARDOP: das freie Modem <i>ardopcf</i> starten (z. B. <code>ardopcf 8515 Soundkarte Soundkarte</code>). Packet: <i>Direwolf</i> mit AGWPORT 8000. VARA ist ein eigenständiges Programm mit eigener Lizenz; Wellenwerk spricht nur seine TCP-Schnittstelle an. Wellenwerk tastet das Funkgerät, wenn das Modem PTT anfordert.</p></div></div>
     <div class="dtab ${tab === "cw" ? "" : "hidden"}" data-t="cw"><div class="grid2">
       <label>CW senden über<select name="cw_out"><option value="rig" ${s.cw_out !== "winkey" ? "selected" : ""}>Funkgerät (CAT, Hamlib send_morse)</option><option value="winkey" ${s.cw_out === "winkey" ? "selected" : ""}>K1EL WinKeyer</option></select></label>
       <label>WinKeyer-Port<select name="winkey_device" class="wk-dev"><option value="${esc(s.winkey_device || "")}">${esc(s.winkey_device || "– wählen –")}</option></select></label>
