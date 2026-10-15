@@ -288,6 +288,10 @@ Neue QSOs können automatisch hochgeladen werden (Haken „Neue QSOs sofort …�
 - **WWK Sweeper:** dekodiert bis zu 16 Signale gleichzeitig (BPSK, RTTY oder CW); Klick übernimmt ein Signal in den Haupt-Dekoder.
 - **Weltkarte:** zeigt die gehörten Stationen.
 
+### FreeDV (digitale Sprache)
+
+**Ansicht → FreeDV (digitale Sprache)** im Digitalbetrieb. Modus wählen (**700D**, **700E** oder **1600** – auf den FreeDV-Frequenzen meist 700D/700E), **Empfang von** (Soundkarte des Funkgeräts oder ein Empfänger/WebSDR), **Lautsprecher**, **Mikrofon** und **Senden zum Funkgerät** einstellen, **▶ Empfang**. Grün = synchronisiert, daneben der Störabstand. Zum Sprechen **PTT** gedrückt halten (oder „rastet ein“). Das Funkgerät steht dabei auf USB.
+
 ## 11. SSTV (Bildübertragung)
 
 ![SSTV-Empfang](bilder/11-sstv-empfang.png)

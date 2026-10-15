@@ -8,3 +8,4 @@ venv/
 .venv-mac/
 desktop/node_modules/
 desktop/dist/
+packaging/codec2/

@@ -25,6 +25,9 @@ for f in ("LICENSE", "LIZENZEN.md"):
     args += ["--add-data", f"{ROOT / f}{sep}."]
 args += ["--add-data", f"{ROOT / 'licenses'}{sep}licenses"]
 args += ["--add-data", f"{ROOT / 'beispiele'}{sep}beispiele"]
+c2 = ROOT / "packaging" / "codec2"          # FreeDV: codec2-Bibliothek (im CI je System bereitgelegt)
+if c2.is_dir() and any(c2.iterdir()):
+    args += ["--add-data", f"{c2}{sep}codec2"]
 ham = ROOT / "packaging" / "hamlib"
 if ham.is_dir():
     args += ["--add-data", f"{ham}{sep}hamlib"]

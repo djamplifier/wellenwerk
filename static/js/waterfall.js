@@ -13,7 +13,7 @@ function wfLut(name) { const st = WF_PALETTES[name] || WF_PALETTES.klassisch, lu
   for (let i = 0; i < 256; i++) { const v = i / 255; let k = 1; while (k < st.length - 1 && v > st[k][0]) k++; const a = st[k - 1], b = st[k], t = Math.max(0, Math.min(1, (v - a[0]) / ((b[0] - a[0]) || 1)));
     for (let c = 0; c < 3; c++) lut[i * 4 + c] = Math.round(a[c + 1] + (b[c + 1] - a[c + 1]) * t); lut[i * 4 + 3] = 255; } return lut; }
 
-function createWaterfall(root) {
+function createWfPanel(root) {
   const o = wfOpts(), st = store.get("wf.view", { mode: "2d", src: "", rx: 0.62, ry: 0.0, dist: 1.55 });
   if (!(st.rx > 0)) Object.assign(st, { rx: 0.62, ry: 0, dist: 1.55 });
   root.innerHTML = `<div class="pane-tb wf-tb"><select class="wf-src" title="Quelle"></select><div class="seg2"><button data-m="2d">2D</button><button data-m="3d">3D</button></div>
@@ -128,4 +128,4 @@ function createWaterfall(root) {
 function wfPass(s) { const m = s.mode, pb = +s.passband || 0;
   if (m === "LSB" || m === "PKTLSB") return [-(pb || 2700), -100]; if (m === "CW") return [500 - (pb || 500) / 2, 500 + (pb || 500) / 2];
   if (m === "AM" || m === "SAM" || m === "FM") return [-(pb || 9000) / 2, (pb || 9000) / 2]; return [100, pb || 2700]; }
-APPS.rig.panels.waterfall = { title: "Wasserfall", create: createWaterfall, dock: { ref: "face", dir: "below" }, size: { height: 340 } };
+APPS.rig.panels.waterfall = { title: "Wasserfall", create: createWfPanel, dock: { ref: "face", dir: "below" }, size: { height: 340 } };

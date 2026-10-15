@@ -51,6 +51,33 @@ jobs:
           for b in rigctl rigctld rotctl rotctld; do cp "$(which $b)" packaging/hamlib/bin/; done
           cp -L $(ldd "$(which rigctld)" | awk '/libhamlib/ {print $3}') packaging/hamlib/lib/
 
+      - name: codec2 fuer FreeDV (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-codec2
+      - name: codec2 kopieren (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          mkdir -p packaging/codec2
+          cp /mingw64/bin/libcodec2*.dll packaging/codec2/libcodec2.dll
+          for d in libgcc_s_seh-1.dll libwinpthread-1.dll libstdc++-6.dll; do [ -f /mingw64/bin/$d ] && cp /mingw64/bin/$d packaging/codec2/ || true; done
+          ls -la packaging/codec2
+      - name: codec2 fuer FreeDV (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install codec2
+          mkdir -p packaging/codec2
+          cp -L "$(brew --prefix codec2)/lib/libcodec2.dylib" packaging/codec2/libcodec2.dylib
+      - name: codec2 fuer FreeDV (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y libcodec2-1.0 || sudo apt-get install -y libcodec2-0.9
+          mkdir -p packaging/codec2
+          cp -L $(ls /usr/lib/x86_64-linux-gnu/libcodec2.so.* | head -1) packaging/codec2/libcodec2.so
+
       - name: Dienst bauen (PyInstaller)
         run: python packaging/build.py
       - name: Dienst-Selbsttest
@@ -61,6 +88,8 @@ jobs:
           for i in $(seq 1 40); do curl -sf http://127.0.0.1:8099/api/state > /dev/null && break; sleep 2; done
           curl -sf http://127.0.0.1:8099/api/hamlib/models | head -c 200; echo
           curl -sf http://127.0.0.1:8099/api/radios | grep -q '"connected":true'
+          curl -sf http://127.0.0.1:8099/api/freedv; echo
+          curl -sf http://127.0.0.1:8099/api/freedv | grep -q '"available":true'
 
       - name: Desktop-Programm bauen
         working-directory: desktop

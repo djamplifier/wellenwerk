@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 from fastapi import FastAPI, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -2389,6 +2390,51 @@ async def rig_raw(body: dict):
 @app.get("/api/stats")
 async def stats():
     return book.stats()
+
+
+@app.get("/api/freedv", tags=["Digitalbetrieb"])
+async def freedv_info():
+    from . import freedv
+    return dict(available=freedv.available(), modes=["700D", "700E", "1600"])
+
+
+@app.websocket("/ws/freedv")
+async def ws_freedv(websocket: WebSocket, mode: str = "700D"):
+    """FreeDV-Kanal: Binaerbloecke [Art 1 Byte][PCM int16 LE, 8 kHz]. Vom Browser: 1 = Funkgeraete-Ton (Empfang),
+    2 = Mikrofon (Senden). Zum Browser: 1 = dekodierte Sprache, 2 = Modemton zum Funkgeraet; dazu Text {sync, snr}."""
+    from . import freedv
+    await websocket.accept()
+    try:
+        rx, tx = freedv.FreeDV(mode), freedv.FreeDV(mode)
+    except (RuntimeError, ValueError) as e:
+        await websocket.send_json(dict(type="error", text=str(e)))
+        await websocket.close()
+        return
+    await websocket.send_json(dict(type="info", mode=mode, speech_rate=rx.speech_rate, modem_rate=rx.modem_rate))
+    loop = asyncio.get_running_loop()
+    last = 0.0
+    try:
+        while True:
+            msg = await websocket.receive_bytes()
+            if not msg:
+                continue
+            kind, pcm = msg[0], np.frombuffer(msg[1:], "<i2")
+            if kind == 1:
+                sp = await loop.run_in_executor(None, rx.rx, pcm)
+                if len(sp):
+                    await websocket.send_bytes(b"\x01" + sp.astype("<i2").tobytes())
+                if time.monotonic() - last > 0.25:
+                    last = time.monotonic()
+                    await websocket.send_json(dict(type="stats", **rx.stats()))
+            elif kind == 2:
+                mod = await loop.run_in_executor(None, tx.tx, pcm)
+                if len(mod):
+                    await websocket.send_bytes(b"\x02" + mod.astype("<i2").tobytes())
+    except WebSocketDisconnect:
+        pass
+    finally:
+        rx.close()
+        tx.close()
 
 
 @app.websocket("/ws/audio")

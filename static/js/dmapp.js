@@ -283,7 +283,7 @@ APPS.dm = {
   menus: [
     { label: "Datei", items: [{ label: "Programmoptionen …", key: "F8", act: () => openOptions() }] },
     { label: "Bearbeiten", items: [{ label: "Makros bearbeiten …", act: () => dmMacroEditor(() => WW.emit("dm-macros")) }] },
-    { label: "Ansicht", items: Object.entries({ waterfall: "Wasserfall", rx: "Empfang", tx: "Senden", macros: "Makros", qso: "QSO", tags: "Über mich", radio: "Funkgerät", sweeper: "WWK Sweeper", worldmap: "Weltkarte", sstv: "SSTV", sstvgal: "SSTV-Bilder" }).map(([k, l]) => ({ label: l, check: () => panelOpen("dm", k), act: () => togglePanel("dm", k) })) },
+    { label: "Ansicht", items: Object.entries({ waterfall: "Wasserfall", rx: "Empfang", tx: "Senden", macros: "Makros", qso: "QSO", tags: "Über mich", radio: "Funkgerät", sweeper: "WWK Sweeper", worldmap: "Weltkarte", sstv: "SSTV", sstvgal: "SSTV-Bilder", freedv: "FreeDV (digitale Sprache)" }).map(([k, l]) => ({ label: l, check: () => panelOpen("dm", k), act: () => togglePanel("dm", k) })) },
     { label: "QSO", items: [{ label: "Loggen", act: () => $(".dm-qso button[type=submit]")?.click() }, { label: "Neues QSO", act: () => { store.set("dm.qso", {}); WW.emit("dm-qso", {}); } }] },
     { label: "Betriebsart", items: Object.entries(DM_GROUPS).flatMap(([g, ms], i) => [...(i ? ["-"] : []), g, ...ms.map(m => ({ label: m, check: () => D.mode === m, act: () => dmSetMode(m) }))]) },
     { label: "SSTV", items: [{ label: "SSTV-Fenster", act: () => addPanel("dm", "sstv") }, { label: "Bild senden …", act: () => sstvSendDialog() }, { label: "Empfangene Bilder", act: () => addPanel("dm", "sstvgal") }] },

@@ -329,12 +329,12 @@ function attachRuler(rul) {
   rul.addEventListener("click", e => { const sp = e.target.closest(".sp"), qs = e.target.closest(".qs");
     if (sp) tuneSpot(+sp.dataset.f, sp.dataset.call, sp.dataset.cmt); else if (qs) { setFreq(+qs.dataset.f); if (qs.dataset.m) setMode(qs.dataset.m); } });
 }
-function niceStep(span, px) { const target = span / (px / 70); const steps = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1e6, 2e6, 5e6]; return steps.find(s => s >= target) || 1e7; }
+function faceStep(span, px) { const target = span / (px / 70); const steps = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1e6, 2e6, 5e6]; return steps.find(s => s >= target) || 1e7; }
 function renderBars(rc) {
   if (!rc.isConnected) return;
   const f = WW.rig.freq || 0, qs = store.get("qs." + WW.current, []);
   rc.querySelectorAll(".rc-ruler").forEach(rul => {
-    const [lo, hi] = rulerRange(rul), w = rul.clientWidth || 600, st = niceStep(hi - lo, w), px = w / (hi - lo);
+    const [lo, hi] = rulerRange(rul), w = rul.clientWidth || 600, st = faceStep(hi - lo, w), px = w / (hi - lo);
     const fine = !!rul.parentElement.dataset.span;
     let html = "";
     for (let t = Math.ceil(lo / st) * st; t <= hi; t += st) {

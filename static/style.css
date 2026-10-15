@@ -385,3 +385,6 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .ch-log-area { flex: 1; overflow: auto; border: 1px solid var(--line2); background: var(--panel2); padding: 6px; font-family: "Share Tech Mono", ui-monospace, monospace; font-size: 13px; }
 .ch-l span { opacity: .55; } .ch-l.tx { color: #2f6fc4; } .ch-l.rx { color: var(--ok); } .ch-l.err { color: var(--bad); } .ch-l.info, .ch-l.ok { opacity: .8; font-style: italic; }
 .ch-in { display: flex; gap: 6px; } .ch-in input { flex: 1; }
+/* FreeDV */
+.fdv { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow: auto; } .fd-sync { color: var(--bad); font-size: 18px; } .fd-sync.ok { color: var(--ok); }
+.fd-lvl { display: block; height: 100%; width: 0; background: var(--ok); } .fd-ptt { min-width: 160px; padding: 10px 14px; font-weight: 700; } .fd-ptt.on { background: var(--bad); color: #fff; }
