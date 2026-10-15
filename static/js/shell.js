@@ -234,7 +234,7 @@ function runAccel(a) {
 function openOptions(tab = "station") {
   const s = WW.settings, o = store.get("opts", {});
   const d = dialog({ title: "Programmoptionen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Speichern", "save", "primary"]], body: `
-    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
+    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["wf", "Wasserfall"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
       .map(([k, l]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${l}</button>`).join("")}</div>
     <div class="dtab ${tab === "station" ? "" : "hidden"}" data-t="station"><div class="grid2">
       <label>Rufzeichen<input name="callsign" value="${esc(s.callsign)}"></label><label>Locator<input name="locator" value="${esc(s.locator)}"></label>
@@ -291,6 +291,15 @@ function openOptions(tab = "station") {
       <label>Packet: AGW-Host (Direwolf)<input name="agw_host" value="${esc(s.agw_host || "127.0.0.1")}"></label><label>AGW-Port<input name="agw_port" type="number" value="${s.agw_port || 8000}"></label>
       <label>Funkkanal am Packet-Modem<input name="agw_radio_port" type="number" min="0" max="15" value="${s.agw_radio_port || 0}"></label><span></span>
       <p class="hint wide">ARDOP: das freie Modem <i>ardopcf</i> starten (z. B. <code>ardopcf 8515 Soundkarte Soundkarte</code>). Packet: <i>Direwolf</i> mit AGWPORT 8000. VARA ist ein eigenständiges Programm mit eigener Lizenz; Wellenwerk spricht nur seine TCP-Schnittstelle an. Wellenwerk tastet das Funkgerät, wenn das Modem PTT anfordert.</p></div></div>
+    <div class="dtab ${tab === "wf" ? "" : "hidden"}" data-t="wf"><div class="grid2">
+      ${(() => { const w = Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, height: 1 }, o.wf || {}); return `
+      <label>Farben<select name="wf_palette" data-local data-wf>${[["klassisch", "Klassisch"], ["feuer", "Feuer"], ["meer", "Meer"], ["grau", "Grau"], ["nacht", "Nachtsicht (rot)"]].map(([k, l]) => `<option value="${k}" ${w.palette === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="chkrow"><input type="checkbox" name="wf_auto" data-local data-wf ${w.auto ? "checked" : ""}> Pegel automatisch anpassen</label>
+      <label>Pegel unten (0–1, ohne Automatik)<input type="number" step="0.05" min="0" max="1" name="wf_lo" data-local data-wf value="${w.lo}"></label><label>Pegel oben<input type="number" step="0.05" min="0" max="1" name="wf_hi" data-local data-wf value="${w.hi}"></label>
+      <label>Tempo (jede n-te Zeile)<input type="number" min="1" max="10" name="wf_speed" data-local data-wf value="${w.speed}"></label>
+      <label>3D: Tiefe (Zeilen, nach Neuöffnen)<input type="number" min="40" max="400" name="wf_depth" data-local data-wf value="${w.depth}"></label>
+      <label>3D: Höhe der Spitzen<input type="number" step="0.1" min="0.2" max="4" name="wf_height" data-local data-wf value="${w.height}"></label>
+      <p class="hint wide">Wasserfall-Fenster: Mausrad = zoomen, Ziehen = verschieben, Klick = abstimmen. 3D: Ziehen dreht, Mausrad ändert den Abstand.</p>`; })()}</div></div>
     <div class="dtab ${tab === "access" ? "" : "hidden"}" data-t="access"><div class="grid2">
       <label>Passwort für Zugriffe von anderen Rechnern (leer = keins)<input name="access_password" type="password" autocomplete="new-password" value="${esc(s.access_password || "")}"></label><span></span>
       <p class="hint wide">An diesem Rechner ist keine Anmeldung nötig. Von Tablet, Handy oder einem anderen PC aus fragt Wellenwerk dann einmal nach dem Passwort. Unbedingt setzen, bevor Wellenwerk aus dem Internet erreichbar ist.</p>
@@ -346,7 +355,8 @@ function openOptions(tab = "station") {
     const body = {}, loc = store.get("opts", {});
     d.querySelectorAll("[name]").forEach(el => {
       const v = el.type === "checkbox" ? el.checked : el.value.trim();
-      if (el.dataset.local !== undefined) loc[el.name.replace(/^o_/, "")] = el.type === "number" ? +v : v; else body[el.name] = v;
+      if (el.dataset.wf !== undefined) { loc.wf = loc.wf || {}; loc.wf[el.name.slice(3)] = el.type === "number" ? +v : v; }
+      else if (el.dataset.local !== undefined) loc[el.name.replace(/^o_/, "")] = el.type === "number" ? +v : v; else body[el.name] = v;
     });
     store.set("opts", loc); applyChrome();
     try { WW.settings = await api("/api/settings", { method: "PUT", body }); d.close(); toast("Optionen gespeichert"); WW.emit("settings"); renderStatus(); }

@@ -38,6 +38,7 @@ class KiwiRig(SdrRig):
         self.audio_rate = 12000
         self.wf_cf = None
         self.zoom = 8
+        self.wf_lines = 0
         self.state["sdr"]["url"] = self.p.get("url", "")
 
     def _uri(self, which: str, prefix: str = "") -> str:
@@ -82,10 +83,17 @@ class KiwiRig(SdrRig):
                 t.cancel()
 
     async def _keepalive(self):
+        n, seen = 0, -1
         while True:
             await asyncio.sleep(5)
+            n += 1
             await self._send(self.snd, "SET keepalive")
             await self._send(self.wf, "SET keepalive")
+            if self.wf_lines == seen and self.state["connected"]:      # Wasserfall steht: Einrichtung erneut senden
+                self.say("Wasserfall bleibt aus – Einrichtung erneut gesendet")
+                await self._setup_wf()
+                self.state["sdr"]["info"] = "Wasserfall bleibt aus (Wasserfall-Kanäle des Empfängers belegt?)" if n > 3 else ""
+            seen = self.wf_lines
 
     async def _reader(self, ws, which: str):
         async for msg in ws:
@@ -206,6 +214,7 @@ class KiwiRig(SdrRig):
         if len(body) < 12 or not self.on_spectrum:
             return
         data = body[12:]
+        self.wf_lines += 1
         span = self._span_hz()
         cf = self.wf_cf or self.state["freq"]
         self.on_spectrum(dict(name="KiwiSDR", low=cf - span / 2, high=cf + span / 2, center=cf, span=span,
