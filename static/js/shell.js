@@ -29,6 +29,11 @@ function info(title, html) { dialog({ title, body: html, buttons: [["OK", "close
 // ---------- Menues ----------
 function renderMenus(app) {
   const mb = $("#menubar");
+  if (typeof pluginMenu === "function") {      // Menue „Erweiterungen“ vor „Fenster“ einfuegen
+    const base = (app.menus || []).filter(m => m.label !== "Erweiterungen"), i = base.findIndex(m => m.label === "Fenster");
+    const pm = pluginMenu(SHELL.active); app = { ...app, menus: i >= 0 ? [...base.slice(0, i), pm, ...base.slice(i)] : [...base, pm] };
+  }
+  SHELL.menus = app.menus || [];             // so wie angezeigt (fuer die Haekchen)
   mb.innerHTML = (app.menus || []).map((m, i) => `<div class="menu" data-i="${i}"><button type="button">${esc(m.label)}</button><div class="drop"></div></div>`).join("");
   mb.querySelectorAll(".menu").forEach(el => {
     const m = app.menus[+el.dataset.i];
@@ -42,9 +47,9 @@ function renderMenus(app) {
 }
 function closeMenus() { $$(".menu.open").forEach(x => x.classList.remove("open")); }
 function refreshMenuChecks() {
-  const app = APPS[SHELL.active]; if (!app) return;
-  $$("#menubar .menu").forEach(el => { const m = app.menus[+el.dataset.i];
-    el.querySelectorAll("[data-check]").forEach(c => { const it = m.items[+c.dataset.check]; c.textContent = it.check() ? "✓" : ""; }); });
+  const menus = SHELL.menus || APPS[SHELL.active]?.menus; if (!menus) return;
+  $$("#menubar .menu").forEach(el => { const m = menus[+el.dataset.i]; if (!m) return;
+    el.querySelectorAll("[data-check]").forEach(c => { const it = m.items[+c.dataset.check]; c.textContent = it?.check?.() ? "✓" : ""; }); });
 }
 
 // ---------- Werkzeugleiste ----------
@@ -234,7 +239,7 @@ function runAccel(a) {
 function openOptions(tab = "station") {
   const s = WW.settings, o = store.get("opts", {});
   const d = dialog({ title: "Programmoptionen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Speichern", "save", "primary"]], body: `
-    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["wf", "Wasserfall"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
+    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["wf", "Wasserfall"], ["plugins", "Erweiterungen"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
       .map(([k, l]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${l}</button>`).join("")}</div>
     <div class="dtab ${tab === "station" ? "" : "hidden"}" data-t="station"><div class="grid2">
       <label>Rufzeichen<input name="callsign" value="${esc(s.callsign)}"></label><label>Locator<input name="locator" value="${esc(s.locator)}"></label>
@@ -300,6 +305,7 @@ function openOptions(tab = "station") {
       <label>3D: Tiefe (Zeilen, nach Neuöffnen)<input type="number" min="40" max="400" name="wf_depth" data-local data-wf value="${w.depth}"></label>
       <label>3D: Höhe der Spitzen<input type="number" step="0.1" min="0.2" max="4" name="wf_height" data-local data-wf value="${w.height}"></label>
       <p class="hint wide">Wasserfall-Fenster: Mausrad = zoomen, Ziehen = verschieben, Klick = abstimmen. 3D: Ziehen dreht, Mausrad ändert den Abstand.</p>`; })()}</div></div>
+    <div class="dtab ${tab === "plugins" ? "" : "hidden"}" data-t="plugins"><div class="pl-opts"></div></div>
     <div class="dtab ${tab === "access" ? "" : "hidden"}" data-t="access"><div class="grid2">
       <label>Passwort für Zugriffe von anderen Rechnern (leer = keins)<input name="access_password" type="password" autocomplete="new-password" value="${esc(s.access_password || "")}"></label><span></span>
       <p class="hint wide">An diesem Rechner ist keine Anmeldung nötig. Von Tablet, Handy oder einem anderen PC aus fragt Wellenwerk dann einmal nach dem Passwort. Unbedingt setzen, bevor Wellenwerk aus dem Internet erreichbar ist.</p>
@@ -340,6 +346,7 @@ function openOptions(tab = "station") {
     } });
   const wkSt = () => { const w = WW.winkey || {}; d.querySelector(".wk-st").textContent = w.connected ? `verbunden an ${w.device}${w.version ? ", Firmware " + w.version : ""}` : (w.error || "nicht verbunden"); };
   api("/api/hamlib/ports").then(ps => { const sel = d.querySelector(".wk-dev"), cur = sel.value; sel.innerHTML = `<option value="">– wählen –</option>` + ps.map(p => `<option value="${esc(p.device)}" ${p.device === cur ? "selected" : ""}>${esc(p.device)}${p.desc ? " – " + esc(p.desc) : ""}</option>`).join("") + (cur && !ps.some(p => p.device === cur) ? `<option selected>${esc(cur)}</option>` : ""); }).catch(() => { });
+  pluginOptions(d.querySelector(".pl-opts"));
   const mcpCfg = () => api("/api/access/mcp_config").then(c => { d.querySelector(".ac-mcp").value = JSON.stringify(c, null, 2); }).catch(() => { });
   mcpCfg();
   d.querySelector(".ac-new").onclick = async () => { if (WW.settings.api_token && !confirm("Neuen Schlüssel erzeugen? Der alte wird ungültig.")) return; const r = await post("/api/access/new_token"); d.querySelector(".ac-tok").value = r.api_token; WW.settings.api_token = "••••••"; mcpCfg(); toast("Neuer API-Schlüssel – jetzt kopieren, er wird später nicht mehr angezeigt"); };
@@ -353,6 +360,7 @@ function openOptions(tab = "station") {
   d.querySelector('button[value="save"]').addEventListener("click", async e => {
     e.preventDefault();
     const body = {}, loc = store.get("opts", {});
+    try { await savePluginSettings(d); } catch (err) { toast("Erweiterungen: " + err.message, true); }
     d.querySelectorAll("[name]").forEach(el => {
       const v = el.type === "checkbox" ? el.checked : el.value.trim();
       if (el.dataset.wf !== undefined) { loc.wf = loc.wf || {}; loc.wf[el.name.slice(3)] = el.type === "number" ? +v : v; }

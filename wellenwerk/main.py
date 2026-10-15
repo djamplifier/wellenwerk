@@ -8,6 +8,7 @@ import subprocess
 import time
 import logging
 import os
+import shutil
 import struct
 import sys
 from contextlib import asynccontextmanager
@@ -34,6 +35,7 @@ from . import wsjtx
 from .winlink.client import Winlink
 from .catemu import CatEmu
 from .access import Access, AccessMiddleware, COOKIE, LOGIN_HTML
+from .plugins import PluginHost, PluginError
 from .winlink.message import Message as WlMessage
 
 VERSION = "1.1.0"
@@ -57,7 +59,7 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 ardop_host="127.0.0.1", ardop_port=8515, ardop_bw="2000MAX", vara_host="127.0.0.1", vara_port=8300, vara_bw="2300",
                 agw_host="127.0.0.1", agw_port=8000, agw_radio_port=0, rtc_stun="",
                 sync_on=False, sync_master="", sync_slave="", sync_offset=0, sync_mode=True,
-                access_password="", api_token="", mcp_allow_tx=False,
+                access_password="", api_token="", mcp_allow_tx=False, plugins={},
                 catemu_on=False, catemu_kind="pty" if os.name != "nt" else "serial", catemu_port=4590, catemu_device="",
                 callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False)
 SECRETS = ("access_password", "api_token", "wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
@@ -123,6 +125,9 @@ async def broadcast(msg: dict):
             dead.append(ws)
     for ws in dead:
         clients.discard(ws)
+    host = globals().get("plugin_host")
+    if host and host.hooks:
+        await host.dispatch(msg)
 
 
 def home() -> tuple[float, float] | None:
@@ -439,6 +444,7 @@ async def lifespan(app):
     tasks = [asyncio.create_task(cluster.run_forever()), asyncio.create_task(rotor.run_forever()), asyncio.create_task(auto_backup_loop())]
     await restart_n1mm()
     await apply_catemu()
+    plugin_host.load_backends(app)
     transport = None
     try:
         transport = await wsjtx.listen(int(cfg["wsjtx_port"]), on_wsjtx_adif, on_wsjtx_status, on_wsjtx_decode)
@@ -566,7 +572,7 @@ async def state():
 
 
 def public_cfg() -> dict:
-    return {k: (MASK if k in SECRETS and v else v) for k, v in cfg.items()}
+    return {k: (MASK if k in SECRETS and v else v) for k, v in cfg.items() if k != "plugins"}
 
 
 @app.get("/api/settings")
@@ -1972,6 +1978,93 @@ def _backup_to(name: str, dst: Path):
     out.close()
 
 
+# ---------- Erweiterungen (Plugins) ----------
+async def _plugin_log_qso(rec: dict, source: str) -> dict:
+    q = book.add(complete_qso(await enrich_callbook(dict(rec))))
+    await broadcast({"type": "qso", "qso": q, "source": source})
+    auto_upload(q["id"])
+    return q
+
+
+plugin_host = PluginHost(DATA / "plugins", cfg, dict(station=lambda: station_identity(), public_cfg=lambda: public_cfg(),
+                                                      broadcast=lambda m: broadcast(m), rig=rig, radios=radios, log_qso=_plugin_log_qso))
+
+
+@app.get("/api/plugins", tags=["Erweiterungen"])
+async def plugins_list():
+    """Installierte Erweiterungen mit Zustand und (maskierten) Einstellungen."""
+    return plugin_host.listing()
+
+
+@app.put("/api/plugins/{pid}", tags=["Erweiterungen"])
+async def plugins_put(pid: str, body: dict):
+    try:
+        plugin_host.set_state(pid, body.get("enabled"), body.get("settings"))
+    except PluginError as e:
+        raise HTTPException(400, str(e))
+    CFG_PATH.write_text(json.dumps(cfg, indent=2))
+    restart = False
+    if body.get("enabled") is True:
+        plugin_host.load_backends(app)
+        app.openapi_schema = None
+    elif body.get("enabled") is False:
+        plugin_host.unload(pid, app)
+    await broadcast({"type": "plugins"})
+    return dict(ok=True, restart=restart, plugins=plugin_host.listing())
+
+
+@app.post("/api/plugins/install", tags=["Erweiterungen"])
+async def plugins_install(file: UploadFile):
+    try:
+        pid = plugin_host.install_zip(await file.read())
+    except (PluginError, ValueError) as e:
+        raise HTTPException(400, f"Installation nicht möglich: {e}")
+    await broadcast({"type": "plugins"})
+    return dict(ok=True, id=pid)
+
+
+@app.get("/api/plugins/examples", tags=["Erweiterungen"])
+async def plugins_examples():
+    """Mitgelieferte Beispiel-Erweiterungen (zum Ausprobieren und als Vorlage)."""
+    ex = BASE / "beispiele" / "plugins"
+    return [json.loads((d / "manifest.json").read_text(encoding="utf-8")) | {"id": d.name} for d in sorted(ex.iterdir())
+            if (d / "manifest.json").is_file()] if ex.is_dir() else []
+
+
+@app.post("/api/plugins/examples/{pid}", tags=["Erweiterungen"])
+async def plugins_install_example(pid: str):
+    src = (BASE / "beispiele" / "plugins" / pid)
+    if not src.is_dir() or "/" in pid or ".." in pid:
+        raise HTTPException(404, "Beispiel nicht gefunden")
+    dst = plugin_host.root / pid
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+    await broadcast({"type": "plugins"})
+    return {"ok": True, "id": pid}
+
+
+@app.delete("/api/plugins/{pid}", tags=["Erweiterungen"])
+async def plugins_delete(pid: str):
+    try:
+        plugin_host.unload(pid, app)
+        plugin_host.remove(pid)
+    except PluginError as e:
+        raise HTTPException(400, str(e))
+    CFG_PATH.write_text(json.dumps(cfg, indent=2))
+    await broadcast({"type": "plugins"})
+    return {"ok": True}
+
+
+@app.get("/plugins/{pid}/{path:path}", include_in_schema=False)
+async def plugin_file(pid: str, path: str):
+    base = (plugin_host.root / pid).resolve()
+    f = (base / path).resolve()
+    if not str(f).startswith(str(base) + os.sep) or not f.is_file() or "daten" in f.relative_to(base).parts[:1]:
+        raise HTTPException(404, "nicht gefunden")
+    return FileResponse(f, headers={"Cache-Control": "no-cache"})
+
+
 # ---------- CAT-Emulation (TS-2000) fuer Fremdprogramme ----------
 def _catemu_notify(st):
     try:
@@ -2402,7 +2495,7 @@ _TAGS = {"rig": "Funkgerät", "radios": "Funkgerät", "snapshots": "Funkgerät",
          "services": "Online-Dienste", "decodes": "WSJT-X", "favorites": "Funkgerät", "hamlib": "Funkgerät", "swdb": "Funkgerät",
          "recordings": "Digitalbetrieb", "sstv": "Digitalbetrieb", "bearing": "Karten & Ausbreitung", "map": "Karten & Ausbreitung",
          "solar": "Karten & Ausbreitung", "calendar": "Karten & Ausbreitung", "state": "Programm", "shutdown": "Programm", "store": "Programm",
-         "access": "Zugang", "login": "Zugang", "logout": "Zugang"}
+         "access": "Zugang", "login": "Zugang", "logout": "Zugang", "plugins": "Erweiterungen"}
 for _r in app.routes:
     _p = getattr(_r, "path", "")
     if _p.startswith("/api/") and not getattr(_r, "tags", None):

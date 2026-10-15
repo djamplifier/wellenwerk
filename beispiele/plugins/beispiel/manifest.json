@@ -1,0 +1,14 @@
+{
+  "id": "beispiel",
+  "name": "Beispiel: Stationsanzeige",
+  "version": "1.0",
+  "author": "Wellenwerk",
+  "description": "Zeigt, wie Erweiterungen funktionieren: eigenes Fenster im Logbuch mit Stationsdaten, letzten QSOs und einem QSO-Zähler aus dem Server-Teil.",
+  "frontend": "plugin.js",
+  "backend": "plugin.py",
+  "settings": [
+    { "key": "gruss", "label": "Begrüßung", "type": "text", "default": "Viel Spaß beim Funken!" },
+    { "key": "farbe", "label": "Farbe", "type": "select", "options": ["blau", "grün", "rot"], "default": "blau" },
+    { "key": "zaehlen", "label": "QSOs seit Programmstart zählen", "type": "bool", "default": true }
+  ]
+}

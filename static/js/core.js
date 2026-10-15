@@ -145,6 +145,7 @@ function connectWs() {
       case "logbooks": loadLogbooks(); break;
       case "qso": if (m.source !== "manual") toast(`${m.qso.call} von ${m.source} übernommen`); WW.emit("qso", m.qso); break;
       case "qso_changed": case "qso_deleted": case "reload": WW.emit("reload"); break;
+      default: if (m.type) WW.emit(m.type, m);     // z. B. eigene Meldungen von Erweiterungen
     }
   };
   ws.onopen = () => { WW.ws = ws; refreshState(); WW.emit("ws-open"); };
