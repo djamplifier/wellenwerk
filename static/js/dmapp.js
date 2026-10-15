@@ -7,7 +7,7 @@ const WF_MAX = 3000, PSK_BAUD = { PSK31: 31.25, PSK63: 62.5, PSK125: 125 };
 const DM_GROUPS = (() => { const g = { PSK: ["PSK31", "PSK63", "PSK125"], RTTY: ["RTTY"], CW: ["CW"] };
   for (const [n, m] of Object.entries(DIGI_MODES)) (g[m.group] = g[m.group] || []).push(n); return g; })();
 const DM_ALL = Object.values(DM_GROUPS).flat();
-const dmBw = m => m === "RTTY" ? 250 : PSK_BAUD[m] ? PSK_BAUD[m] * 2 : DIGI_MODES[m] ? DIGI_MODES[m].bw : 80;
+const dmBw = m => m === "RTTY" ? +store.get("dm.rtty.shift", 170) + 80 : PSK_BAUD[m] ? PSK_BAUD[m] * 2 : DIGI_MODES[m] ? DIGI_MODES[m].bw : 80;
 const dmModeOptions = () => Object.entries(DM_GROUPS).map(([g, ms]) => `<optgroup label="${esc(g)}">${ms.map(m => `<option ${m === D.mode ? "selected" : ""}>${esc(m)}</option>`).join("")}</optgroup>`).join("");
 function dmAdif(m) {   // ADIF-Modus/Submodus fuer das Logbuch
   if (PSK_BAUD[m]) return ["PSK", m]; if (m === "RTTY" || m === "CW") return [m, ""];
@@ -33,12 +33,13 @@ function dmFill(t) {
 // ---------- Audio-Kette ----------
 function dmMakeRx() {
   const f = D.rx ? D.rx.freq : +store.get("dm.f", 1500), out = ch => WW.emit("dm-char", ch);
-  const markHigh = !/LSB|RTTYR/.test(WW.rig.mode || "USB") !== !!store.get("dm.rev", false);
+  const markHigh = !/LSB|RTTYR/.test(WW.rig.mode || "USB") !== (store.get("dm.rev", false) === true);
   if (!DM_ALL.includes(D.mode)) D.mode = "PSK31";
   const M = DIGI_MODES[D.mode];
-  D.rx = PSK_BAUD[D.mode] ? new Psk31Rx(f, out, PSK_BAUD[D.mode]) : D.mode === "RTTY" ? new RttyRx(f, out, markHigh) : D.mode === "CW" ? new CwRx(f, out)
+  D.rx = PSK_BAUD[D.mode] ? new Psk31Rx(f, out, PSK_BAUD[D.mode]) : D.mode === "RTTY" ? (store.get("dm.rev", false) === "auto" ? new RttyAuto(f, out, +store.get("dm.rtty.baud", 45.45), +store.get("dm.rtty.shift", 170), store.get("dm.rtty.usos", true))
+      : Object.assign(new RttyRx(f, out, markHigh, +store.get("dm.rtty.baud", 45.45), +store.get("dm.rtty.shift", 170)), { usos: store.get("dm.rtty.usos", true) })) : D.mode === "CW" ? new CwRx(f, out)
     : M.image === "hell" ? M.rx(f, col => WW.emit("dm-hell", col)) : M.rx(f, out);
-  D.rx.sql = store.get("dm.sql", 25) / 100; if (D.rx instanceof Psk31Rx) { D.rx.afc = store.get("dm.afc", true); D.rx.freqCb = f2 => WW.emit("dm-freq", f2); }
+  D.rx.sql = store.get("dm.sql", 25) / 100; if (D.rx instanceof RttyAuto) D.rx.sqlv = D.rx.sql; if (D.rx instanceof Psk31Rx) { D.rx.afc = store.get("dm.afc", true); D.rx.freqCb = f2 => WW.emit("dm-freq", f2); }
   WW.emit("dm-freq", f); WW.emit("dm-mode");
 }
 async function dmStart(dev) {
@@ -89,9 +90,9 @@ async function dmTx(text) {
   text = dmFill(text); if (!text.trim()) return;
   if (!WW.settings.callsign) return toast("Erst eigenes Rufzeichen eintragen (Optionen)", true);
   if (D.mode === "CW") { if (await act("/api/rig/morse", { text })) WW.emit("dm-echo", text); return; }
-  const f = D.rx ? D.rx.freq : 1500, markHigh = !/LSB|RTTYR/.test(WW.rig.mode || "USB") !== !!store.get("dm.rev", false);
+  const f = D.rx ? D.rx.freq : 1500, markHigh = !/LSB|RTTYR/.test(WW.rig.mode || "USB") !== (store.get("dm.rev", false) === true);
   D.txCtx = D.txCtx || new AudioContext();
-  const sr = D.txCtx.sampleRate, data = PSK_BAUD[D.mode] ? psk31Tx(text, f, sr, PSK_BAUD[D.mode]) : D.mode === "RTTY" ? rttyTx(text, f, sr, markHigh) : DIGI_MODES[D.mode].tx(text, f, sr);
+  const sr = D.txCtx.sampleRate, data = PSK_BAUD[D.mode] ? psk31Tx(text, f, sr, PSK_BAUD[D.mode]) : D.mode === "RTTY" ? rttyTx(text, f, sr, markHigh, +store.get("dm.rtty.baud", 45.45), +store.get("dm.rtty.shift", 170)) : DIGI_MODES[D.mode].tx(text, f, sr);
   const done = dmPlay(data); WW.emit("dm-echo", text); await done;
 }
 // Audio ueber die gewaehlte Soundkarte ausgeben, PTT davor an und danach aus (auch fuer SSTV)
@@ -125,7 +126,10 @@ function createWaterfall(root) {
   root.innerHTML = `<div class="pane-tb dm-tb"><select class="dm-mode">${dmModeOptions()}</select>
     <button class="dm-run">▶ Empfang</button><label class="chk">Eingang <select class="dm-in"><option value="">Standard</option><option value="__sdr">Empfänger (WebSDR/KiwiSDR)</option></select></label><span class="lvl dm-lvl"><i></i></span>
     <b class="dm-f">1500 Hz</b><span class="hint dm-wpm"></span><label class="chk dm-afcw"><input type="checkbox" class="dm-afc" ${store.get("dm.afc", true) ? "checked" : ""}> AFC</label>
-    <label class="chk dm-revw"><input type="checkbox" class="dm-rev" ${store.get("dm.rev", false) ? "checked" : ""}> umgekehrt</label>
+    <label class="chk dm-revw"><select class="dm-rev" title="Lage von Mark/Space">${[["false", "normal"], ["true", "umgekehrt"], ["auto", "Lage automatisch"]].map(([v, l]) => `<option value="${v}" ${String(store.get("dm.rev", false)) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <label class="chk" title="Nach Leerzeichen auf Buchstaben zurückschalten (im Amateurfunk üblich, beim Wetterdienst aus)"><input type="checkbox" class="dm-usos" ${store.get("dm.rtty.usos", true) ? "checked" : ""}> USOS</label>
+      <select class="dm-baud" title="Baudrate">${[45.45, 50, 75, 100].map(b => `<option ${b === +store.get("dm.rtty.baud", 45.45) ? "selected" : ""}>${b}</option>`).join("")}</select> Bd
+      <select class="dm-shift" title="Shift">${[170, 200, 425, 450, 850].map(b => `<option ${b === +store.get("dm.rtty.shift", 170) ? "selected" : ""}>${b}</option>`).join("")}</select> Hz</label>
     <label class="chk">Squelch <input type="range" class="dm-sql" min="0" max="90" value="${store.get("dm.sql", 25)}" style="width:80px"></label></div>
     <div class="dm-wfwrap"><canvas class="dm-wf"></canvas><div class="dm-mk"></div><div class="dm-scale"></div></div>`;
   const cv = $(".dm-wf", root), ctx = cv.getContext("2d");
@@ -138,8 +142,10 @@ function createWaterfall(root) {
   root.addEventListener("change", e => { const t = e.target;
     if (t.classList.contains("dm-mode")) dmSetMode(t.value);
     if (t.classList.contains("dm-in")) { store.set("dm.in", t.value); if (D.running) { dmStop(); dmStart(t.value); } }
+    if (t.classList.contains("dm-baud") || t.classList.contains("dm-shift")) { store.set(t.classList.contains("dm-baud") ? "dm.rtty.baud" : "dm.rtty.shift", +t.value); dmMakeRx(); }
     if (t.classList.contains("dm-afc")) { store.set("dm.afc", t.checked); if (D.rx) D.rx.afc = t.checked; }
-    if (t.classList.contains("dm-rev")) { store.set("dm.rev", t.checked); dmMakeRx(); } });
+    if (t.classList.contains("dm-rev")) { store.set("dm.rev", t.value === "auto" ? "auto" : t.value === "true"); dmMakeRx(); }
+    if (t.classList.contains("dm-usos")) { store.set("dm.rtty.usos", t.checked); dmMakeRx(); } });
   $(".dm-sql", root).addEventListener("input", e => { store.set("dm.sql", +e.target.value); if (D.rx) D.rx.sql = +e.target.value / 100; });
   $(".dm-run", root).onclick = () => dmStart($(".dm-in", root).value);
   const row = p => { const W = cv.width, H = cv.height, bins = Math.floor(WF_MAX / (DFS / 1024)); ctx.drawImage(cv, 0, 0, W, H - 1, 0, 1, W, H - 1);
@@ -239,9 +245,9 @@ function createSweeper(root) {
     for (let i = 30; i < 384; i++) if (p[i] > med + 10 && p[i] >= p[i - 1] && p[i] >= p[i + 1]) peaks.push(i * bw);
     const fs = []; peaks.forEach(f => { if (!fs.some(x => Math.abs(x - f) < 40)) fs.push(dmSnap(f)); });
     D.sweep = D.sweep.filter(ch => fs.some(f => Math.abs(f - ch.f) < 25));
-    const sm = store.get("sw.mode", "PSK31"), sep = sm === "RTTY" ? 120 : 25, cf = f => sm === "RTTY" ? f - 85 : f;   // RTTY: Mitte zwischen Mark/Space
+    const sm = store.get("sw.mode", "PSK31"), sh = +store.get("dm.rtty.shift", 170), sep = sm === "RTTY" ? sh * 0.7 : 25, cf = f => sm === "RTTY" ? f - sh / 2 : f;   // RTTY: Mitte zwischen Mark/Space
     fs.slice(0, 16).forEach(f => { f = cf(f); if (!D.sweep.some(ch => Math.abs(ch.f - f) < sep)) { const ch = { f, text: "", mode: sm }; const on = c => { ch.text = (ch.text + c).slice(-120); };
-      ch.rx = sm === "RTTY" ? new RttyRx(f, on, true) : sm === "CW" ? new CwRx(f, on) : new Psk31Rx(f, on); ch.rx.sql = 0.3; D.sweep.push(ch); } });
+      ch.rx = sm === "RTTY" ? new RttyRx(f, on, true, +store.get("dm.rtty.baud", 45.45), sh) : sm === "CW" ? new CwRx(f, on) : new Psk31Rx(f, on); ch.rx.sql = 0.3; D.sweep.push(ch); } });
     draw(); };
   const draw = () => { $(".sw-t tbody", root).innerHTML = D.sweep.sort((a, b) => a.f - b.f).map(ch => `<tr data-f="${ch.rx.freq}"><td class="nowrap"><b>${Math.round(ch.rx.freq)} Hz</b></td><td class="mono">${esc(ch.text.replace(/\n/g, " "))}</td></tr>`).join("") || '<tr><td class="hint">noch keine Signale erkannt</td></tr>'; };
   $(".sw-mode", root).onchange = e => { store.set("sw.mode", e.target.value); D.sweep = []; if (D.sweepOn) rescan(); else draw(); };

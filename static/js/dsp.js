@@ -142,7 +142,7 @@ function psk31Tx(text, f, sr, baud = 31.25) {
 
 // ---------- RTTY ----------
 class RttyRx {
-  constructor(f, onChar, markHigh = true) { this.onChar = onChar; this.baud = 45.45; this.shift = 170; this.markHigh = markHigh; this.setFreq(f);
+  constructor(f, onChar, markHigh = true, baud = 45.45, shift = 170) { this.onChar = onChar; this.baud = baud; this.shift = shift; this.markHigh = markHigh; this.setFreq(f);
     const L = Math.round(DFS / this.baud); this.bl = DFS / this.baud;
     this.f = [new Boxcar(L), new Boxcar(L), new Boxcar(L), new Boxcar(L)]; this.state = 0; this.t = 0; this.prevD = 0; this.code = 0; this.figs = false; this.q = 0; this.sql = 0.3; }
   get freq() { return this.center; }
@@ -179,12 +179,30 @@ class RttyRx {
     if (c === BAUDOT_FIGS_CODE) { this.figs = true; return; }
     if (this.q < this.sql) return;
     const ch = (this.figs ? BAUDOT_FIGS : BAUDOT_LTRS)[c];
-    if (c === 4) this.figs = false;                 // Unshift on Space (USOS)
+    if (c === 4 && this.usos !== false) this.figs = false;     // Unshift on Space (USOS, abschaltbar)
     if (ch && ch !== "\r" && ch !== "\x07") this.onChar(ch);
   }
 }
-function rttyTx(text, f, sr, markHigh = true) {
-  const mark = markHigh ? f + 85 : f - 85, space = markHigh ? f - 85 : f + 85, bl = sr / 45.45;
+// RTTY mit automatischer Polaritaet: beide Lagen dekodieren parallel, ausgegeben wird die mit plausiblerem Text
+class RttyAuto {
+  constructor(f, onChar, baud = 45.45, shift = 170, usos = true) {
+    this.onChar = onChar; this.score = [0, 0]; this.use = 0; this.sql = 0.3;
+    this.rx = [true, false].map((mh, k) => { const r = new RttyRx(f, ch => this.got(k, ch), mh, baud, shift); r.usos = usos; return r; });
+  }
+  got(k, ch) {
+    const good = /[A-Z0-9 .,:\/\-+=?()\n']/.test(ch) ? 1 : -2;      // Ziffern/Buchstaben/Satzzeichen vs. Steuer-/Sonderzeichen
+    this.score[k] = this.score[k] * 0.97 + good;
+    if (this.score[1 - this.use] > this.score[this.use] + 4) this.use = 1 - this.use;
+    if (k === this.use) this.onChar(ch);
+  }
+  get markHigh() { return this.rx[this.use].markHigh; }
+  get freq() { return this.rx[0].freq; }
+  set freq(f) { this.rx.forEach(r => r.freq = f); }
+  set sqlv(v) { this.rx.forEach(r => r.sql = v); }
+  process(x) { this.rx[0].process(x); this.rx[1].process(x); }
+}
+function rttyTx(text, f, sr, markHigh = true, baud = 45.45, shift = 170) {
+  const h = shift / 2, mark = markHigh ? f + h : f - h, space = markHigh ? f - h : f + h, bl = sr / baud;
   const codes = []; let figs = null;
   const lt = new Map(BAUDOT_LTRS.map((c, i) => [c, i])), fg = new Map(BAUDOT_FIGS.map((c, i) => [c, i]));
   codes.push(BAUDOT_LTRS_CODE, BAUDOT_LTRS_CODE); figs = false;
@@ -210,31 +228,37 @@ function rttyTx(text, f, sr, markHigh = true) {
 
 // ---------- CW ----------
 class CwRx {
-  constructor(f, onChar) { this.onChar = onChar; this.nco = new Nco(f); this.bi = new Boxcar(64); this.bq = new Boxcar(64); this.k = 0;
-    this.peak = 1e-6; this.floor = 1e-6; this.down = false; this.dur = 0; this.dit = 60; this.sym = ""; this.wordSent = true; this.sql = 0.25; }
+  // Robust fuer echte Signale: schmales Filter (2x 10-ms-Mittelung ≈ 70 Hz), geglaettete Huellkurve,
+  // Entprellen (Zustandswechsel erst nach ~1/3 Punktlaenge), Schwellen aus Spitze und Rauschboden, Tempo nachgefuehrt.
+  constructor(f, onChar) { this.onChar = onChar; this.nco = new Nco(f); this.bi = [new Boxcar(80), new Boxcar(80)]; this.bq = [new Boxcar(80), new Boxcar(80)]; this.k = 0;
+    this.sm = new Float32Array(4); this.si = 0; this.peak = 1e-6; this.floor = 1e-6; this.down = false; this.dur = 0; this.pend = 0; this.dit = 60;
+    this.sym = ""; this.wordSent = true; this.sql = 0.25; }
   get freq() { return this.nco.f; } set freq(f) { this.nco.set(f); }
   get wpm() { return Math.round(1200 / this.dit); }
   process(x) {
     for (let i = 0; i < x.length; i++) {
-      const [c, s] = this.nco.step(), ei = this.bi.push(x[i] * c), eq = this.bq.push(x[i] * s);
+      const [c, s] = this.nco.step(), ei = this.bi[1].push(this.bi[0].push(x[i] * c)), eq = this.bq[1].push(this.bq[0].push(x[i] * s));
       if (++this.k % 8) continue;                               // 1 kHz Takt fuer die Auswertung
-      const env = Math.hypot(ei, eq);
-      this.peak = Math.max(env, this.peak * 0.9993);
-      this.floor = env < this.floor ? env : this.floor + (env - this.floor) * 0.0008;
-      const snrOk = this.peak > this.floor * 4 && this.peak > this.sql * 0.01;
-      const thr = this.floor + (this.down ? 0.35 : 0.5) * (this.peak - this.floor);
+      this.sm[this.si++ & 3] = Math.hypot(ei, eq); const env = (this.sm[0] + this.sm[1] + this.sm[2] + this.sm[3]) / 4;
+      this.peak = Math.max(env, this.peak * 0.9995);
+      this.floor = env < this.floor ? this.floor * 0.9 + env * 0.1 : this.floor + (env - this.floor) * 0.0005;
+      const snrOk = this.peak > this.floor * 3 && this.peak > this.sql * 0.01;
+      const thr = this.floor + (this.down ? 0.4 : 0.55) * (this.peak - this.floor);
       const key = snrOk && env > thr;
       this.dur++;
-      if (key !== this.down) { this.edge(this.down, this.dur); this.down = key; this.dur = 0; }
-      else if (!key) this.gap(this.dur);
+      const deb = Math.max(5, Math.min(25, this.dit * 0.33));   // Entprellen
+      if (key !== this.down) { if (++this.pend >= deb) { this.edge(this.down, this.dur - this.pend); this.down = key; this.dur = this.pend; this.pend = 0; } }
+      else { this.pend = 0; if (!key) this.gap(this.dur); }
     }
   }
   edge(wasDown, ms) {
     if (wasDown) {
-      if (ms < 12) return;                                       // Stoerspitze
-      if (ms < 2 * this.dit) { this.sym += "."; this.dit = 0.85 * this.dit + 0.15 * ms; }
-      else { this.sym += "-"; this.dit = 0.85 * this.dit + 0.15 * ms / 3; }
+      if (ms < 10) return;
+      if (ms < 0.6 * this.dit) this.dit = 0.5 * this.dit + 0.5 * ms;            // deutlich schneller: rasch nachfuehren
+      if (ms < 2 * this.dit) { this.sym += "."; this.dit = 0.8 * this.dit + 0.2 * ms; }
+      else { this.sym += "-"; this.dit = 0.8 * this.dit + 0.2 * ms / 3; }
       this.dit = Math.max(20, Math.min(240, this.dit));
+      if (this.sym.length > 8) this.sym = "";
       this.wordSent = false;
     }
   }
