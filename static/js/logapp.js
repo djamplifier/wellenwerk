@@ -22,11 +22,11 @@ function createLogbook(root, params) {
     <button data-a="more">${icon("i-more")}<span>Mehr …</span></button><i class="sep"></i>
     <button data-a="filter">${icon("i-filter")}<span>Filter</span></button><button data-a="qsl">${icon("i-cloud")}<span>QSL</span></button>
     <button data-a="lotwup">${icon("i-upload")}<span>LoTW hoch</span></button><button data-a="lotwdown">${icon("i-download")}<span>LoTW holen</span></button></div>
-    <div class="lb-find hidden"><input class="lb-q" placeholder="Suchen: Rufzeichen, Land, Name, Locator, DOK …"><select class="lb-band"><option value="">Band</option>${WW.bands.map(b => `<option>${b.name}</option>`).join("")}</select>
+    <div class="lb-find hidden"><input class="lb-q" placeholder="Suchen: Rufzeichen, Land, Name, Locator, DOK …"><button class="lb-clear" title="Filter zurücksetzen">×</button><select class="lb-band"><option value="">Band</option>${WW.bands.map(b => `<option>${b.name}</option>`).join("")}</select>
       <select class="lb-mode"><option value="">Mode</option>${Object.keys(modeTable()).map(m => `<option>${esc(m)}</option>`).join("")}</select>
       <select class="lb-qsl"><option value="">alle QSOs</option><option value="confirmed">bestätigt</option><option value="unconfirmed">unbestätigt</option><option value="lotw">LoTW bestätigt</option><option value="eqsl">eQSL bestätigt</option><option value="paper">Papier-QSL erhalten</option><option value="queued">QSL vorgemerkt</option><option value="to_send">QSL nicht gesendet</option><option value="no_qrz">nicht bei QRZ</option><option value="no_lotw">nicht bei LoTW</option><option value="no_eqsl">nicht bei eQSL</option><option value="no_clublog">nicht bei Club Log</option></select>
       <input type="date" class="lb-from"><input type="date" class="lb-to"><input class="lb-cond" placeholder="Bedingung, z. B. cqz=14; iota nicht leer" title="Feld-Bedingungen mit ; trennen. Vergleich: = != < > <= >=, ~ enthält, !~ enthält nicht, „leer“, „nicht leer“. Felder: call, band, mode, country, cqz, ituz, dxcc, state, cnty, iota, darc_dok, comment, qso_date (JJJJMMTT) …">
-      <select class="lb-view" title="Gespeicherte Ansichten (Filter, Spalten, Sortierung)"></select><button class="lb-clear" title="Filter zurücksetzen">×</button></div>
+      <select class="lb-view" title="Gespeicherte Ansichten (Filter, Spalten, Sortierung)"></select></div>
     <div class="tablewrap lb-wrap"><table class="grid lb-grid"><thead></thead><tbody></tbody></table></div>
     <div class="lb-foot"><span class="lb-info"></span><i class="grow"></i><span>${esc(name)}</span><span>SQLite</span><span class="lb-count"></span><span class="lb-selc"></span></div>`;
   const cols = () => store.get("log.cols", LOG_DEFAULT_COLS);
