@@ -134,6 +134,10 @@ ctxRegister(".pane-cluster tr[data-call]", el => { const f = +el.dataset.f, call
 ctxRegister(".pane-alert tr[data-call]", el => { const id = +el.dataset.id, call = el.dataset.call;
   return [{ label: "In WSJT-X anrufen", icon: "i-radio", disabled: !id, act: () => act("/api/wsjtx/reply", { id }) }, { label: "WSJT-X: Senden stoppen", act: () => act("/api/wsjtx/halt", {}) },
     { label: "Nachricht kopieren", icon: "i-copy", act: () => clipCopy(el.querySelector(".msg")?.textContent || "") }, "-", ...callItems(call)]; });
+ctxRegister(".pane-programs tr[data-id]", el => { const sp = PRG.spots.find(x => x.id === el.dataset.id); if (!sp) return [];
+  return [`${PRG.names[sp.prog]} ${sp.ref} – ${sp.name}`, { label: "Abstimmen und Referenz vormerken", icon: "i-tune", act: () => prgTune(sp) }, { label: "Logbuch-Eintrag mit Referenz", icon: "i-plus", act: () => prgLog(sp) },
+    { label: `${PRG.names[sp.prog]}-Seite der Referenz öffnen`, icon: "i-globe", act: () => window.open(prgSite(sp.prog, sp.ref.split(",")[0]), "_blank") }, { label: "Referenz kopieren", icon: "i-copy", act: () => clipCopy(sp.ref) },
+    ...(sp.lat != null && WW.home ? [{ label: "Antenne zur Referenz drehen", icon: "i-compass", act: () => { const b = bearingTo(sp.lat, sp.lon); if (b) rotorSet(b.az); } }] : []), "-", ...callItems(sp.call, { freq: sp.freq }).slice(1)]; });
 ctxRegister(".pane-calendar tr[data-call]", el => callItems(el.dataset.call.split("/")[0]));
 ctxRegister(".pane-bandmap canvas.bm", (el, e) => { const r = el.getBoundingClientRect(), y = e.clientY - r.top, hit = (el._hits || []).reduce((b, h) => Math.abs(h[0] - 5 - y) < Math.abs((b?.[0] ?? 1e9) - 5 - y) ? h : b, null);
   if (hit && Math.abs(hit[0] - 5 - y) < 12) { const s = hit[1]; return [...freqItems(s.freq), "-", ...callItems(s.call, { freq: s.freq })]; }

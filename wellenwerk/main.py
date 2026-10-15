@@ -5,6 +5,7 @@ import itertools
 import json
 import re
 import subprocess
+import time
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -25,6 +26,7 @@ from .rig import POLL, Rig, RigError
 from .rotor import Rotor, RotorError
 from . import radios as radmod
 from . import winkey as wkmod
+from . import programs
 from . import wsjtx
 
 VERSION = "1.0.2"
@@ -174,13 +176,35 @@ def complete_qso(rec: dict) -> dict:
     for k in ("country", "dxcc", "cont", "cqz", "ituz"):
         if not rec.get(k) and info.get(k):
             rec[k] = info[k]
-    if cfg.get("callsign") and not rec.get("station_callsign"):
-        rec["station_callsign"] = cfg["callsign"].upper()
-    if cfg.get("locator") and not rec.get("my_gridsquare"):
-        rec["my_gridsquare"] = cfg["locator"]
-    if cfg.get("operator") and not rec.get("operator"):
-        rec["operator"] = cfg["operator"].upper()
+    # POTA/WWFF/SOTA aus den allgemeinen SIG-Feldern uebernehmen (Import aus anderen Programmen) und umgekehrt
+    for pre in ("", "my_"):
+        sig, info = (rec.get(f"{pre}sig") or "").lower(), rec.get(f"{pre}sig_info")
+        if sig in programs.PROGS and info and not rec.get(f"{pre}{sig}_ref"):
+            rec[f"{pre}{sig}_ref"] = info.upper()
+    # aktives Stationsprofil (Standort, Park/Gipfel), sonst Programmoptionen
+    st = active_station()
+    for key, src in (("station_callsign", "callsign"), ("operator", "operator"), ("my_gridsquare", "locator"),
+                     ("my_pota_ref", "my_pota_ref"), ("my_sota_ref", "my_sota_ref"), ("my_wwff_ref", "my_wwff_ref"), ("tx_pwr", "tx_pwr")):
+        v = (st.get(src) if st else None) or (cfg.get(src) if src in ("callsign", "operator", "locator") else None)
+        if v and not rec.get(key):
+            rec[key] = v.upper() if key in ("station_callsign", "operator") or key.startswith("my_") and key.endswith("_ref") else v
     return rec
+
+
+# ---------- Stationsprofile (Standorte, Portabelbetrieb) ----------
+STATIONS_PATH = DATA / "stations.json"
+
+
+def load_stations() -> dict:
+    try:
+        return json.loads(STATIONS_PATH.read_text())
+    except Exception:
+        return {"active": "", "list": []}
+
+
+def active_station() -> dict | None:
+    s = load_stations()
+    return next((x for x in s["list"] if x.get("id") == s.get("active")), None)
 
 
 # ---------- Hintergrunddienste ----------
@@ -1442,6 +1466,119 @@ async def shutdown(request: Request):
     if srv:
         srv.should_exit = True
     return {"ok": True}
+
+
+# ---------- Stationsprofile ----------
+@app.get("/api/stations")
+async def stations_get():
+    return load_stations()
+
+
+@app.put("/api/stations")
+async def stations_put(body: dict):
+    keep = ("id", "name", "callsign", "operator", "locator", "tx_pwr", "my_pota_ref", "my_sota_ref", "my_wwff_ref", "rig", "antenna", "notes")
+    lst = []
+    for i, x in enumerate(body.get("list") or []):
+        x = {k: str(x.get(k) or "").strip() for k in keep}
+        x["id"] = x["id"] or f"s{int(time.time() * 1000) % 10**9}{i}"
+        if x["locator"] and not geo.valid_grid(x["locator"]):
+            raise HTTPException(400, f"Locator ungültig: {x['locator']}")
+        lst.append(x)
+    active = body.get("active") or ""
+    if active and not any(x["id"] == active for x in lst):
+        active = ""
+    data = {"active": active, "list": lst}
+    STATIONS_PATH.write_text(json.dumps(data, indent=1, ensure_ascii=False))
+    await broadcast({"type": "stations", "stations": data})
+    return data
+
+
+# ---------- POTA / SOTA / WWFF ----------
+@app.get("/api/programs/spots")
+async def program_spots(prog: str = "pota,sota,wwff"):
+    want = [p for p in prog.lower().split(",") if p in programs.PROGS]
+    sp = await asyncio.to_thread(programs.spots, want)
+    got = programs.hunted(book.query("pota_ref IS NOT NULL OR sota_ref IS NOT NULL OR wwff_ref IS NOT NULL", limit=1000000)[0])
+    calls = {c.split("/")[0] for c in book.worked_sets()[2]}
+    for s in sp:
+        refs = programs.refs_of(s["ref"])
+        s["worked_ref"] = bool(refs) and all(r in got[s["prog"]]["refs"] for r in refs)
+        s["worked_call"] = s["call"].split("/")[0] in calls
+        s["band"] = band_for(s["freq"])
+    return {"spots": sp}
+
+
+@app.get("/api/programs/refs")
+async def program_refs(prog: str, q: str = ""):
+    if prog not in programs.PROGS:
+        raise HTTPException(400, "unbekanntes Programm")
+    return {"refs": await asyncio.to_thread(programs.find_refs, prog, q, DATA)}
+
+
+@app.get("/api/programs/ref/{prog}/{ref}")
+async def program_ref(prog: str, ref: str):
+    if prog not in programs.PROGS:
+        raise HTTPException(400, "unbekanntes Programm")
+    r = await asyncio.to_thread(programs.ref_info, prog, ref, DATA)
+    if not r:
+        raise HTTPException(404, "Referenz nicht gefunden")
+    return r
+
+
+@app.get("/api/programs/stats")
+async def program_stats():
+    rows, _ = book.query("pota_ref IS NOT NULL OR sota_ref IS NOT NULL OR wwff_ref IS NOT NULL OR my_pota_ref IS NOT NULL OR my_sota_ref IS NOT NULL OR my_wwff_ref IS NOT NULL", limit=1000000)
+    h = programs.hunted(rows)
+    return {p: dict(hunted=len(h[p]["refs"]), qsos=sum(h[p]["refs"].values()), p2p=h[p]["p2p"], activations=h[p]["activated"][:200],
+                    refs=sorted(h[p]["refs"].items())[:5000]) for p in programs.PROGS}
+
+
+@app.get("/api/programs/activation")
+async def program_activation(prog: str, ref: str, date: str = ""):
+    """Aktivierung: QSOs eines Tages (UTC) mit eigener Referenz; Zaehler fuer die Mindestanzahl."""
+    if prog not in programs.PROGS:
+        raise HTTPException(400, "unbekanntes Programm")
+    date = date or datetime.now(timezone.utc).strftime("%Y%m%d")
+    rows, _ = book.query(f"qso_date = ? AND my_{prog}_ref LIKE ?", [date, f"%{ref.upper()}%"], limit=100000)
+    uniq = {(r.get("call"), r.get("band"), r.get("mode")) for r in rows}
+    need = {"pota": 10, "sota": 4, "wwff": 44}[prog]
+    dupes = len(rows) - len(uniq)
+    return {"date": date, "ref": ref.upper(), "qsos": len(rows), "unique": len(uniq), "need": need, "valid": len(uniq) >= need, "dupes": dupes,
+            "p2p": sum(1 for r in rows if r.get(f"{prog}_ref"))}
+
+
+@app.get("/api/programs/export")
+async def program_export(prog: str, ref: str, date: str = ""):
+    if prog not in programs.PROGS:
+        raise HTTPException(400, "unbekanntes Programm")
+    where, args = f"my_{prog}_ref LIKE ?", [f"%{ref.upper()}%"]
+    if date:
+        where += " AND qso_date = ?"
+        args.append(date)
+    rows, _ = book.query(where, args, order="qso_date, time_on", limit=100000)
+    if not rows:
+        raise HTTPException(404, "Keine QSOs für diese Aktivierung")
+    call = (rows[0].get("station_callsign") or cfg.get("callsign") or "CALL").replace("/", "-")
+    day = date or rows[0].get("qso_date", "")
+    if prog == "sota":
+        return Response(programs.sota_csv(rows, ref.upper()), media_type="text/csv",
+                        headers={"Content-Disposition": f'attachment; filename="{call}_{ref.upper().replace("/", "-")}_{day}.csv"'})
+    sep = "@" if prog == "pota" else "_"
+    return Response(programs.activation_adif(rows, prog, ref.upper()), media_type="text/plain",
+                    headers={"Content-Disposition": f'attachment; filename="{call}{sep}{ref.upper()}-{day}.adi"'})
+
+
+@app.post("/api/programs/selfspot")
+async def program_selfspot(body: dict):
+    """Eigenen POTA-Spot setzen (wie auf pota.app). Erfordert Rufzeichen, Park, Frequenz und Mode."""
+    ref, freq, mode = str(body.get("ref", "")).strip(), int(body.get("freq") or 0), str(body.get("mode", "")).strip()
+    call = (body.get("call") or (active_station() or {}).get("callsign") or cfg.get("callsign") or "").strip()
+    if not (ref and freq and mode and call):
+        raise HTTPException(400, "Rufzeichen, Park, Frequenz und Mode werden gebraucht")
+    try:
+        return await asyncio.to_thread(programs.post_pota_spot, call, call, freq, ref, mode, str(body.get("comment", ""))[:100])
+    except Exception as e:
+        raise HTTPException(502, f"POTA-Spot nicht gesendet: {e}")
 
 
 @app.get("/api/calendar")

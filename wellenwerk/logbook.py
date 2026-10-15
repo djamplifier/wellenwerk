@@ -15,7 +15,10 @@ FIELDS = ["call", "qso_date", "time_on", "time_off", "freq", "band", "mode", "su
           "eqsl_qslsdate", "eqsl_qslrdate", "qrzcom_qso_upload_status", "qrzcom_qso_upload_date",
           "clublog_qso_upload_status", "clublog_qso_upload_date",
           # Diplom-Felder
-          "state", "cnty", "iota", "darc_dok", "pfx", "email", "address", "srx", "stx"]
+          "state", "cnty", "iota", "darc_dok", "pfx", "email", "address", "srx", "stx",
+          # Portabel-Programme (ADIF 3.1.4) und allgemeine Sonderaktivitaeten
+          "pota_ref", "my_pota_ref", "sota_ref", "my_sota_ref", "wwff_ref", "my_wwff_ref",
+          "sig", "sig_info", "my_sig", "my_sig_info"]
 INT_FIELDS = {"dxcc", "cqz", "ituz"}
 
 

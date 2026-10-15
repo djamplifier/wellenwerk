@@ -4,7 +4,7 @@
 const LOG_COLS = [["qso_date", "Datum"], ["time_on", "Beginn"], ["time_off", "Ende"], ["call", "Rufzeichen"], ["mode", "Mode"], ["submode", "Submode"], ["rst_sent", "Ges."], ["rst_rcvd", "Empf."],
   ["band", "Band"], ["freq", "Freq"], ["name", "Name"], ["qth", "QTH"], ["gridsquare", "Locator"], ["country", "Land"], ["cont", "Kont."], ["cqz", "CQ"], ["ituz", "ITU"], ["state", "Staat"], ["cnty", "County"],
   ["iota", "IOTA"], ["darc_dok", "DOK"], ["tx_pwr", "Leistung"], ["comment", "Bemerkung"], ["qsl_sent", "QSL ges."], ["qsl_rcvd", "QSL empf."], ["qsl_via", "QSL via"], ["lotw_qsl_sent", "LoTW ges."], ["lotw_qsl_rcvd", "LoTW empf."],
-  ["eqsl_qsl_sent", "eQSL ges."], ["eqsl_qsl_rcvd", "eQSL empf."], ["qrzcom_qso_upload_status", "QRZ"], ["clublog_qso_upload_status", "Club Log"], ["contest_id", "Contest"], ["stx_string", "Nr. ges."], ["srx_string", "Nr. empf."], ["operator", "Operator"], ["my_gridsquare", "Mein Loc."]];
+  ["eqsl_qsl_sent", "eQSL ges."], ["eqsl_qsl_rcvd", "eQSL empf."], ["qrzcom_qso_upload_status", "QRZ"], ["clublog_qso_upload_status", "Club Log"], ["contest_id", "Contest"], ["stx_string", "Nr. ges."], ["srx_string", "Nr. empf."], ["operator", "Operator"], ["my_gridsquare", "Mein Loc."], ["pota_ref", "POTA"], ["my_pota_ref", "Mein POTA"], ["sota_ref", "SOTA"], ["my_sota_ref", "Mein SOTA"], ["wwff_ref", "WWFF"], ["my_wwff_ref", "Mein WWFF"], ["sig", "SIG"], ["sig_info", "SIG-Info"]];
 const LOG_DEFAULT_COLS = ["qso_date", "time_on", "call", "mode", "submode", "rst_sent", "rst_rcvd", "band", "name", "qth", "country", "lotw_qsl_sent", "lotw_qsl_rcvd", "eqsl_qsl_rcvd", "clublog_qso_upload_status"];
 const LOGB = { sel: new Set(), clip: null, filter: {}, sort: store.get("log.sort", ["qso_date", -1]), contest: false, serial: store.get("log.serial", 1) };
 const fmtCell = (k, v) => k === "qso_date" ? fmtDate(v) : (k === "time_on" || k === "time_off") ? fmtTimeS(v) : v ?? "";
@@ -160,11 +160,14 @@ function createAle(root) {
       <label>RST gesendet<input id="ale-rsts"></label><label>RST empfangen<input id="ale-rstr"></label><label>Leistung W<input id="ale-pwr"></label><label class="chkrow"><input type="checkbox" id="ale-lock"> Freq/Mode festhalten</label>
       <label>Name<input id="ale-name"></label><label>QTH<input id="ale-qth"></label><label>Locator<input id="ale-grid"></label><label>Land<input id="ale-country" readonly></label>
     </div>
-    <div class="dtabs"><button class="on" data-t="note">Bemerkung</button><button data-t="qsl">QSL</button><button data-t="awards">Diplome</button><button data-t="contest">Contest</button><button data-t="station">Station</button></div>
+    <div class="dtabs"><button class="on" data-t="note">Bemerkung</button><button data-t="qsl">QSL</button><button data-t="awards">Diplome</button><button data-t="prg">Park/Gipfel</button><button data-t="contest">Contest</button><button data-t="station">Station</button></div>
     <div class="dtab" data-t="note"><label class="wide">Bemerkung<input id="ale-comment"></label></div>
     <div class="dtab hidden" data-t="qsl"><div class="ale-grid"><label>QSL gesendet<select id="ale-qsls"><option value="">–</option><option value="N">nein</option><option value="Q">vormerken</option><option value="Y">gesendet</option><option value="I">ignorieren</option></select></label>
       <label>QSL empfangen<select id="ale-qslr"><option value="">–</option><option value="N">nein</option><option value="R">angefordert</option><option value="Y">erhalten</option></select></label><label>QSL via<input id="ale-via"></label><label>E-Mail<input id="ale-email"></label></div></div>
     <div class="dtab hidden" data-t="awards"><div class="ale-grid"><label>Staat/Provinz<input id="ale-state"></label><label>County<input id="ale-cnty"></label><label>IOTA<input id="ale-iota"></label><label>DOK<input id="ale-dok"></label></div></div>
+    <div class="dtab hidden" data-t="prg"><div class="ale-grid"><label>POTA-Park der Gegenstation<input id="ale-pota" placeholder="z. B. DE-0001 (mehrere mit Komma)"></label><label>SOTA-Gipfel<input id="ale-sota" placeholder="z. B. DM/BW-001"></label>
+      <label>WWFF-Referenz<input id="ale-wwff" placeholder="z. B. DLFF-0001"></label><span class="ale-prgname hint"></span>
+      <label>Mein POTA-Park<input id="ale-mypota"></label><label>Mein SOTA-Gipfel<input id="ale-mysota"></label><label>Meine WWFF-Referenz<input id="ale-mywwff"></label></div></div>
     <div class="dtab hidden" data-t="contest"><div class="ale-grid"><label>Contest-ID<input id="ale-cid" placeholder="z. B. CQ-WW-SSB"></label><label>Nr. gesendet<input id="ale-stx"></label><label>Nr. empfangen<input id="ale-srx"></label><label class="chkrow"><input type="checkbox" id="ale-auto" checked> Nr. hochzählen</label></div></div>
     <div class="dtab hidden" data-t="station"><div class="ale-grid"><label>Mein Rufzeichen<input id="ale-mycall"></label><label>Operator<input id="ale-op"></label><label>Mein Locator<input id="ale-myloc"></label><label>Logbuch<select id="ale-log"></select></label></div></div>
     <div class="ale-prev"></div>
@@ -182,12 +185,14 @@ function createAle(root) {
     set("sub", ["USB", "LSB"].includes(WW.rig.mode) ? WW.rig.mode : ""); };
   const tick = () => { if (ALE.editing || !F("live").checked) return; const n = new Date().toISOString(); F("date").value = n.slice(0, 10); if (!ALE.start) F("ton").value = n.slice(11, 19); };
   const clear = () => { ALE.editing = null; ALE.dirty.clear(); ALE.start = null; form.reset(); F("live").checked = true; F("auto").checked = true; F("pwr").value = WW.settings.tx_pwr || "";
-    F("mycall").value = WW.settings.callsign || ""; F("myloc").value = WW.settings.locator || ""; F("op").value = WW.settings.operator || ""; $(".ale-state", root).textContent = "Neuer Eintrag";
+    const stp = (PRG.stations.list || []).find(x => x.id === PRG.stations.active) || {};
+    F("mycall").value = stp.callsign || WW.settings.callsign || ""; F("myloc").value = stp.locator || WW.settings.locator || ""; F("op").value = stp.operator || WW.settings.operator || "";
+    if (stp.tx_pwr) F("pwr").value = stp.tx_pwr; F("mypota").value = stp.my_pota_ref || ""; F("mysota").value = stp.my_sota_ref || ""; F("mywwff").value = stp.my_wwff_ref || ""; $(".ale-prgname", root).textContent = ""; $(".ale-state", root).textContent = "Neuer Eintrag";
     $("#ale-save", root).textContent = "Hinzufügen ⏎"; $("#ale-del", root).classList.add("hidden"); $(".ale-dx", root).innerHTML = ""; $(".ale-cb", root).innerHTML = ""; $(".ale-prev", root).innerHTML = "";
     if (LOGB.contest) { F("stx").value = String(LOGB.serial).padStart(3, "0"); } logs(); tick(); sync(); set("rsts", rst(F("mode").value)); set("rstr", rst(F("mode").value)); F("call").focus(); WW.emit("dx", null); };
   const fill = q => { clear(); ALE.editing = q.id; F("live").checked = false; $(".ale-state", root).textContent = `QSO #${q.id} bearbeiten`; $("#ale-save", root).textContent = "Ändern ⏎"; $("#ale-del", root).classList.remove("hidden");
     const map = { call: "call", qso_date: "date", time_on: "ton", time_off: "toff", freq: "freq", band: "band", mode: "mode", submode: "sub", rst_sent: "rsts", rst_rcvd: "rstr", tx_pwr: "pwr", name: "name", qth: "qth", gridsquare: "grid",
-      country: "country", comment: "comment", qsl_sent: "qsls", qsl_rcvd: "qslr", qsl_via: "via", email: "email", state: "state", cnty: "cnty", iota: "iota", darc_dok: "dok", contest_id: "cid", stx_string: "stx", srx_string: "srx", station_callsign: "mycall", operator: "op", my_gridsquare: "myloc" };
+      country: "country", comment: "comment", qsl_sent: "qsls", qsl_rcvd: "qslr", qsl_via: "via", email: "email", state: "state", cnty: "cnty", iota: "iota", darc_dok: "dok", contest_id: "cid", stx_string: "stx", srx_string: "srx", pota_ref: "pota", sota_ref: "sota", wwff_ref: "wwff", my_pota_ref: "mypota", my_sota_ref: "mysota", my_wwff_ref: "mywwff", station_callsign: "mycall", operator: "op", my_gridsquare: "myloc" };
     for (const [k, id] of Object.entries(map)) { let v = q[k] ?? ""; if (k === "qso_date" && v) v = `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}`; if ((k === "time_on" || k === "time_off") && v) v = fmtTimeS(v); F(id).value = v; }
     lookup(true); };
   const lookup = async (noCb) => {
@@ -214,7 +219,10 @@ function createAle(root) {
   };
   F("call").addEventListener("input", e => { const p = e.target.selectionStart; e.target.value = e.target.value.toUpperCase().replace(/\s/g, ""); e.target.setSelectionRange(p, p);
     if (!ALE.start && !ALE.editing && e.target.value.length === 1) { ALE.start = new Date(); F("ton").value = ALE.start.toISOString().slice(11, 19); }
-    clearTimeout(ALE.lt); ALE.lt = setTimeout(() => lookup(), 250); });
+    clearTimeout(ALE.lt); ALE.lt = setTimeout(() => lookup(), 250);
+    const pd = PRG.pending; if (pd && !ALE.editing && Date.now() - pd.t < 30 * 60000 && e.target.value === pd.call && !F(pd.prog).value) { F(pd.prog).value = pd.ref; prgName(pd.prog, pd.ref); } });
+  const prgName = async (prog, ref) => { const r = await api(`/api/programs/ref/${prog}/${encodeURIComponent(ref.split(",")[0].trim())}`).catch(() => null); $(".ale-prgname", root).textContent = r ? `${PRG.names[prog]} ${r.ref}: ${r.name}${r.loc ? " (" + r.loc + ")" : ""}` : ""; };
+  for (const [id, prog] of [["pota", "pota"], ["sota", "sota"], ["wwff", "wwff"], ["mypota", "pota"], ["mysota", "sota"], ["mywwff", "wwff"]]) { prgRefInput(F(id), prog); F(id).addEventListener("change", () => F(id).value && prgName(prog, F(id).value)); }
   root.addEventListener("input", e => { if (e.target.id && e.target.id !== "ale-call") ALE.dirty.add(e.target.id.slice(4)); if (["ale-date", "ale-ton"].includes(e.target.id)) F("live").checked = false; });
   F("freq").addEventListener("change", () => { const hz = parseFloat(F("freq").value.replace(",", ".")) * 1e6; if (hz) set("band", bandFor(hz), true); });
   F("mode").addEventListener("change", () => { F("mode").value = F("mode").value.toUpperCase(); if (!ALE.editing) { set("rsts", rst(F("mode").value), true); set("rstr", rst(F("mode").value), true); } });
@@ -232,7 +240,9 @@ function createAle(root) {
       rst_sent: F("rsts").value.trim(), rst_rcvd: F("rstr").value.trim(), tx_pwr: F("pwr").value.trim(), name: F("name").value.trim(), qth: F("qth").value.trim(), gridsquare: F("grid").value.trim(),
       comment: F("comment").value.trim(), qsl_sent: F("qsls").value, qsl_rcvd: F("qslr").value, qsl_via: F("via").value.trim(), email: F("email").value.trim(), state: F("state").value.trim(), cnty: F("cnty").value.trim(),
       iota: F("iota").value.trim(), darc_dok: F("dok").value.trim(), contest_id: F("cid").value.trim(), stx_string: F("stx").value.trim(), srx_string: F("srx").value.trim(),
-      station_callsign: F("mycall").value.trim(), operator: F("op").value.trim(), my_gridsquare: F("myloc").value.trim() };
+      station_callsign: F("mycall").value.trim(), operator: F("op").value.trim(), my_gridsquare: F("myloc").value.trim(),
+      pota_ref: F("pota").value.trim().toUpperCase(), sota_ref: F("sota").value.trim().toUpperCase(), wwff_ref: F("wwff").value.trim().toUpperCase(),
+      my_pota_ref: F("mypota").value.trim().toUpperCase(), my_sota_ref: F("mysota").value.trim().toUpperCase(), my_wwff_ref: F("mywwff").value.trim().toUpperCase() };
     if (rec.call.length < 3) { toast("Rufzeichen fehlt", true); F("call").focus(); return; }
     if (rec.freq && !rec.band) rec.band = bandFor(parseFloat(rec.freq) * 1e6);
     if (!rec.time_off && !ALE.editing) rec.time_off = new Date().toISOString().slice(11, 19).replaceAll(":", "");
@@ -245,7 +255,8 @@ function createAle(root) {
     } catch (err) { toast(err.message, true); }
   });
   const offs = [WW.on("rig", sync), WW.on("ale-open", q => q ? fill(q) : clear()), WW.on("prefill", p => { clear(); F("call").value = p.call; if (p.mode) { F("mode").value = p.mode; ALE.dirty.add("mode"); set("rsts", rst(p.mode), true); set("rstr", rst(p.mode), true); }
-    if (p.freq) { F("freq").value = (p.freq / 1e6).toFixed(4); F("band").value = bandFor(p.freq); } lookup(); }), WW.on("logbooks", logs), WW.on("contest", () => { if (LOGB.contest && !F("stx").value) F("stx").value = String(LOGB.serial).padStart(3, "0"); })];
+    if (p.freq) { F("freq").value = (p.freq / 1e6).toFixed(4); F("band").value = bandFor(p.freq); }
+    for (const k of ["pota", "sota", "wwff"]) if (p[k]) { F(k).value = p[k]; prgName(k, p[k]); root.querySelector('.dtabs [data-t="prg"]')?.click(); } lookup(); }), WW.on("logbooks", logs), WW.on("contest", () => { if (LOGB.contest && !F("stx").value) F("stx").value = String(LOGB.serial).padStart(3, "0"); })];
   const tk = setInterval(tick, 1000); clear();
   return () => { offs.forEach(f => f()); clearInterval(tk); };
 }
@@ -570,6 +581,7 @@ APPS.log = {
     clock: { title: "Uhr", create: createClock, dock: { ref: "greyline", dir: "right" } },
     rotator: { title: "Rotor", create: createRotorPane, dock: { ref: "bandmap", dir: "below" } },
     calendar: { title: "Kalender", create: createCalendar, dock: { ref: ["histogram", "cluster"], dir: "within" } },
+    programs: { title: "POTA / SOTA / WWFF", create: createPrograms, dock: { ref: ["cluster", "alert"], dir: "within" } },
     ale: { title: "Neuer Eintrag", create: createAle, dock: { dir: "within" } },
     awards: { title: "Diplome", create: (...a) => createAwards(...a), dock: { ref: "logbook", dir: "within" } },
     qsl: { title: "QSL & Online", create: (...a) => createQslPanel(...a), dock: { ref: "logbook", dir: "within" } },
@@ -585,7 +597,7 @@ APPS.log = {
     dv.addPanel({ id: "netserver", component: "netserver", title: "Netzwerk", position: { referencePanel: "recorder", direction: "within" } });
     const bm = dv.addPanel({ id: "bandmap", component: "bandmap", title: "Bandkarte", position: { referencePanel: lb.id, direction: "right" } });
     dv.addPanel({ id: "solar30", component: "solar30", title: "30-Tage-Sonnendaten", position: { referencePanel: lb.id, direction: "below" } });
-    ["solarcycle", "audiomon", "cluster", "alert", "histogram"].forEach(c => dv.addPanel({ id: c, component: c, title: APPS.log.panels[c].title, position: { referencePanel: "solar30", direction: "within" } }));
+    ["solarcycle", "audiomon", "cluster", "alert", "programs", "histogram"].forEach(c => dv.addPanel({ id: c, component: c, title: APPS.log.panels[c].title, position: { referencePanel: "solar30", direction: "within" } }));
     dv.getPanel("cluster").api.setActive();
     const gl = dv.addPanel({ id: "greyline", component: "greyline", title: "Graulinie", position: { referencePanel: "cluster", direction: "right" } });
     dv.addPanel({ id: "clock", component: "clock", title: "Uhr", position: { referencePanel: "greyline", direction: "right" } });
@@ -599,13 +611,14 @@ APPS.log = {
       { label: "Cabrillo-Export …", act: cabrilloDialog }, "-", { label: "Sicherung jetzt", act: async () => toast("Gesichert: " + (await post("/api/logbooks/backup", { name: WW.logbook })).file) }, { label: "Sicherungen …", act: backupsDialog }, "-",
       { label: "Logbuch drucken", act: () => window.open(`/print/log?${logq()}`, "_blank") }, { label: "QSL-Etiketten drucken (vorgemerkt/ungesendet)", act: () => window.open(`/print/labels?${logq("qsl=to_send")}`, "_blank") }] },
     { label: "Bearbeiten", items: [{ label: "Neuer Eintrag …", key: "Strg+N", act: () => openAle() }, { label: "Spot senden …", act: () => spotDialog() }] },
-    { label: "Ansicht", items: Object.entries({ lookup: "Rufzeichen-Info", favorites: "Favoriten", radiopane: "Funkgerät-Feld", recorder: "Audio-Rekorder", netserver: "Netzwerk", solar30: "30-Tage-Sonnendaten", solarcycle: "Sonnenzyklus", audiomon: "Audio-Monitor", cluster: "DX-Cluster", alert: "Alert (FT8)", histogram: "DX-Histogramm", bandmap: "Bandkarte", greyline: "Graulinie", clock: "Uhr", rotator: "Rotor", calendar: "Kalender", awards: "Diplome", qsl: "QSL & Online", stats: "Statistik" })
+    { label: "Ansicht", items: Object.entries({ lookup: "Rufzeichen-Info", favorites: "Favoriten", radiopane: "Funkgerät-Feld", recorder: "Audio-Rekorder", netserver: "Netzwerk", solar30: "30-Tage-Sonnendaten", solarcycle: "Sonnenzyklus", audiomon: "Audio-Monitor", cluster: "DX-Cluster", alert: "Alert (FT8)", histogram: "DX-Histogramm", bandmap: "Bandkarte", greyline: "Graulinie", clock: "Uhr", rotator: "Rotor", calendar: "Kalender", programs: "POTA / SOTA / WWFF", awards: "Diplome", qsl: "QSL & Online", stats: "Statistik" })
       .map(([k, l]) => ({ label: l, check: () => panelOpen("log", k), act: () => togglePanel("log", k) })) },
     { label: "Kalender", items: [{ label: "Kalender-Fenster (Contests, DXpeditionen)", act: () => addPanel("log", "calendar") }, "-", { label: "Contest-Kalender (WA7BNM) öffnen", act: () => window.open("https://www.contestcalendar.com/weeklycont.php", "_blank") }, { label: "DX-Kalender (NG3K) öffnen", act: () => window.open("https://www.ng3k.com/Misc/adxo.html", "_blank") }] },
     { label: "Länder", items: [{ label: "Diplome / DXCC-Matrix", act: () => addPanel("log", "awards") }, { label: "Länderliste aktualisieren", act: () => toast("Die Länderliste (cty) wird alle 14 Tage automatisch aktualisiert") }] },
     { label: "Logbuch", items: [{ label: "Logbuch öffnen …", act: logbookManager }, { label: "QSL & Online-Dienste", act: () => addPanel("log", "qsl") }, { label: "LoTW abgleichen", act: async () => { try { const r = await post("/api/sync/confirmations?" + logq(), { service: "lotw" }); toast(`LoTW: ${r.matched} zugeordnet`); } catch (e) { toast(e.message, true); } } },
       { label: "eQSL abgleichen", act: async () => { try { const r = await post("/api/sync/confirmations?" + logq(), { service: "eqsl" }); toast(`eQSL: ${r.matched} zugeordnet`); } catch (e) { toast(e.message, true); } } }, { label: "Statistik", act: () => addPanel("log", "stats") }] },
-    { label: "Extras", items: [{ label: "Konfigurieren …", icon: "i-gear", key: "F8", act: () => openOptions() }, { label: "Cluster-Alarme …", act: alarmsDialog }, { label: "Rotor verbinden …", act: () => openRotorConnect() }] },
+    { label: "Extras", items: [{ label: "Konfigurieren …", icon: "i-gear", key: "F8", act: () => openOptions() }, { label: "Stationsprofile …", icon: "i-radio", act: () => stationsDialog() },
+      { label: "POTA / SOTA / WWFF", icon: "i-tower", act: () => addPanel("log", "programs") }, { label: "Cluster-Alarme …", act: alarmsDialog }, { label: "Rotor verbinden …", act: () => openRotorConnect() }] },
     MENU_WINDOW("log"), MENU_HELP,
   ],
   toolbar: [

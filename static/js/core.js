@@ -132,6 +132,7 @@ function connectWs() {
       case "decode": WW.decodes.unshift(m.decode); if (WW.decodes.length > 500) WW.decodes.pop(); WW.emit("decode", m.decode); break;
       case "rotor": WW.rotor = m.rotor; WW.emit("rotor", m.rotor); break;
       case "winkey": WW.winkey = m.winkey; WW.emit("winkey", m.winkey); break;
+      case "stations": if (window.PRG) PRG.stations = m.stations; WW.emit("stations", m.stations); break;
       case "spectrum": WW.emit("spectrum", m); break;
       case "favorites": WW.emit("favorites"); break;
       case "notice": toast(m.text, m.bad); break;

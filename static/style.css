@@ -321,3 +321,35 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .ctxmenu hr { border: 0; border-top: 1px solid var(--line, #ccd); margin: 3px 6px; }
 .ctxmenu .label { padding: 4px 10px; font-size: 11px; font-weight: 600; opacity: .7; text-transform: uppercase; letter-spacing: .03em; }
 .me-t tr.empty td { opacity: .55; }
+
+/* POTA / SOTA / WWFF */
+.pane-programs { display: flex; flex-direction: column; }
+.prg-view { flex: 1; min-height: 0; overflow: auto; }
+.prg-f { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.prg-act, .prg-stat { padding: 8px 10px; }
+.prg-stat { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.prg-stat h3 { margin: 4px 0; }
+.prg-cnt { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.prg-cnt .cnt { border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; display: flex; flex-direction: column; min-width: 180px; }
+.prg-cnt .cnt.ok { border-color: var(--ok, #2a9d4a); }
+.prg-cnt .n { font-size: 15px; }
+.prg-suggest { position: fixed; z-index: 10001; max-height: 320px; overflow: auto; background: var(--panel, #fff); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+.prg-suggest button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 8px; font: inherit; color: inherit; }
+.prg-suggest button:hover { background: var(--accent, #1f5fae); color: #fff; }
+.prg-suggest small { opacity: .7; }
+
+/* POTA / SOTA / WWFF */
+.pane-programs { display: flex; flex-direction: column; }
+.prg-view { flex: 1; min-height: 0; overflow: auto; }
+.prg-f { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.prg-act, .prg-stat { padding: 8px 10px; }
+.prg-stat { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.prg-stat h3 { margin: 4px 0; }
+.prg-cnt { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.prg-cnt .cnt { border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; display: flex; flex-direction: column; min-width: 180px; }
+.prg-cnt .cnt.ok { border-color: var(--ok, #2a9d4a); }
+.prg-cnt .n { font-size: 15px; }
+.prg-suggest { position: fixed; z-index: 10001; max-height: 320px; overflow: auto; background: var(--panel, #fff); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+.prg-suggest button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 8px; font: inherit; color: inherit; }
+.prg-suggest button:hover { background: var(--accent, #1f5fae); color: #fff; }
+.prg-suggest small { opacity: .7; }
