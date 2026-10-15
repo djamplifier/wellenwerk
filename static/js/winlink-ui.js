@@ -37,6 +37,7 @@ function createWlRead(root) {
   root.innerHTML = `<div class="wl-read"><div class="hint">Nachricht auswählen.</div></div>`;
   const show = async () => { const el = $(".wl-read", root); if (!WL.sel) { el.innerHTML = `<div class="hint">Nachricht auswählen.</div>`; return; }
     let m; try { m = await api(`/api/winlink/msg/${WL.folder}/${WL.sel}`); } catch { el.innerHTML = `<div class="hint">Nachricht nicht mehr vorhanden.</div>`; return; }
+    wlRefresh().catch(() => { });      // Zaehler „neu“ aktualisieren
     el.innerHTML = `<div class="wl-hd"><div class="wl-subj">${esc(m.subject)}</div><div><b>Von</b> ${esc(m.sender)} · <b>An</b> ${esc(m.to.join(", "))}${m.cc.length ? ` · <b>Cc</b> ${esc(m.cc.join(", "))}` : ""}</div><div class="hint">${esc(m.date)} UTC · ${esc(m.mid)} · ${wlSize(m.size)}</div>
       ${m.files.length ? `<div class="wl-att">${m.files.map((f, i) => `<a href="/api/winlink/att/${WL.folder}/${encodeURIComponent(m.mid)}/${i}" download>📎 ${esc(f.name)} (${wlSize(f.size)})</a>`).join("")}</div>` : ""}
       <div class="ctl-row">${wlMsgMenu(WL.folder, m.mid).filter(x => x !== "-").map((x, i) => `<button data-i="${i}">${esc(x.label)}</button>`).join("")}</div></div><pre class="wl-body">${esc(m.text)}</pre>`;

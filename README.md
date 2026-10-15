@@ -7,13 +7,16 @@ Code, Logo und Icons sind eigenständig.
 - **Gerätesteuerung** (Hamlib, über 300 Funkgeräte, mehrere gleichzeitig): große Frequenzanzeige, VFO A/B, Split, RIT/XIT,
   alle Regler und Schalter des Geräts, Abstimmleisten je Band, Feinabstimmung, Schnellspeicher, Favoriten, Speicherkanäle,
   Scanner, Makros, Sprachspeicher, Bandübersicht, Panadapter (Geräte-Scope oder IQ-Soundkarte), WinKeyer,
-  Freigabe des Geräts für andere Programme (Hamlib NET rigctl), Layout frei anpassbar
+  Freigabe des Geräts für andere Programme (Hamlib NET rigctl oder CAT-Emulation Kenwood TS-2000), Schnappschüsse,
+  Synchronisierung zweier Geräte, Fernbetrieb-Audio (WebRTC) mit PTT, Layout frei anpassbar
 - **Logbuch**: mehrere Logbücher, Rufzeichen-Info mit Callbook (HamQTH/QRZ.com) und gearbeitet-Matrix, DX-Cluster mit
   Alarmen, FT8-Alert und Antworten über WSJT-X, Bandkarte, Graulinie, Sonnendaten, Kalender (Contests, DXpeditionen),
-  QSL (Papier, LoTW, eQSL), Uploads zu QRZ.com/eQSL/LoTW/Club Log, Diplome, Etiketten, Cabrillo, ADIF
+  QSL (Papier, LoTW, eQSL), Uploads zu QRZ.com/eQSL/LoTW/Club Log, Diplome, Etiketten, Cabrillo, ADIF,
+  POTA/SOTA/WWFF mit Stationsprofilen, Filter-Bedingungen und gespeicherte Ansichten, QSO-Austausch mit N1MM, VarAC, JTAlert, GridTracker
 - **Digitalbetrieb**: Wasserfall, PSK/QPSK, RTTY, CW, MFSK, DominoEX, THOR, Olivia, Contestia, Throb, MT63, Hellschreiben,
   SSTV (18 Bildmodi mit Vorlagen und Galerie), Makros, WWK Sweeper (bis 16 Signale gleichzeitig)
-- **Satelliten** (Doppler- und Rotor-Nachführung), **Rotor**, **Karten**
+- **Winlink**: E-Mail über Funk – Postfach, Verfassen mit Anhängen, Austausch über Telnet, ARDOP, VARA (TCP-Schnittstelle) und Packet (AGW/Direwolf)
+- **Satelliten** (Doppler- und Rotor-Nachführung, Zeitplan, gemeinsame Sichtbarkeit), **Rotor** (Anschlag, Versatz, Überlauf), **Karten**
 - Andockbare Fenster (lösen, auf zweiten Bildschirm, Layouts speichern), Rechtsklick-Menüs überall
 
 ## Aufbau

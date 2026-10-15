@@ -1,6 +1,6 @@
 # Wellenwerk – Anleitung
 
-Wellenwerk ist ein Programm für die Funkstation: Funkgerät steuern, Logbuch führen, Digitalbetrieb (PSK, RTTY, Olivia, MT63, SSTV und mehr), Satelliten, Rotor und Karten – alles in einem Fenster.
+Wellenwerk ist ein Programm für die Funkstation: Funkgerät steuern, Logbuch führen, Digitalbetrieb (PSK, RTTY, Olivia, MT63, SSTV und mehr), Winlink-E-Mail über Funk, Satelliten, Rotor und Karten – alles in einem Fenster.
 
 > **Lizenz und Haftung:** Wellenwerk ist freie Software unter der GNU General Public License 3 und wird **ohne jede Gewährleistung** bereitgestellt. Die Nutzung – insbesondere die Steuerung von Sendern, Funkgeräten und Rotoren – erfolgt auf eigene Verantwortung. Für die Einhaltung der Amateurfunk-Vorschriften ist die bedienende Person verantwortlich. Einzelheiten und alle Fremdlizenzen: [LIZENZEN.md](../LIZENZEN.md) bzw. im Programm unter **Hilfe → Lizenzen und Fremdkomponenten**.
 
@@ -16,12 +16,13 @@ Wellenwerk ist ein Programm für die Funkstation: Funkgerät steuern, Logbuch f�
 9. [Online-Dienste (QRZ.com, LoTW, eQSL, Club Log)](#9-online-dienste)
 10. [Digitalbetrieb](#10-digitalbetrieb)
 11. [SSTV (Bildübertragung)](#11-sstv-bildübertragung)
-12. [Satelliten](#12-satelliten)
-13. [Rotor](#13-rotor)
-14. [Karten](#14-karten)
-15. [Tastenkürzel](#15-tastenkürzel)
-16. [Daten, Sicherung und Umzug](#16-daten-sicherung-und-umzug)
-17. [Probleme lösen](#17-probleme-lösen)
+12. [Winlink (E-Mail über Funk)](#12-winlink-e-mail-über-funk)
+13. [Satelliten](#13-satelliten)
+14. [Rotor](#14-rotor)
+15. [Karten](#15-karten)
+16. [Tastenkürzel](#16-tastenkürzel)
+17. [Daten, Sicherung und Umzug](#17-daten-sicherung-und-umzug)
+18. [Probleme lösen](#18-probleme-lösen)
 
 ---
 
@@ -78,6 +79,8 @@ Weitere Einstellungen:
 
 **Funkgerät mit anderen Programmen teilen** (WSJT-X, JTDX, N1MM, fldigi, Log4OM): In der Registerkarte **Gespeichert** steht in der Spalte „Für andere Programme“ eine Adresse wie `127.0.0.1:4600`. Im anderen Programm als Funkgerät **Hamlib NET rigctl** mit dieser Adresse wählen. Beide Programme steuern dann dasselbe Gerät gleichzeitig.
 
+**Programme ohne Hamlib-Netzanbindung** (nur „serielles Funkgerät“): **F8 → Kommunikation → CAT-Emulation** einschalten. Wellenwerk verhält sich dann wie ein **Kenwood TS-2000**. Unter macOS/Linux erscheint ein Port wie `/dev/ttys003` (zusätzlich immer als `~/.wellenwerk-cat`), unter Windows ein virtuelles Port-Paar mit **com0com** anlegen, das eine Ende (z. B. COM11) in Wellenwerk eintragen, das andere (COM12) im Fremdprogramm; alternativ ein TCP-Port. Im Fremdprogramm „Kenwood TS-2000“, 9600 Baud wählen. Frequenz, Betriebsart, PTT, S-Meter, Leistung und Lautstärke werden an das gerade gewählte Funkgerät weitergegeben.
+
 ## 4. Gerätesteuerung
 
 ![Gerätesteuerung](bilder/03-geraetesteuerung.png)
@@ -104,6 +107,26 @@ Weitere Fenster über **Ansicht** bzw. **Extras**: Kurzwellen-Datenbank (Rundfun
 
 - **Panadapter** (oben im Bild): Spektrum und Wasserfall; Klick stimmt ab. Quelle entweder das **Scope des Funkgeräts** (Icom) oder eine **IQ-Soundkarte** (SDR, z. B. über DAX-IQ oder einen IQ-Ausgang). Bei IQ: Eingang wählen, **Start**; bei Bedarf **ZF-Ablage** und **I/Q tauschen** (wenn das Spektrum gespiegelt ist).
 - **Speicherkanäle** (unten im Bild): **Lesen** holt die Kanäle aus dem Gerät. Kanal anklicken, dann **Speicher → VFO** (oder Doppelklick), **VFO → Speicher** oder **Löschen**. **CSV-Export** speichert die Liste.
+
+### Schnappschüsse und Synchronisieren
+
+![Schnappschüsse](bilder/19-schnappschuesse.png)
+
+**Funkgerät → Schnappschüsse …** speichert den kompletten Gerätezustand unter einem Namen – Frequenz, Betriebsart und Bandbreite, Split mit Sendefrequenz, RIT und alle Regler und Schalter, die das Gerät setzen kann – und stellt ihn mit **Abrufen** wieder her (z. B. „40 m FT8“, „Contest SSB“). Einmal-Aktionen wie Tuner-Start oder Tonruf werden dabei nie ausgelöst.
+
+**Funkgerät → Synchronisieren …**: Ein zweites verbundenes Gerät folgt dem ersten – Frequenz plus einstellbarer **Versatz** und auf Wunsch die Betriebsart (Zweitempfänger, SDR als Panadapter, Transverter-ZF).
+
+### Fernbetrieb-Audio
+
+![Fernbetrieb-Audio](bilder/18-fernbetrieb-audio.png)
+
+Für den Betrieb aus einem anderen Raum oder unterwegs: **Ansicht → Fernbetrieb-Audio**.
+
+1. **Am Stationsrechner** (dort, wo die Soundkarte am Funkgerät hängt): **Empfang vom Funkgerät** und **Senden zum Funkgerät** wählen, **Audio freigeben**.
+2. **Am anderen Rechner/Tablet** Wellenwerk im Browser öffnen – wegen des Mikrofons über **https** (Port 8443), im Heimnetz z. B. `https://stationsrechner:8443` – und **Verbinden**. Der Empfang ist sofort zu hören.
+3. **PTT – Senden** gedrückt halten (oder „rastet ein“ wählen): das Funkgerät sendet, das Mikrofon geht zur Station. Loslassen = Empfang.
+
+Das Audio läuft direkt zwischen den Rechnern (WebRTC, Opus); außerhalb des Heimnetzes in den Optionen (**Kommunikation**) einen STUN-Server eintragen.
 
 ## 5. Fenster anordnen und Layouts
 
@@ -166,7 +189,22 @@ Eine Auswahl:
 
 **Contest-Modus:** Taste **Contest** – fortlaufende Nummern werden automatisch vergeben.
 
-**Diplome:** **Diplome** zeigt DXCC, WAZ, WAS, WAC, WPX, DOK und IOTA, wahlweise gearbeitet oder bestätigt.
+**Diplome:** **Diplome** zeigt DXCC, DXCC-Challenge, WAZ, WAS, WAC, WPX, ITU-Zonen, Europa, DOK, IOTA, VUCC-Locatorfelder, US-Counties und den CQ DX Marathon – wahlweise gearbeitet oder bestätigt.
+
+**Suchen, Filter und gespeicherte Ansichten:** **Suchen** blendet die Filterleiste ein (Text, Band, Mode, QSL-Status, Zeitraum). Im Feld **Bedingung** lassen sich beliebige Felder abfragen, mehrere mit `;` getrennt: `=`, `!=`, `<`, `>`, `<=`, `>=`, `~` (enthält), `!~` (enthält nicht), `leer`, `nicht leer` – z. B. `cqz=14; iota nicht leer` oder `band=20m; country~Japan; qso_date>=20260101`. **Ansicht … → Aktuelle Ansicht speichern** merkt sich Filter, Spalten und Sortierung unter einem Namen.
+
+![Bedingung im Logbuch](bilder/21-logbuch-bedingung.png)
+
+**Betriebsarten und RST:** **F8 → Betriebsarten** – eine Zeile je Mode mit RST-Vorgabe (z. B. `FT8 -10`, `CW 599`). Die Liste erscheint im Feld Mode des Eintrags, beim Wechsel der Betriebsart werden die RST-Felder vorbelegt.
+
+**POTA, SOTA und WWFF:** Fenster **POTA / SOTA / WWFF** im Logbuch (Menü **Extras**) zeigt aktuelle Spots (Klick stimmt ab, Doppelklick öffnet den Eintrag mit Referenz), im Eintrag gibt es eine Referenzsuche. Für eigene Aktivierungen **Stationsprofile** anlegen (Rufzeichen, Locator, eigene Park-/Gipfel-Referenz) – der Zähler zeigt die QSOs des Tages, **Selbst-Spot** meldet die Aktivierung, **Export** erzeugt die Logdatei fürs Portal.
+
+**Andere Programme anbinden** (**F8 → Programme & Sicherung**):
+- **QSOs weiterleiten** an andere Programme (UDP; ADIF, WSJT-X „Logged ADIF“ für GridTracker/Log4OM oder N1MM-Format).
+- **Empfangen:** N1MM Logger+ (Contacts), **ADIF per UDP** – z. B. von **VarAC**, **JTAlert** oder **GridTracker** – sowie WSJT-X/JTDX. Doppelte QSOs werden erkannt.
+- **WSJT-X-Pakete weiterreichen** an GridTracker oder JTAlert.
+
+**Weitere Werkzeuge** unter **Mehr …**: Google-Earth-Datei (KML), Datenbank prüfen und optimieren, Callbook für die Auswahl abfragen (leere Felder füllen), Adressetiketten drucken. **Automatische tägliche Sicherung** in einen Ordner, z. B. einen Cloud-Ordner.
 
 ## 8. DX-Cluster, Alarme und WSJT-X
 
@@ -233,7 +271,33 @@ Neue QSOs können automatisch hochgeladen werden (Haken „Neue QSOs sofort …�
 
 Hintergrund wählen (Testbild, eigene Bilddatei, zuletzt empfangenes Bild), bis zu drei Textzeilen mit Platzhaltern (`<CALL> de <MYCALL>`, `ur <RST>` …), Textfarbe und -lage. Mit **Empfangenes Bild der Gegenstation klein einfügen** sieht die Gegenstation, wie ihr Bild angekommen ist. Die Vorschau zeigt das Ergebnis und die Sendedauer.
 
-## 12. Satelliten
+## 12. Winlink (E-Mail über Funk)
+
+![Winlink](bilder/17-winlink.png)
+
+Das Register **Winlink** ist ein vollständiges Winlink-Postfach: Nachrichten schreiben, über Funk oder Internet austauschen, lesen, beantworten. Links die Ordner (**Eingang**, **Ausgang**, **Gesendet**, **Archiv**), in der Mitte die Nachrichten und darunter das Lesefenster, rechts die Verbindung mit Protokoll.
+
+**Einrichten** (**Einstellungen** bzw. **F8 → Winlink**): Winlink-Rufzeichen (leer = Stationsrufzeichen) und **Winlink-Passwort** des Kontos auf winlink.org. Für Funkbetrieb zusätzlich das Modem:
+
+| Verbindungsweg | Was gebraucht wird |
+|---|---|
+| **Telnet – Winlink-Server** | nur Internet (Austausch direkt mit dem Winlink-Server, z. B. zum Testen) |
+| **Telnet – Peer** | Adresse und Port einer anderen Station im Netz (Station-zu-Station ohne Server) |
+| **ARDOP** (Kurzwelle) | das freie Modem **ardopcf** läuft auf diesem Rechner, z. B. `ardopcf 8515 <Soundkarte> <Soundkarte>` |
+| **VARA** | das Programm **VARA** (eigenständig, eigene Lizenz) läuft; Wellenwerk nutzt nur seine TCP-Schnittstelle (Port 8300) |
+| **Packet** (VHF/UHF) | **Direwolf** (oder ein anderes Modem mit AGW-Schnittstelle) läuft, AGW-Port 8000 |
+
+Bei ARDOP und VARA tastet Wellenwerk das Funkgerät, sobald das Modem senden will (oder das Modem macht es selbst bzw. per VOX – Einstellung **PTT**).
+
+**Nachricht schreiben:** **Neu** – Empfänger (Rufzeichen oder E-Mail-Adresse, mehrere mit Komma), Betreff, Text, Anhänge. Die Nachricht wartet im **Ausgang** auf die nächste Verbindung. Über Funk Anhänge klein halten.
+
+**Verbinden:** Verbindungsweg wählen, bei Funk die **Gegenstation** (Rufzeichen des RMS-Gateways bzw. der Station) und optional die **Frequenz** in kHz eintragen – das Funkgerät wird vorher darauf gestellt. **Verbinden** tauscht in beide Richtungen aus: Ausgang wird gesendet, neue Nachrichten landen im Eingang (fett = ungelesen). **Nur empfangen** lässt den Ausgang liegen. Das Protokoll zeigt jeden Schritt.
+
+**Lesen und weiter:** Klick auf eine Nachricht zeigt sie unten an; Knöpfe bzw. Rechtsklick: **Antworten**, **Allen antworten**, **Weiterleiten**, **Archivieren**, **Löschen**, im Ordner Gesendet **Erneut senden**. Anhänge per Klick speichern.
+
+> Die Nachrichten liegen als Dateien im Datenordner unter `winlink/` (ein Ordner je Postfach-Ordner) und sind damit Teil der Sicherung.
+
+## 13. Satelliten
 
 ![Satelliten](bilder/13-satelliten.png)
 
@@ -242,20 +306,26 @@ Bahndaten und Sender werden automatisch geladen. Links die Liste mit aktueller E
 - **Sender** des Satelliten wählen – Downlink/Uplink werden angezeigt.
 - **Funkgerät nachführen (Doppler):** stellt die Empfangsfrequenz laufend nach; **Uplink per Split** stellt die Sendefrequenz mit ein.
 - **Rotor nachführen (Az/El):** dreht die Antenne mit.
+- **Zeitplan:** alle ausgewählten Satelliten der nächsten Stunden nach Beginn sortiert, mit Mindest-Elevation und Filter „nur mit Sprechfunk/Transponder“. Klick wählt den Satelliten.
+- **Gemeinsame Sichtbarkeit:** Rufzeichen oder Locator der Gegenstation eingeben – die Liste zeigt, wann ein Satellit für **beide** Stationen über dem Horizont steht (für einen oder alle ausgewählten Satelliten).
 
-## 13. Rotor
+![Satelliten-Zeitplan](bilder/20-satelliten-zeitplan.png)
+
+## 14. Rotor
 
 ![Rotor](bilder/14-rotor.png)
 
 **Rotor verbinden:** Hersteller/Modell, Port und Geschwindigkeit (wie beim Funkgerät). Bedienung: Klick ins Rundinstrument dreht dorthin, Gradzahl eingeben, Stopp, Parken. Die Karte rechts zeigt die Strahlrichtung (Mercator oder Großkreis um den eigenen Standort). Ziel per **Rufzeichen, Land oder Locator** eingeben, **Kurz/Lang** für den kurzen bzw. langen Weg, dann **Rotor drehen**. Aus Logbuch, Cluster und Karten geht es per Rechtsklick → **Antenne drehen**.
 
-## 14. Karten
+Im Verbinden-Dialog außerdem: **Anschlag** im Norden (0°…360°) oder Süden (−180°…+180°), **Azimut-Versatz** zum Kalibrieren (zeigt der Rotor 10° zu viel, −10 eintragen), eigener **Drehbereich** für Rotoren mit Überlauf (z. B. 0…450° – Wellenwerk nimmt dann den kürzeren Weg) und ein **Bewegungsprotokoll**.
+
+## 15. Karten
 
 ![Karten](bilder/15-karten.png)
 
 Weltkarte mit Graulinie (Tag/Nacht), eigener Station und Spots, dazu die **Peilkarte** (mittabstandstreu um den eigenen Standort – Richtungen stimmen dort exakt). Rechtsklick auf einen Punkt zeigt Locator, Richtung und Entfernung und dreht auf Wunsch die Antenne.
 
-## 15. Tastenkürzel
+## 16. Tastenkürzel
 
 | Taste | Wirkung |
 |---|---|
@@ -273,7 +343,7 @@ Weltkarte mit Graulinie (Tag/Nacht), eigener Station und Spots, dazu die **Peilk
 
 Eigene Tastenkürzel: **Optionen → Tastenkürzel**.
 
-## 16. Daten, Sicherung und Umzug
+## 17. Daten, Sicherung und Umzug
 
 Alle Daten (Logbücher, Einstellungen, Favoriten, SSTV-Bilder) liegen im Benutzerordner:
 
@@ -283,7 +353,7 @@ Alle Daten (Logbücher, Einstellungen, Favoriten, SSTV-Bilder) liegen im Benutze
 
 **Sichern:** **Sicherung** (Werkzeugleiste des Logbuchs) legt eine Kopie des aktuellen Logbuchs an; **Mehr … → Sicherungen** stellt wieder her. Für einen Rechnerwechsel den ganzen Ordner kopieren oder das Logbuch als ADIF exportieren und auf dem neuen Rechner importieren. Das Layout der Gerätesteuerung überträgt **Layout anpassen → Layout als Datei speichern / laden**.
 
-## 17. Probleme lösen
+## 18. Probleme lösen
 
 | Problem | Lösung |
 |---|---|

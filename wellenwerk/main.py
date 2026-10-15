@@ -33,7 +33,7 @@ from .winlink.client import Winlink
 from .catemu import CatEmu
 from .winlink.message import Message as WlMessage
 
-VERSION = "1.0.2"
+VERSION = "1.1.0"
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("WW_DATA", BASE / "data"))
 DATA.mkdir(parents=True, exist_ok=True)
