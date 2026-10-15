@@ -40,7 +40,7 @@ from .access import Access, AccessMiddleware, COOKIE, LOGIN_HTML
 from .plugins import PluginHost, PluginError
 from .winlink.message import Message as WlMessage
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("WW_DATA", BASE / "data"))
 DATA.mkdir(parents=True, exist_ok=True)

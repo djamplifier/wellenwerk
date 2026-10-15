@@ -271,7 +271,7 @@ Neue QSOs können automatisch hochgeladen werden (Haken „Neue QSOs sofort …�
 | Gruppe | Varianten |
 |---|---|
 | PSK | BPSK31/63/125, QPSK31/63/125 |
-| RTTY | 45,45 Baud, 170 Hz |
+| RTTY | 45,45 Baud / 170 Hz (Amateurfunk); einstellbar 50, 75, 100 Baud und 200, 425, 450, 850 Hz Shift – z. B. Wetterdienst DWD: 50 Baud, 450 Hz, Lage „umgekehrt“ oder „automatisch“, USOS aus |
 | CW | über Funkgerät oder WinKeyer |
 | MFSK | MFSK8, MFSK16, MFSK32 |
 | DominoEX, THOR | 4, 5, 8, 11, 16, 22 |
