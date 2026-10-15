@@ -43,9 +43,10 @@ function dmMakeRx() {
 }
 async function dmStart(dev) {
   if (D.running) return dmStop();
-  if (!navigator.mediaDevices?.getUserMedia) return toast("Soundkarten-Zugriff nur über https://…:8443 möglich", true);
+  if (dev !== "__sdr" && !navigator.mediaDevices?.getUserMedia) return toast("Soundkarten-Zugriff nur über https://…:8443 möglich", true);
   try {
-    D.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: dev ? { exact: dev } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    D.fromSdr = dev === "__sdr";
+    D.stream = D.fromSdr ? await rxStream() : await navigator.mediaDevices.getUserMedia({ audio: { deviceId: dev ? { exact: dev } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
     try { D.ctx = new AudioContext({ sinkId: { type: "none" } }); } catch { D.ctx = new AudioContext(); }
     await D.ctx.audioWorklet.addModule("/static/digi-worklet.js");
     const src = D.ctx.createMediaStreamSource(D.stream);
@@ -54,7 +55,7 @@ async function dmStart(dev) {
     src.connect(lp1).connect(lp2).connect(D.tap); D.running = true; WW.emit("dm-run");
   } catch (e) { toast("Audio: " + e.message, true); }
 }
-function dmStop() { D.running = false; try { D.stream?.getTracks().forEach(t => t.stop()); D.ctx?.close(); } catch { } WW.emit("dm-run"); }
+function dmStop() { D.running = false; try { if (!D.fromSdr) D.stream?.getTracks().forEach(t => t.stop()); D.ctx?.close(); } catch { } WW.emit("dm-run"); }
 async function dmFeedBuffer(samples, sr) {   // Testeinspeisung durch dieselbe Kette
   try { D.ctx = new AudioContext({ sinkId: { type: "none" } }); } catch { D.ctx = new AudioContext(); }
   await D.ctx.audioWorklet.addModule("/static/digi-worklet.js");
@@ -122,7 +123,7 @@ function dmTune() {
 async function audioDevices(kind) { try { return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === kind); } catch { return []; } }
 function createWaterfall(root) {
   root.innerHTML = `<div class="pane-tb dm-tb"><select class="dm-mode">${dmModeOptions()}</select>
-    <button class="dm-run">▶ Empfang</button><label class="chk">Eingang <select class="dm-in"><option value="">Standard</option></select></label><span class="lvl dm-lvl"><i></i></span>
+    <button class="dm-run">▶ Empfang</button><label class="chk">Eingang <select class="dm-in"><option value="">Standard</option><option value="__sdr">Empfänger (WebSDR/KiwiSDR)</option></select></label><span class="lvl dm-lvl"><i></i></span>
     <b class="dm-f">1500 Hz</b><span class="hint dm-wpm"></span><label class="chk dm-afcw"><input type="checkbox" class="dm-afc" ${store.get("dm.afc", true) ? "checked" : ""}> AFC</label>
     <label class="chk dm-revw"><input type="checkbox" class="dm-rev" ${store.get("dm.rev", false) ? "checked" : ""}> umgekehrt</label>
     <label class="chk">Squelch <input type="range" class="dm-sql" min="0" max="90" value="${store.get("dm.sql", 25)}" style="width:80px"></label></div>
@@ -132,7 +133,7 @@ function createWaterfall(root) {
   const marker = () => { const W = cv.clientWidth; if (!D.rx || !W) return; const bw = dmBw(D.mode);
     const mk = $(".dm-mk", root); mk.style.left = ((D.rx.freq - bw / 2) / WF_MAX * W) + "px"; mk.style.width = Math.max(3, bw / WF_MAX * W) + "px"; };
   $(".dm-scale", root).innerHTML = Array.from({ length: WF_MAX / 250 + 1 }, (_, i) => i * 250).map(f => `<span style="left:${f / WF_MAX * 100}%">${f % 500 === 0 ? f : "·"}</span>`).join("");
-  audioDevices("audioinput").then(ds => { $(".dm-in", root).innerHTML += ds.map(d => `<option value="${esc(d.deviceId)}" ${d.deviceId === store.get("dm.in", "") ? "selected" : ""}>${esc(d.label || d.deviceId.slice(0, 8))}</option>`).join(""); });
+  audioDevices("audioinput").then(ds => { $(".dm-in", root).innerHTML += ds.filter(d => d.deviceId !== "__sdr").map(d => `<option value="${esc(d.deviceId)}" ${d.deviceId === store.get("dm.in", "") ? "selected" : ""}>${esc(d.label || d.deviceId.slice(0, 8))}</option>`).join(""); });
   cv.addEventListener("click", e => { const r = cv.getBoundingClientRect(); dmSetFreq(Math.round(dmSnap((e.clientX - r.left) / r.width * WF_MAX))); });
   root.addEventListener("change", e => { const t = e.target;
     if (t.classList.contains("dm-mode")) dmSetMode(t.value);

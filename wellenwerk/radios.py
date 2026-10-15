@@ -244,10 +244,11 @@ class RadioProc:
 
 
 class RadioManager:
-    def __init__(self, data_dir: Path, on_change, base_port: int = 4600, on_spectrum=None):
+    def __init__(self, data_dir: Path, on_change, base_port: int = 4600, on_spectrum=None, on_audio=None):
         self.path = Path(data_dir) / "radios.json"
         self.on_change = on_change
         self.on_spectrum = on_spectrum
+        self.on_audio = on_audio
         self.base_port = base_port
         self.active: dict[str, RadioProc] = {}
         self.current: str | None = None
@@ -295,6 +296,8 @@ class RadioManager:
         prof = self.profile(pid)
         if not prof:
             raise RuntimeError("Profil nicht gefunden")
+        if prof.get("kind") == "sdr":                 # Empfaenger (KiwiSDR, OpenWebRX, SDR-Hardware)
+            return await self._connect_sdr(pid, prof)
         used = {rp.port for rp in self.active.values()}
         port = next(p for p in range(self.base_port, self.base_port + 90) if p not in used and port_free(p) and port_free(p + 100, udp=True))
         rp = RadioProc(prof, port, self.on_change, self.on_spectrum)
@@ -317,6 +320,25 @@ class RadioManager:
         self.active[pid] = rp
         self.current = pid
         log.info("Funkgerät %s verbunden (Modell %s, %s)", prof.get("name"), prof.get("model"), prof.get("device") or prof.get("host") or "-")
+
+    async def _connect_sdr(self, pid: str, prof: dict):
+        from .sdr.base import SdrProc
+        from .sdr import registry
+        cls = registry.rig_class(prof.get("sdr_type", ""))
+        rp = SdrProc(prof, cls, self.on_change, self.on_spectrum, self.on_audio)
+        await rp.start()
+        for _ in range(60):                      # bis zu 15 s: Web-Empfaenger brauchen etwas fuer den Aufbau
+            if rp.rig.state.get("connected") or rp.proc.poll() is not None:
+                break
+            await asyncio.sleep(0.25)
+        if not rp.rig.state.get("connected"):
+            err = rp.rig.state.get("error") or ("keine Antwort nach 15 s – Empfänger überlastet oder nicht erreichbar" if rp.proc.poll() is None else (list(rp.log)[-1] if rp.log else "keine Antwort"))
+            await rp.stop()
+            raise RuntimeError(f"Empfänger nicht verbunden: {err}")
+        self.active[pid] = rp
+        if prof.get("role") != "second" or not self.current:      # zweiter Empfaenger: Funkgeraet bleibt das aktuelle
+            self.current = pid
+        log.info("Empfänger %s verbunden (%s, %s)", prof.get("name"), prof.get("sdr_type"), prof.get("url"))
 
     async def disconnect(self, pid: str):
         rp = self.active.pop(pid, None)

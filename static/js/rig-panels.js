@@ -232,12 +232,12 @@ function vkDb() { return new Promise((ok, bad) => { const r = indexedDB.open("ww
     get: k => new Promise(res => { const q = db.transaction("m").objectStore("m").get(k); q.onsuccess = () => res(q.result); }) }); }; }); }
 
 // ---------- Verbinden ----------
-async function openConnect(editId) {
+async function openConnect(editId, tab) {
   let models = [], ports = [];
   try { [models, ports] = await Promise.all([api("/api/hamlib/models"), api("/api/hamlib/ports")]); } catch (e) { toast(e.message, true); }
   const mfgs = [...new Set(models.map(m => m.mfg))].sort((a, b) => a.localeCompare(b));
   const d = dialog({ title: "Verbinden", icon: "i-plug", wide: true, buttons: [["Schließen", "close"]], body: `
-    <div class="dtabs"><button class="on" data-t="new">Neu</button><button data-t="preset">Gespeichert</button><button data-t="ports">Serielle Ports</button><button data-t="help">Hilfe</button></div>
+    <div class="dtabs"><button class="on" data-t="new">Neu</button><button data-t="preset">Gespeichert</button><button data-t="sdr">Empfänger (SDR)</button><button data-t="ports">Serielle Ports</button><button data-t="help">Hilfe</button></div>
     <div class="dtab" data-t="new"><div class="cn-grid"><div>
       <input type="hidden" id="cn-id">
       <div class="ctl-row cn-tpl"><span class="hint">Vorlage:</span><button type="button" data-tpl="wfview">wfview (Icom-Remote)</button><button type="button" data-tpl="flrig">FLRig</button><button type="button" data-tpl="ww">andere Wellenwerk-Station</button></div>
@@ -261,13 +261,14 @@ async function openConnect(editId) {
       <div class="ctl-row"><button type="button" class="primary" id="cn-go">${icon("i-plug")} Verbinden</button><button type="button" id="cn-save">Nur speichern</button><button type="button" id="cn-det">Baudrate suchen</button></div>
     </div><div><b>Status</b><div class="cn-status" id="cn-st"></div></div></div></div>
     <div class="dtab hidden" data-t="preset"><table class="grid" id="cn-presets"></table></div>
+    <div class="dtab hidden" data-t="sdr"><div class="sdr-pick"></div></div>
     <div class="dtab hidden" data-t="ports"><table class="grid"><thead><tr><th>Port</th><th>Beschreibung</th><th>Hardware</th></tr></thead><tbody>${ports.map(p => `<tr><td>${esc(p.device)}</td><td>${esc(p.desc)}</td><td>${esc(p.hwid)}</td></tr>`).join("") || `<tr><td colspan="3" class="hint">Keine seriellen Ports gefunden. Funkgerät per USB anschließen und neu öffnen.</td></tr>`}</tbody></table></div>
     <div class="dtab hidden" data-t="help"><p>Wellenwerk steuert Funkgeräte über <b>Hamlib</b> (${models.length} Modelle). Für Geräte im Netzwerk wähle Hersteller <b>Hamlib → NET rigctl</b>, <b>FLRig</b> oder bei FlexRadio das passende Modell mit Adresse.</p>
       <ul><li><b>Icom:</b> CI-V-Adresse wie im Gerätemenü (z. B. IC-7300 = 94, IC-705 = A4, IC-9700 = A2). Im Gerät „CI-V USB Echo Back“ meist aus.</li>
       <li><b>Yaesu/Kenwood:</b> Baudrate wie im Gerätemenü (CAT RATE), oft 38400.</li><li><b>Geräte mit eigener USB-Soundkarte:</b> PTT über CAT; Audio für Digitalmodi im Programm Digitalbetrieb einstellen.</li>
       <li>Antwortet das Gerät nicht, steht die Meldung von Hamlib im Statusfeld.</li>
       <li><b>Gerät mit anderen Programmen teilen</b> (wie Gerätefreigabe für Fremdprogramme): In WSJT-X, JTDX, N1MM, Log4OM oder fldigi als Funkgerät <b>Hamlib NET rigctl</b> wählen und die Adresse aus „Gespeichert → Für andere Programme“ eintragen (z. B. 127.0.0.1:4600). Wellenwerk und das andere Programm steuern dann gleichzeitig dasselbe Gerät.</li></ul></div>` });
-  tabsIn(d);
+  tabsIn(d); sdrPicker($(".sdr-pick", d), () => d.close()); if (tab) d.querySelector(`.dtabs [data-t="${tab}"]`)?.click();
   const fillModels = () => { const mf = $("#cn-mfg", d).value; $("#cn-scope", d).checked = /icom/i.test(mf); $("#cn-model", d).innerHTML = models.filter(m => m.mfg === mf).map(m => `<option value="${m.id}">${esc(m.model)}${m.status && m.status !== "Stable" ? " (" + esc(m.status) + ")" : ""}</option>`).join(""); netVis(); };
   const netVis = () => { const id = +$("#cn-model", d).value, mf = $("#cn-mfg", d).value; const net = [2, 4, 5].includes(id) || /flex/i.test(mf) && /6\d00|smart|tci/i.test($("#cn-model", d).selectedOptions[0]?.text || "");
     $(".cn-net", d).classList.toggle("hidden", !net); $(".cn-serial", d).classList.toggle("hidden", net || id === 1); };
@@ -395,7 +396,7 @@ APPS.rig = {
 function rigMenus() {
   const macros = store.get("macros", []);
   APPS.rig.menus = [
-    { label: "Datei", items: [{ label: "Verbinden …", icon: "i-plug", act: () => openConnect() }, { label: "Trennen", act: () => WW.current && act(`/api/radios/${WW.current}/disconnect`) },
+    { label: "Datei", items: [{ label: "Verbinden …", icon: "i-plug", act: () => openConnect() }, { label: "Empfänger (WebSDR/KiwiSDR) …", icon: "i-wave", act: () => { addPanel("rig", "receivers"); openConnect(null, "sdr"); } }, { label: "Trennen", act: () => WW.current && act(`/api/radios/${WW.current}/disconnect`) },
       { label: "Verbindung bearbeiten …", act: () => openConnect(WW.current) }, "-", { label: "Programmoptionen …", key: "F8", act: () => openOptions() }] },
     { label: "Bearbeiten", items: [{ label: "Frequenz eingeben …", key: "Enter", act: freqDialog }, { label: "Frequenz kopieren", act: () => navigator.clipboard?.writeText(fmtMHz(WW.rig.freq || 0)) }] },
     { label: "Ansicht", items: [
@@ -405,7 +406,8 @@ function rigMenus() {
       { label: "Bandübersicht", check: () => panelOpen("rig", "bandscope"), act: () => togglePanel("rig", "bandscope") },
       { label: "Panadapter", check: () => panelOpen("rig", "panadapter"), act: () => togglePanel("rig", "panadapter") },
       { label: "Speicherkanäle", check: () => panelOpen("rig", "memories"), act: () => togglePanel("rig", "memories") },
-      { label: "Fernbetrieb-Audio", check: () => panelOpen("rig", "remoteaudio"), act: () => togglePanel("rig", "remoteaudio") }, "-",
+      { label: "Fernbetrieb-Audio", check: () => panelOpen("rig", "remoteaudio"), act: () => togglePanel("rig", "remoteaudio") },
+      { label: "Empfänger (SDR)", check: () => panelOpen("rig", "receivers"), act: () => togglePanel("rig", "receivers") }, "-",
       "Schema", ...Object.keys(SCHEMES).map(s => ({ label: s, act: () => { store.set("rc.scheme", s); if (RC.layout) { RC.layout.scheme = { base: s }; saveRigLayout(); } } })), "-",
       { label: "Vollbild", key: "F11", act: fullScreen }] },
     { label: "Bänder", items: [...PLAN_NAMES.map(p => ({ label: p[1], act: () => { store.set("rc.plan", p[0]); WW.emit("rc-layout"); } })), "-", { label: "Bandspreizung aus", act: () => { RC.bsp = false; WW.emit("rc-layout"); } }] },

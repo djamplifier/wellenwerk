@@ -8,6 +8,7 @@ import subprocess
 import time
 import logging
 import os
+import struct
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -337,7 +338,31 @@ async def on_spectrum(radio_id, line):
     await broadcast({"type": "spectrum", "radio": radio_id, **line})
 
 
-radios = radmod.RadioManager(DATA, on_rig, on_spectrum=on_spectrum)
+AUDIO_SUBS: dict = {}          # Empfaenger-Ton: Radio-ID -> {websocket: wird_gerade_gesendet}
+
+
+def on_sdr_audio(radio_id, pcm: bytes, rate: int):
+    subs = AUDIO_SUBS.get(radio_id)
+    if not subs:
+        return
+    frame = struct.pack("<I", rate) + pcm
+    for ws, busy in list(subs.items()):
+        if busy:                  # langsame Verbindung: Block auslassen statt Rueckstau
+            continue
+        subs[ws] = True
+
+        async def _send(ws=ws):
+            try:
+                await ws.send_bytes(frame)
+            except Exception:
+                subs.pop(ws, None)
+            else:
+                if ws in subs:
+                    subs[ws] = False
+        asyncio.ensure_future(_send())
+
+
+radios = radmod.RadioManager(DATA, on_rig, on_spectrum=on_spectrum, on_audio=on_sdr_audio)
 if not radios.profiles:          # erster Start: Demo-Geraet zum Ausprobieren
     radios.upsert(dict(name="Demo-Funkgerät", model=1, mfg="Hamlib", model_name="Dummy", autoconnect=True))
 rig = _RigProxy()
@@ -624,8 +649,22 @@ async def radios_list():
 @app.post("/api/radios")
 async def radios_save(body: dict):
     keep = ("id", "name", "model", "mfg", "model_name", "device", "speed", "civaddr", "handshake", "dtr_state", "rts_state",
-            "ptt_type", "ptt_device", "host", "conf", "autoconnect", "share", "scope")
+            "ptt_type", "ptt_device", "host", "conf", "autoconnect", "share", "scope", "kind", "sdr_type", "url", "params", "role")
     prof = {k: body[k] for k in keep if k in body}
+    if prof.get("kind") == "sdr":
+        from .sdr import registry
+        t = next((x for x in registry.kinds() if x["kind"] == prof.get("sdr_type")), None)
+        if not t:
+            raise HTTPException(400, "Empfänger-Art fehlt")
+        if t["needs"] == "url" and not (prof.get("url") or "").strip():
+            raise HTTPException(400, "Adresse des Empfängers fehlt")
+        prof.update(mfg=prof.get("mfg") or "SDR", model_name=t["label"], model=0)
+        prof["name"] = prof.get("name") or f"{t['label']} {prof.get('url', '')}".strip()
+        if prof.get("id") in radios.active:
+            await radios.disconnect(prof["id"])
+        p = radios.upsert(prof)
+        await broadcast({"type": "radios"})
+        return p
     try:
         int(prof.get("model", 0))
     except ValueError:
@@ -2222,6 +2261,67 @@ async def stats():
     return book.stats()
 
 
+@app.websocket("/ws/audio")
+async def ws_audio(websocket: WebSocket, radio: str = ""):
+    """Ton eines Empfaengers (KiwiSDR, OpenWebRX, SDR): Binaerbloecke [Abtastrate uint32 LE][PCM int16 LE mono]."""
+    await websocket.accept()
+    rid = radio or radios.current or ""
+    AUDIO_SUBS.setdefault(rid, {})[websocket] = False
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        AUDIO_SUBS.get(rid, {}).pop(websocket, None)
+
+
+@app.get("/api/sdr/receivers", tags=["Empfänger (SDR)"])
+async def sdr_receivers(type: str = "", q: str = "", khz: float = 0, limit: int = 400, free: bool = False):
+    """Oeffentliche Empfaenger (receiverbook.de, KiwiSDR-Liste), nach Entfernung zur eigenen Station sortiert."""
+    from .sdr import lists
+    rows = await asyncio.to_thread(lists.receivers, DATA, home())
+    ql = q.lower().strip()
+    out = []
+    for r in rows:
+        if type and r["type"] != type:
+            continue
+        if ql and ql not in (r.get("name", "") + " " + r.get("place", "") + " " + r.get("grid", "") + " " + r.get("antenna", "")).lower():
+            continue
+        if khz and r.get("hi") and not (r.get("lo", 0) <= khz * 1000 <= r["hi"]):
+            continue
+        if free and r.get("users_max") and r.get("users", 0) >= r["users_max"]:
+            continue
+        out.append(r)
+        if len(out) >= limit:
+            break
+    return dict(total=len(rows), receivers=out)
+
+
+@app.post("/api/radios/{pid}/rig/{what}", tags=["Funkgerät"])
+async def radio_rig_cmd(pid: str, what: str, body: dict):
+    """Ein bestimmtes verbundenes Geraet steuern (auch wenn es nicht das aktuelle ist, z. B. zweiter Empfaenger):
+    what = freq {hz} | mode {mode, passband} | level {name, value} | func {name, on}."""
+    r = radios.rig(pid)
+    if not r:
+        raise HTTPException(400, "Gerät ist nicht verbunden")
+    if what == "freq":
+        return await _rig(r.set_freq(int(body["hz"])))
+    if what == "mode":
+        return await _rig(r.set_mode(str(body["mode"]).upper(), int(body.get("passband", 0))))
+    if what == "level":
+        return await _rig(r.set_level(str(body["name"]), float(body["value"])))
+    if what == "func":
+        return await _rig(r.set_func(str(body["name"]), bool(body["on"])))
+    raise HTTPException(404, "unbekannter Befehl")
+
+
+@app.get("/api/sdr/kinds", tags=["Empfänger (SDR)"])
+async def sdr_kinds():
+    from .sdr import registry
+    return registry.kinds()
+
+
 # Fernbetrieb-Audio: Vermittlung von WebRTC-Angeboten zwischen dem Stationsfenster (Soundkarte am Funkgeraet)
 # und entfernten Fenstern. Das Audio selbst fliesst direkt zwischen den Browsern.
 WS_IDS: dict = {}
@@ -2297,7 +2397,7 @@ async def index():
 _TAGS = {"rig": "Funkgerät", "radios": "Funkgerät", "snapshots": "Funkgerät", "catemu": "Funkgerät", "qso": "Logbuch", "logbooks": "Logbuch",
          "adif": "Logbuch", "lookup": "Logbuch", "callbook": "Logbuch", "awards": "Logbuch", "upload": "Online-Dienste", "sync": "Online-Dienste",
          "spots": "DX-Cluster", "cluster": "DX-Cluster", "wsjtx": "WSJT-X", "rotor": "Rotor", "winlink": "Winlink", "sat": "Satelliten",
-         "settings": "Einstellungen", "station": "Einstellungen", "stations": "Einstellungen", "programs": "POTA/SOTA/WWFF", "winkey": "CW",
+         "settings": "Einstellungen", "station": "Einstellungen", "stations": "Einstellungen", "programs": "POTA/SOTA/WWFF", "winkey": "CW", "sdr": "Empfänger (SDR)",
          "backups": "Logbuch", "cabrillo": "Logbuch", "kml": "Logbuch", "stats": "Logbuch", "countries": "Logbuch", "lotw": "Online-Dienste",
          "services": "Online-Dienste", "decodes": "WSJT-X", "favorites": "Funkgerät", "hamlib": "Funkgerät", "swdb": "Funkgerät",
          "recordings": "Digitalbetrieb", "sstv": "Digitalbetrieb", "bearing": "Karten & Ausbreitung", "map": "Karten & Ausbreitung",
