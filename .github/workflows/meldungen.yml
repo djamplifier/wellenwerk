@@ -1,0 +1,25 @@
+name: Rückmeldungen abholen
+# Holt alle 15 Minuten Meldungen aus dem Programm bei der Annahmestelle (Cloudflare Worker, relay/) ab und legt Issues an.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  abholen:
+    runs-on: ubuntu-latest
+    if: ${{ vars.MELDUNGEN_URL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/github-script@v7
+        env:
+          MELDUNGEN_TOKEN: ${{ secrets.MELDUNGEN_TOKEN }}
+        with:
+          script: |
+            const run = require("./.github/scripts/meldungen.js");
+            await run({ github, context, core, url: "${{ vars.MELDUNGEN_URL }}", token: process.env.MELDUNGEN_TOKEN });

@@ -1,0 +1,7 @@
+name = "wellenwerk-meldungen"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+[[kv_namespaces]]
+binding = "REPORTS"
+id = "PLATZHALTER_KV_ID"

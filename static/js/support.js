@@ -9,6 +9,7 @@ function supportOptionsHtml(s) {
       <label class="chkrow wide"><input type="checkbox" name="err_mail_on" ${s.err_mail_on ? "checked" : ""}> Fehler automatisch per E-Mail melden</label>
       <label>An E-Mail-Adresse<input name="err_mail_to" type="email" value="${esc(s.err_mail_to || "")}" placeholder="name@beispiel.de"></label>
       <label>Höchstens eine Nachricht alle … Minuten<input name="err_mail_interval" type="number" min="5" max="1440" value="${s.err_mail_interval || 30}"></label>
+      <label class="chkrow wide"><input type="checkbox" name="err_github" ${s.err_github ? "checked" : ""}> Programmfehler automatisch und ohne persönliche Daten an die Entwickler melden (öffentlich auf GitHub)</label>
       <label class="chkrow wide"><input type="checkbox" name="err_ui" ${s.err_ui !== false ? "checked" : ""}> auch Fehlermeldungen der Oberfläche aufnehmen (z. B. „Verbindung fehlgeschlagen“)</label>
       <p class="hint wide">Gesammelt werden Programmfehler aus Dienst, Oberfläche und Desktop-Programm. Gleiche Fehler werden zusammengefasst, Passwörter und Schlüssel unkenntlich gemacht. Eine Nachricht enthält Version, Betriebssystem und Rufzeichen.</p>
       <label>SMTP-Server (leer = direkt zustellen)<input name="smtp_host" value="${esc(s.smtp_host || "")}" placeholder="z. B. mx.freenet.de, smtp.gmail.com"></label>
@@ -131,21 +132,26 @@ function alphaNotice(v = WW.version, force = false) {
     <p><b>Wellenwerk ist eine experimentelle Alpha-Version.</b> Vieles funktioniert schon, aber noch nicht alles fehlerfrei – rechne mit Fehlern und ungewohntem Verhalten, besonders beim Senden.</p>
     <p>Jeder Nutzer hilft mit, das Programm zu verbessern: einfach benutzen, ausprobieren und Probleme melden. Über <b>Hilfe → Feedback / Problem melden</b> beschreibst du ein Problem mit eigenen Worten; das Fehlerprotokoll und die Systemdaten können automatisch angehängt werden.</p>
     <p class="hint">Bitte beim Senden immer die Funkvorschriften beachten und die Station beaufsichtigen. Nutzung auf eigene Verantwortung.</p>
+    <label class="chkrow ${WW.devReports ? "" : "hidden"}"><input type="checkbox" class="al-gh" ${(WW.settings || {}).err_github ? "checked" : ""}> Programmfehler automatisch und ohne persönliche Daten an die Entwickler melden (erscheinen öffentlich auf GitHub)</label>
     <label class="chkrow"><input type="checkbox" class="al-hide"> Bis zur nächsten Version nicht mehr anzeigen</label>` });
   d.querySelector('button[value="fb"]').addEventListener("click", e => { e.preventDefault(); d.close(); showFeedback(); });
-  return new Promise(res => d.addEventListener("close", () => { if (d.querySelector(".al-hide").checked) store.set("alphaHidden", v); res(); }));
+  return new Promise(res => d.addEventListener("close", async () => {
+    if (d.querySelector(".al-hide").checked) store.set("alphaHidden", v);
+    const gh = d.querySelector(".al-gh").checked;
+    if (WW.devReports && gh !== !!(WW.settings || {}).err_github) { try { WW.settings = await api("/api/settings", { method: "PUT", body: { err_github: gh } }); } catch { } }
+    res(); }));
 }
 
 // ---------- Feedback: Probleme selbst beschreiben und senden ----------
 function showFeedback(kind = "Problem") {
-  const s = WW.settings || {}, canMail = !!(s.err_mail_to || "").trim();
+  const s = WW.settings || {}, canMail = !!(s.err_mail_to || "").trim() || !!WW.devReports;
   const d = dialog({ title: "Feedback / Problem melden", icon: "i-info", wide: true, buttons: [["Abbrechen", "close"], ["Auf GitHub melden", "gh"], ...(canMail ? [["Abschicken", "send", "primary"]] : [])], body: `
     <div class="grid2">
       <label>Art<select class="fb-kind">${[["Problem", "Problem / Fehler"], ["Vorschlag", "Verbesserungsvorschlag"], ["Frage", "Frage"], ["Lob", "Lob"], ["Sonstiges", "Sonstiges"]].map(([k, l]) => `<option value="${k}" ${k === kind ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-      <label>Kontakt für Rückfragen (Rufzeichen oder E-Mail, freiwillig)<input class="fb-contact" value="${esc(store.get("fbContact", "") || s.callsign || "")}"></label>
+      <label>Kontakt für Rückfragen (freiwillig, erscheint öffentlich)<input class="fb-contact" value="${esc(store.get("fbContact", "") || s.callsign || "")}"></label>
       <label class="wide">Was ist passiert? Was hast du gemacht, was hast du erwartet?<textarea class="fb-text" rows="9" placeholder="z. B. Empfänger Bremen, 14,175 MHz USB: nach 5 Minuten kein Ton mehr, Wasserfall steht. Seite neu geladen – dann ging es wieder."></textarea></label>
       <label class="chkrow wide"><input type="checkbox" class="fb-attach" checked> Fehlerprotokoll und Systemdaten anhängen (Version, Betriebssystem, Rufzeichen – keine Passwörter)</label>
-      <p class="hint wide">${canMail ? `<span>„Abschicken“ schickt die Meldung per E-Mail an ${esc(s.err_mail_to)}.</span> ` : ""}<span>„Auf GitHub melden“ öffnet eine vorausgefüllte Meldung im öffentlichen Projekt (GitHub-Konto nötig) – dort sehen auch andere Nutzer das Problem und die Lösung.</span></p>
+      <p class="hint wide">${WW.devReports ? `<span>„Abschicken“ schickt die Meldung an die Entwickler – sie erscheint als öffentlicher Eintrag auf GitHub (ohne Rechnernamen und Rufzeichen, außer du gibst es als Kontakt an).</span> ` : ""}${(s.err_mail_to || "").trim() ? `<span>Zusätzlich per E-Mail an ${esc(s.err_mail_to)}.</span> ` : ""}<span>„Auf GitHub melden“ öffnet eine vorausgefüllte Meldung im öffentlichen Projekt (GitHub-Konto nötig) – dort sehen auch andere Nutzer das Problem und die Lösung.</span></p>
       <p class="fb-st hint wide"></p></div>` });
   const val = () => ({ kind: d.querySelector(".fb-kind").value, text: d.querySelector(".fb-text").value, contact: d.querySelector(".fb-contact").value.trim(), attach: d.querySelector(".fb-attach").checked });
   const st = d.querySelector(".fb-st");
@@ -157,7 +163,7 @@ function showFeedback(kind = "Problem") {
   };
   const sb = d.querySelector('button[value="send"]');
   if (sb) sb.addEventListener("click", async e => { e.preventDefault(); const r = await go(true); if (!r) return;
-    if (r.sent) { d.close(); toast("Danke! Deine Meldung wurde gesendet."); } else st.textContent = r.result || "Nicht gesendet – bitte „Auf GitHub melden“ benutzen."; });
+    if (r.sent) { d.close(); toast("Danke! Deine Meldung wurde gesendet."); if (/fehlgeschlagen/.test(r.result)) setTimeout(() => toast(r.result, true), 2500); } else st.textContent = r.result || "Nicht gesendet – bitte „Auf GitHub melden“ benutzen."; });
   d.querySelector('button[value="gh"]').addEventListener("click", async e => { e.preventDefault(); const r = await go(false); if (!r) return;
     const body = r.text.length > 6000 ? r.text.slice(0, 6000) + "\n… (gekürzt)" : r.text;
     window.open(`${ISSUES}/new?title=${encodeURIComponent(r.subject)}&body=${encodeURIComponent(body)}`, "_blank"); d.close(); toast("Danke! Bitte die Meldung auf GitHub noch absenden."); });

@@ -28,6 +28,8 @@ from email.utils import formatdate, make_msgid
 from pathlib import Path
 
 log = logging.getLogger("ww.errors")
+# Annahmestelle fuer Rueckmeldungen (relay/worker.js); daraus werden Issues auf GitHub
+REPORT_URL = __import__("os").environ.get("WW_REPORT_URL", "")
 KEEP = 1000                     # Eintraege in errors.jsonl
 _SECRET_RE = re.compile(r"(?i)((?:pass(?:word|wort)?|pwd|token|api[_-]?key|secret)[\"']?\s*[:=]\s*[\"']?|(?:bearer|basic)\s+)([^\s\"'&,;]{3,})")
 
@@ -160,9 +162,14 @@ class ErrorLog:
         while True:
             await self._wake.wait()
             self._wake.clear()
-            if not self.enabled() or not self.pending:
+            if not self.pending:
                 continue
             await asyncio.sleep(60)                                     # Folgefehler einsammeln
+            await self.report_auto()
+            if not self.enabled():
+                with self._lock:
+                    self.pending = []
+                continue
             gap = max(5, int(self.cfg.get("err_mail_interval") or 30)) * 60
             wait = self.last_mail + gap - time.time()
             if wait > 0:
@@ -230,12 +237,15 @@ class ErrorLog:
         self.last_result = f"{datetime.now().strftime('%d.%m.%Y %H:%M')}: gesendet an {msg['To']} ({how})"
         return self.last_result
 
-    def feedback_text(self, kind: str, text: str, contact: str, attach: bool) -> tuple[str, str]:
-        """Betreff und Text einer Rueckmeldung (fuer E-Mail und GitHub)."""
+    def feedback_text(self, kind: str, text: str, contact: str, attach: bool, public: bool = False) -> tuple[str, str]:
+        """Betreff und Text einer Rueckmeldung (fuer E-Mail und GitHub). public: ohne Rechnername/Rufzeichen,
+        Pfade mit Benutzernamen gekuerzt – nur was der Nutzer selbst als Kontakt angibt, erscheint."""
         si = self.system_info()
+        if public:
+            si = {k: v for k, v in si.items() if k not in ("host", "station")}
         first = (text.strip().splitlines() or [""])[0][:80]
         subject = f"[Wellenwerk {self.version} {kind}] {first}"
-        lines = [f"Art: {kind}", f"Kontakt: {contact or '–'}", "", text.strip(), "", "-" * 40]
+        lines = ["", text.strip(), "", "-" * 40]
         lines += [f"{k:9}: {v}" for k, v in si.items()]
         if attach:
             recent = list(reversed(self.entries))[:15]
@@ -244,7 +254,12 @@ class ErrorLog:
                 lines += [f"- [{e['source']}] {e['count']}× {e['last']} {e['message'].splitlines()[0][:200]}" + (f" ({e['where'][:80]})" if e.get("where") else "")]
                 if e.get("detail"):
                     lines += ["    " + x for x in e["detail"].strip().splitlines()[-6:]]
-        return subject, self.scrub("\n".join(lines))
+        body = self.scrub("\n".join(lines))
+        if public:                    # Text des Nutzers bleibt, Protokoll und Systemdaten werden anonymisiert
+            cut = body.index("-" * 40)
+            body = body[:cut] + self.anonymize(body[cut:])
+            subject = f"{kind}: {first}"
+        return subject, f"Art: {kind}\nKontakt: {contact or '–'}\n" + body
 
     async def send_feedback(self, kind: str, text: str, contact: str, attach: bool) -> str:
         subject, body = self.feedback_text(kind, text, contact, attach)
@@ -264,6 +279,55 @@ class ErrorLog:
         finally:
             self._busy = False
         return f"gesendet an {to} ({how})"
+
+    # ---------- an die Entwickler (GitHub ueber die Annahmestelle) ----------
+    def report_url(self) -> str:
+        return (self.cfg.get("report_url") or REPORT_URL or "").rstrip("/")
+
+    def anonymize(self, text: str) -> str:
+        text = self.scrub(text).replace(str(Path.home()), "~")
+        for k in ("callsign", "locator", "operator"):
+            v = (self.cfg.get(k) or "").strip()
+            if len(v) >= 3:
+                text = re.sub(re.escape(v), "…", text, flags=re.I)
+        return re.sub(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", "…@…", text)
+
+    def post_report(self, payload: dict) -> dict:
+        url = self.report_url()
+        if not url:
+            raise RuntimeError("Keine Annahmestelle eingetragen")
+        data = json.dumps({"client": f"Wellenwerk {self.version}", "version": self.version, **payload}).encode()
+        req = urllib.request.Request(url + "/report", data=data, method="POST",
+                                     headers={"Content-Type": "application/json", "User-Agent": f"Wellenwerk/{self.version}"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            try:
+                msg = json.load(e).get("error")
+            except Exception:
+                msg = ""
+            raise RuntimeError(msg or f"Annahmestelle antwortet {e.code}")
+
+    async def report_auto(self):
+        """Neue Programmfehler (keine Bedienmeldungen) anonym an die Entwickler – nur mit Zustimmung (err_github)."""
+        if not (self.cfg.get("err_github") and self.report_url()):
+            return
+        si = self.system_info()
+        todo = [e for e in list(self.entries) if e["level"] == "error" and not e.get("gh") and e.get("version") == self.version][:5]
+        for e in todo:
+            text = "\n".join([f"{e['message']}", "", f"Quelle: {e['source']} · Ort: {e.get('where', '')}", f"Anzahl: {e['count']} · zuerst {e['first']}",
+                              f"System: {si['system']} · {si['art']} · Python {si['python']}", "", e.get("detail") or ""])
+            try:
+                await asyncio.to_thread(self.post_report, dict(kind="Fehlerbericht", auto=True, sig=f"{self.version}-{e['sig']}",
+                                                               title=self.anonymize(e["message"].splitlines()[0])[:140], text=self.anonymize(text)))
+                e["gh"] = True
+            except Exception as ex:
+                log.info("Fehlerbericht an Entwickler nicht gesendet: %s", ex)
+                break
+        if todo:
+            with self._lock:
+                self._save()
 
     def _deliver(self, msg: EmailMessage) -> str:
         c = self.cfg

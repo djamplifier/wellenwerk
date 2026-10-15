@@ -69,9 +69,9 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100", lang="",
                 # Fehlerbericht per E-Mail und Aktualisierung
                 err_mail_on=False, err_mail_to="", err_mail_interval=30, err_ui=True,
                 smtp_host="", smtp_port=587, smtp_security="starttls", smtp_user="", smtp_pass="", smtp_from="",
-                update_mode="auto")
+                update_mode="auto", err_github=False, report_url="")
 SECRETS = ("access_password", "api_token", "wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api", "smtp_pass")
-BOOLS = ("mcp_allow_tx", "catemu_on", "sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo", "err_mail_on", "err_ui")
+BOOLS = ("mcp_allow_tx", "catemu_on", "sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo", "err_mail_on", "err_ui", "err_github")
 MASK = "••••••"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("ww")
@@ -619,7 +619,7 @@ async def new_api_token():
 # ---------- API ----------
 @app.get("/api/state")
 async def state():
-    return dict(version=VERSION, station=station_identity(), rig={**rig.state, "band": band_for(rig.state.get("freq"))},
+    return dict(version=VERSION, developers=bool(errors.report_url()), station=station_identity(), rig={**rig.state, "band": band_for(rig.state.get("freq"))},
                 cluster=cluster.status, wsjtx=wsjtx_state, settings=public_cfg(), home=home(), rotor=rotor.state, winkey=winkey.state,
                 bands=[dict(name=n, lo=lo, hi=hi, start=s) for n, lo, hi, s in BANDS])
 
@@ -1795,7 +1795,7 @@ def ingest_desktop_errors():
 @app.get("/api/errors")
 async def errors_list(limit: int = 200):
     """Fehlerprotokoll (neueste zuerst) und Stand des E-Mail-Versands."""
-    return dict(entries=list(reversed(errors.entries))[:max(1, min(limit, 1000))],
+    return dict(entries=list(reversed(errors.entries))[:max(1, min(limit, 1000))], developers=bool(errors.report_url()),
                 mail=dict(enabled=errors.enabled(), to=cfg.get("err_mail_to", ""), pending=len(errors.pending), last=errors.last_result),
                 system=errors.system_info())
 
@@ -1862,12 +1862,25 @@ async def feedback(body: dict):
         raise HTTPException(400, "Bitte das Problem kurz beschreiben")
     contact = str(body.get("contact") or "")[:200]
     subject, txt = errors.feedback_text(kind, text, contact, bool(body.get("attach", True)))
-    out = dict(subject=subject, text=txt, sent=False, result="")
-    if body.get("send", True) and (cfg.get("err_mail_to") or "").strip():
+    out = dict(subject=subject, text=txt, sent=False, result="", github=False)
+    if not body.get("send", True):
+        return out
+    msgs = []
+    if errors.report_url():          # an die Entwickler: wird ein Issue auf GitHub (oeffentlich)
         try:
-            out.update(sent=True, result=await errors.send_feedback(kind, text, contact, bool(body.get("attach", True))))
+            ps, pt = errors.feedback_text(kind, text, contact, bool(body.get("attach", True)), public=True)
+            await asyncio.to_thread(errors.post_report, dict(kind=kind, title=ps[:140], text=pt))
+            out.update(sent=True, github=True)
+            msgs.append("an die Entwickler gesendet (erscheint auf GitHub)")
         except Exception as e:
-            out["result"] = f"Senden fehlgeschlagen: {e}"
+            msgs.append(f"an die Entwickler fehlgeschlagen: {e}")
+    if (cfg.get("err_mail_to") or "").strip():
+        try:
+            msgs.append(await errors.send_feedback(kind, text, contact, bool(body.get("attach", True))))
+            out["sent"] = True
+        except Exception as e:
+            msgs.append(f"E-Mail fehlgeschlagen: {e}")
+    out["result"] = "; ".join(msgs) or "Keine Annahmestelle und keine E-Mail-Adresse eingetragen"
     return out
 
 

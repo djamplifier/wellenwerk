@@ -199,6 +199,7 @@ async function loadLogbooks() {
 async function refreshState() {
   const st = await api("/api/state");
   Object.assign(WW, { settings: st.settings, station: st.station || {}, home: st.home, rotor: st.rotor, winkey: st.winkey || {}, cluster: st.cluster, wsjtx: st.wsjtx, bands: st.bands, version: st.version });
+  WW.devReports = !!st.developers;
   WW.emit("version", st.version);
   if (!I18N.chosen()) {   // dieser Browser hat noch keine Sprache gewaehlt: Sprache der Station; bestehende Installationen bleiben deutsch
     const want = st.settings.lang || (st.settings.callsign ? "de" : I18N.lang);

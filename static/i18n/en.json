@@ -1649,5 +1649,10 @@
 "Hinweis zur Alpha-Version": "About the alpha version",
 "Experimentelle Alpha-Version – Problem melden": "Experimental alpha version – report a problem",
 "Abschicken": "Submit",
-"„Abschicken“ schickt die Meldung per E-Mail an {}.": "“Submit” e-mails the report to {}."
+"„Abschicken“ schickt die Meldung per E-Mail an {}.": "“Submit” e-mails the report to {}.",
+"Programmfehler automatisch und ohne persönliche Daten an die Entwickler melden (erscheinen öffentlich auf GitHub)": "Report program errors to the developers automatically and without personal data (they appear publicly on GitHub)",
+"Programmfehler automatisch und ohne persönliche Daten an die Entwickler melden (öffentlich auf GitHub)": "Report program errors to the developers automatically and without personal data (public on GitHub)",
+"Kontakt für Rückfragen (freiwillig, erscheint öffentlich)": "Contact for questions (optional, appears publicly)",
+"„Abschicken“ schickt die Meldung an die Entwickler – sie erscheint als öffentlicher Eintrag auf GitHub (ohne Rechnernamen und Rufzeichen, außer du gibst es als Kontakt an).": "“Submit” sends the report to the developers – it appears as a public entry on GitHub (without computer name and callsign, unless you give it as contact).",
+"Zusätzlich per E-Mail an {}.": "Additionally by e-mail to {}."
 }
