@@ -1,10 +1,11 @@
 // Wellenwerk – Desktop-Programm: startet den lokalen Dienst und zeigt die Oberflaeche in einem eigenen Fenster.
-const { app, BrowserWindow, Menu, session, shell, dialog, screen } = require("electron");
+const { app, BrowserWindow, Menu, session, shell, dialog, screen, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const net = require("net");
 const http = require("http");
+const updater = require("./updater");
 
 let server = null, port = 0, mainWin = null, quitting = false;
 const DEV_URL = process.env.WW_SERVER_URL;          // Entwicklung: vorhandenen Dienst benutzen
@@ -31,7 +32,7 @@ async function startServer() {
   const log = fs.createWriteStream(path.join(app.getPath("userData"), "dienst.log"), { flags: "a" });
   server = spawn(exe, ["--desktop", "--port", String(port)], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   server.stdout.pipe(log); server.stderr.pipe(log);
-  server.on("exit", code => { server = null; if (!quitting) dialog.showErrorBox("Wellenwerk", `Der Wellenwerk-Dienst wurde beendet (Code ${code}). Details: ${path.join(app.getPath("userData"), "dienst.log")}`); });
+  server.on("exit", code => { server = null; if (!quitting) noteCrash(`Wellenwerk-Dienst unerwartet beendet (Code ${code})`, tail(path.join(app.getPath("userData"), "dienst.log"))); if (!quitting) dialog.showErrorBox("Wellenwerk", `Der Wellenwerk-Dienst wurde beendet (Code ${code}). Details: ${path.join(app.getPath("userData"), "dienst.log")}`); });
   const url = `http://localhost:${port}/`;
   await waitReady(url); return url;
 }
@@ -41,6 +42,21 @@ function stopServer() {
     const t = setTimeout(() => { try { server && server.kill(); } catch { } res(); }, 4000);
     server.once("exit", () => { clearTimeout(t); res(); }); });
 }
+// ---------- Fehler des Desktop-Programms ins Fehlerprotokoll des Dienstes ----------
+function tail(file, n = 60) { try { return fs.readFileSync(file, "utf8").split(/\r?\n/).slice(-n).join("\n"); } catch { return ""; } }
+function noteCrash(message, detail = "", where = "Desktop-Programm") {
+  const e = { message: String(message).slice(0, 2000), detail: String(detail || "").slice(0, 20000), where: `${where} ${app.getVersion()} ${process.platform}/${process.arch}` };
+  if (server && port) {   // Dienst laeuft: direkt melden
+    const body = JSON.stringify({ source: "desktop", ...e });
+    const req = http.request({ host: "127.0.0.1", port, path: "/api/errors", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } }, r => r.resume());
+    req.on("error", () => appendCrash(e)); req.end(body); return;
+  }
+  appendCrash(e);   // sonst merken – der Dienst liest die Datei beim naechsten Start ein
+}
+function appendCrash(e) { try { const d = updater.serverDataDir(); fs.mkdirSync(d, { recursive: true }); fs.appendFileSync(path.join(d, "desktop-errors.jsonl"), JSON.stringify(e) + "\n"); } catch { } }
+process.on("uncaughtException", err => { noteCrash(`${err.name}: ${err.message}`, err.stack, "Desktop-Hauptprozess"); console.error(err); });
+process.on("unhandledRejection", err => noteCrash(String(err && err.message || err), err && err.stack, "Desktop-Hauptprozess"));
+
 function loadBounds() { try { const b = JSON.parse(fs.readFileSync(stateFile(), "utf8")); const d = screen.getDisplayMatching(b); return d ? b : null; } catch { return null; } }
 function saveBounds(w) { try { fs.writeFileSync(stateFile(), JSON.stringify({ ...w.getNormalBounds(), max: w.isMaximized() })); } catch { } }
 
@@ -51,6 +67,7 @@ function createWindow(url) {
   if (b.max) mainWin.maximize();
   mainWin.once("ready-to-show", () => { if (!process.env.WW_TEST_SHOT) mainWin.show(); else mainWin.showInactive(); });
   mainWin.on("close", () => saveBounds(mainWin));
+  mainWin.webContents.on("render-process-gone", (ev, d) => { if (d.reason !== "clean-exit") noteCrash(`Oberfläche abgestürzt (${d.reason}, Code ${d.exitCode})`, "", "Desktop-Fenster"); });
   // Ausgelagerte Fenster (zweiter Bildschirm) als eigene Programmfenster, Links nach aussen im Standardbrowser
   mainWin.webContents.setWindowOpenHandler(({ url: u }) => {
     if (u.startsWith(url) || u === "about:blank") return { action: "allow", overrideBrowserWindowOptions: { title: "Wellenwerk", icon: path.join(__dirname, "build", "icon.png"), autoHideMenuBar: true, webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, sandbox: true } } };
@@ -81,6 +98,13 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler((wc, perm) => ["media", "speaker-selection", "clipboard-sanitized-write", "fullscreen"].includes(perm));
   // Programm-Menues bringt die Oberflaeche selbst mit; macOS braucht trotzdem die Standard-Bearbeiten-Befehle
   Menu.setApplicationMenu(process.platform === "darwin" ? Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]) : null);
+  ipcMain.handle("ww-update-check", () => updater.check());
+  ipcMain.handle("ww-update-install", async () => { const u = await updater.check(); if (!u.newer) throw new Error("Keine neuere Version vorhanden"); return updater.run(u, { beforeQuit: () => { quitting = true; return stopServer(); } }); });
+  // Beim Start nach einer neuen Version sehen und sie (Einstellung „automatisch installieren“) gleich installieren
+  if (!DEV_URL && !process.env.WW_TEST_SHOT && (app.isPackaged || process.env.WW_UPDATE_URL) && updater.mode() === "auto") {
+    try { const u = await updater.check(6000); if (u.newer && u.asset && await updater.run(u, { atStart: true })) return; }
+    catch (e) { console.warn("Update:", e.message); if (!/Netz|fetch|ENOTFOUND|timeout|abgebrochen|übersprungen/i.test(e.message)) noteCrash("Aktualisierung fehlgeschlagen: " + e.message, e.stack, "Updater"); }
+  }
   try { createWindow(await startServer()); }
   catch (e) { dialog.showErrorBox("Wellenwerk", e.message); app.quit(); }
 });

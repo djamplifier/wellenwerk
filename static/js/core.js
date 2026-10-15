@@ -30,7 +30,22 @@ const post = (path, body) => api(path, { method: "POST", body: body || {} });
 async function act(path, body) { try { await post(path, body); return true; } catch (e) { toast(e.message, true); return false; } }
 const logq = (extra = "") => `log=${encodeURIComponent(WW.logbook)}${extra ? "&" + extra : ""}`;
 
+// ---------- Fehlerprotokoll: Skriptfehler und Fehlermeldungen an den Dienst melden (Optionen → Fehler & Updates) ----------
+const reportError = (() => {
+  const seen = new Map();
+  return (message, detail = "", where = "", level = "error") => {
+    message = String(message || "").slice(0, 2000); if (!message) return;
+    const k = level + message + where, n = Date.now(); if (seen.get(k) > n - 30000) return; seen.set(k, n);
+    if (seen.size > 500) seen.clear();
+    where = [where, window.SHELL && SHELL.active ? "Programm " + SHELL.active : ""].filter(Boolean).join(" · ");
+    fetch("/api/errors", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: "ui", message, detail: String(detail || "").slice(0, 20000), where, level }) }).catch(() => { });
+  };
+})();
+window.addEventListener("error", e => { if (e.message && !/^Script error\.?$/.test(e.message)) reportError(e.message, e.error && e.error.stack || "", `${(e.filename || "").replace(location.origin, "")}:${e.lineno}:${e.colno}`); });
+window.addEventListener("unhandledrejection", e => { const r = e.reason; if (r && r.name === "AbortError") return; reportError(r && r.message || String(r), r && r.stack || "", "Promise"); });
+
 function toast(msg, bad = false) {
+  if (bad) reportError(msg, "", "Meldung", "meldung");
   let t = $("#toast"); if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
   t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
   clearTimeout(toast.h); toast.h = setTimeout(() => t.className = "", bad ? 5000 : 2200);
@@ -38,6 +53,20 @@ function toast(msg, bad = false) {
 const _scripts = {};
 function loadScript(src) {   // jede Bibliothek nur einmal laden; gleichzeitige Aufrufe warten auf dasselbe Laden
   return _scripts[src] = _scripts[src] || new Promise((ok, bad) => { const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = () => { delete _scripts[src]; bad(new Error("Laden fehlgeschlagen: " + src)); }; document.head.appendChild(sc); });
+}
+
+// Wasserfall: langsame Quellen (z. B. OpenWebRX mit 5 Zeilen/s) laufen sonst kaum sichtbar – jede Zeile dann mehrfach
+// zeichnen, so dass der Wasserfall gleichmaessig etwa 25 Pixel je Sekunde weiterlaeuft.
+function wfRows(key) {
+  const now = performance.now(), t = wfRows.t[key]; wfRows.t[key] = now; if (!t) return 1;
+  const dt = Math.min(1000, now - t), e = wfRows.e[key] = (wfRows.e[key] || dt) * 0.8 + dt * 0.2;
+  return Math.max(1, Math.min(8, Math.round(e * 0.025)));
+}
+wfRows.t = {}; wfRows.e = {};
+// Wasserfall um k Zeilen nach unten schieben und die neue Zeile (RGBA, Breite W) k-mal oben eintragen
+function wfPush(g, W, H, row, k) {
+  k = Math.max(1, Math.min(k, H)); g.drawImage(g.canvas, 0, 0, W, H - k, 0, k, W, H - k);
+  const img = g.createImageData(W, k); for (let y = 0; y < k; y++) img.data.set(row, y * W * 4); g.putImageData(img, 0, 0);
 }
 
 // ---------- Formatierung ----------
@@ -142,6 +171,7 @@ function connectWs() {
       case "spectrum": WW.emit("spectrum", m); break;
       case "favorites": WW.emit("favorites"); break;
       case "notice": toast(m.text, m.bad); break;
+      case "update": WW.update = m.update; WW.emit("update", m.update); break;
       case "logbooks": loadLogbooks(); break;
       case "qso": if (m.source !== "manual") toast(`${m.qso.call} von ${m.source} übernommen`); WW.emit("qso", m.qso); break;
       case "qso_changed": case "qso_deleted": case "reload": WW.emit("reload"); break;
@@ -169,6 +199,7 @@ async function loadLogbooks() {
 async function refreshState() {
   const st = await api("/api/state");
   Object.assign(WW, { settings: st.settings, station: st.station || {}, home: st.home, rotor: st.rotor, winkey: st.winkey || {}, cluster: st.cluster, wsjtx: st.wsjtx, bands: st.bands, version: st.version });
+  WW.emit("version", st.version);
   if (!I18N.chosen()) {   // dieser Browser hat noch keine Sprache gewaehlt: Sprache der Station; bestehende Installationen bleiben deutsch
     const want = st.settings.lang || (st.settings.callsign ? "de" : I18N.lang);
     let again = false; try { again = sessionStorage.getItem("ww.langReload") === want; sessionStorage.setItem("ww.langReload", want); } catch { }

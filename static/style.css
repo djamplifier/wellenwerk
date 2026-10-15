@@ -50,7 +50,7 @@ button.danger { color: var(--bad); }
 .menu.open .drop { display: block; }
 .drop button { display: flex; width: 100%; background: none; border: 1px solid transparent; padding: 3px 6px; text-align: left; gap: 6px; }
 .drop button:hover:not(:disabled) { background: var(--sel); border-color: var(--line); }
-.drop button span { flex: 1; } .drop kbd { color: var(--muted); font: 11px system-ui; } .drop .chk { width: 14px; color: var(--accent); }
+.drop button span { flex: 1; } .drop button span.ic { flex: 0 0 16px; } .drop kbd { color: var(--muted); font: 11px system-ui; } .drop .chk { width: 14px; color: var(--accent); }
 .drop hr { border: none; border-top: 1px solid var(--line2); margin: 2px 4px; }
 .drop .label { color: var(--muted); font-size: 11px; padding: 4px 8px 1px; }
 .toolbar { display: flex; align-items: stretch; gap: 1px; padding: 2px 6px; background: var(--tb); border-bottom: 1px solid var(--line); overflow-x: auto; min-height: 50px; }
@@ -375,7 +375,7 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .rx-list { flex: 1; overflow: auto; padding: 6px; display: flex; flex-direction: column; gap: 8px; }
 .rx-item { border: 1px solid var(--line2); border-radius: 4px; padding: 6px; display: flex; flex-direction: column; gap: 5px; } .rx-item.cur { border-color: #3d82d4; }
 .rx-head { display: flex; gap: 8px; align-items: center; } .rx-f { width: 90px; font-family: "Share Tech Mono", monospace; } .rx-s { font-family: "Share Tech Mono", monospace; min-width: 60px; }
-.rx-wf { width: 100%; height: 90px; background: #0b1622; display: block; } .rx-item button.on { background: var(--bad); color: #fff; }
+.rx-wf { width: 100%; height: 90px; background: #0b1622; display: block; cursor: crosshair; } .rx-item button.on { background: var(--bad); color: #fff; }
 /* Wasserfall 2D/3D */
 .wf-area { flex: 1; display: flex; flex-direction: column; min-height: 0; background: #08121c; }
 .wf-spec { height: 32%; min-height: 60px; width: 100%; display: block; cursor: crosshair; } .wf-fall { flex: 1; width: 100%; min-height: 40px; display: block; cursor: crosshair; }
@@ -389,3 +389,5 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .fdv { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow: auto; } .fd-sync { color: var(--bad); font-size: 18px; } .fd-sync.ok { color: var(--ok); }
 .fd-lvl { display: block; height: 100%; width: 0; background: var(--ok); } .fd-ptt { min-width: 160px; padding: 10px 14px; font-weight: 700; } .fd-ptt.on { background: var(--bad); color: #fff; }
 .rc-srv { margin-left: 8px; max-width: 320px; background: #1d2228; color: #dfe6ee; border: 1px solid #3a424c; font-size: 12px; }
+.pa-spec, .pa-wf { cursor: crosshair; }
+.ww-notes h1, .ww-notes h2, .ww-notes h3, .ww-notes h4 { background: none; border: 0; padding: 0; margin: 12px 0 4px; font-size: 14px; } .ww-notes ul { margin: 4px 0; padding-left: 22px; }

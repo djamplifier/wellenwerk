@@ -30,22 +30,22 @@ function createFreedv(root) {
     }
     try {
       FDV.ctx = new AudioContext(); if (st.spk && FDV.ctx.setSinkId) await FDV.ctx.setSinkId(st.spk).catch(() => { });
-      await FDV.ctx.audioWorklet.addModule("/static/digi-worklet.js"); await FDV.ctx.audioWorklet.addModule("/static/sdr-worklet.js");
+      await FDV.ctx.audioWorklet.addModule("/static/digi-worklet.js");
       if (st.inp !== "__sdr") {
         FDV.in = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: st.inp ? { exact: st.inp } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
         const src = FDV.ctx.createMediaStreamSource(FDV.in), lp = new BiquadFilterNode(FDV.ctx, { type: "lowpass", frequency: 3600 }), lp2 = new BiquadFilterNode(FDV.ctx, { type: "lowpass", frequency: 3600 });
         FDV.tap = new AudioWorkletNode(FDV.ctx, "ww-tap"); src.connect(lp).connect(lp2).connect(FDV.tap);
       }
-      FDV.play = new AudioWorkletNode(FDV.ctx, "ww-pcm-player", { outputChannelCount: [1] }); FDV.gain = FDV.ctx.createGain(); FDV.gain.gain.value = st.vol;
-      FDV.play.connect(FDV.gain).connect(FDV.ctx.destination);
+      FDV.gain = FDV.ctx.createGain(); FDV.gain.gain.value = st.vol; FDV.play = pcmScheduler(FDV.ctx, FDV.gain);
+      FDV.gain.connect(FDV.ctx.destination);
       const proto = location.protocol === "https:" ? "wss://" : "ws://";
       FDV.ws = new WebSocket(`${proto}${location.host}/ws/freedv?mode=${st.mode}`); FDV.ws.binaryType = "arraybuffer";
       FDV.ws.onmessage = e => { if (typeof e.data === "string") { const m = JSON.parse(e.data);
           if (m.type === "stats") { $(".fd-sync", root).classList.toggle("ok", m.sync); $(".fd-snr", root).textContent = m.sync ? `Sync · SNR ${m.snr} dB` : "kein Sync"; }
           if (m.type === "error") { toast(m.text, true); stop(); } return; }
         const kind = new Uint8Array(e.data, 0, 1)[0], s = new Int16Array(e.data.slice(1)), f = new Float32Array(s.length); for (let i = 0; i < s.length; i++) f[i] = s[i] / 32768;
-        if (kind === 1 && !FDV.tx) FDV.play.port.postMessage({ pcm: f, rate: 8000 }, [f.buffer]);
-        if (kind === 2 && FDV.txPlay) FDV.txPlay.port.postMessage({ pcm: f, rate: 8000 }, [f.buffer]); };
+        if (kind === 1 && !FDV.tx) FDV.play(f, 8000);
+        if (kind === 2 && FDV.txPlay) FDV.txPlay(f, 8000); };
       const feed = (x, peak) => { const el = $(".fd-lvl", root); if (el) el.style.width = Math.min(100, peak * 100) + "%";
         if (FDV.tx || FDV.ws?.readyState !== 1) return; const out = new DataView(new ArrayBuffer(1 + x.length * 2)); out.setUint8(0, 1);
         for (let i = 0; i < x.length; i++) out.setInt16(1 + i * 2, Math.max(-32767, Math.min(32767, x[i] * 32767)), true); FDV.ws.send(out.buffer); };
@@ -59,11 +59,11 @@ function createFreedv(root) {
     if (!FDV.on || FDV.tx) return;
     try {
       FDV.txCtx = new AudioContext(); if (st.out && FDV.txCtx.setSinkId) await FDV.txCtx.setSinkId(st.out).catch(() => { });
-      await FDV.txCtx.audioWorklet.addModule("/static/digi-worklet.js"); await FDV.txCtx.audioWorklet.addModule("/static/sdr-worklet.js");
+      await FDV.txCtx.audioWorklet.addModule("/static/digi-worklet.js");
       FDV.mic = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: st.mic ? { exact: st.mic } : undefined, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       const m = FDV.txCtx.createMediaStreamSource(FDV.mic), lp = new BiquadFilterNode(FDV.txCtx, { type: "lowpass", frequency: 3600 });
       FDV.micTap = new AudioWorkletNode(FDV.txCtx, "ww-tap"); m.connect(lp).connect(FDV.micTap);
-      FDV.txPlay = new AudioWorkletNode(FDV.txCtx, "ww-pcm-player", { outputChannelCount: [1] }); FDV.txPlay.connect(FDV.txCtx.destination);
+      FDV.txPlay = pcmScheduler(FDV.txCtx, FDV.txCtx.destination);
       FDV.micTap.port.onmessage = e => { if (!FDV.tx || FDV.ws?.readyState !== 1) return; const x = e.data.samples, out = new DataView(new ArrayBuffer(1 + x.length * 2)); out.setUint8(0, 2);
         for (let i = 0; i < x.length; i++) out.setInt16(1 + i * 2, Math.max(-32767, Math.min(32767, x[i] * 32767)), true); FDV.ws.send(out.buffer); };
       await post("/api/rig/ptt", { on: true }); FDV.tx = true; $(".fd-txinfo", root).textContent = `sendet FreeDV ${st.mode}`; status();

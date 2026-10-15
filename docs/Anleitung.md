@@ -23,7 +23,8 @@ Wellenwerk ist ein Programm für die Funkstation: Funkgerät steuern, Logbuch f�
 16. [Tastenkürzel](#16-tastenkürzel)
 17. [Daten, Sicherung und Umzug](#17-daten-sicherung-und-umzug)
 18. [Zugang, API und KI-Assistenten](#18-zugang-api-und-ki-assistenten)
-19. [Probleme lösen](#19-probleme-lösen)
+19. [Fehlerbericht und Aktualisierung](#19-fehlerbericht-und-aktualisierung)
+20. [Probleme lösen](#20-probleme-lösen)
 
 ---
 
@@ -149,7 +150,9 @@ Wellenwerk berechnet Spektrum, Wasserfall und Ton (USB, LSB, CW, AM, FM) selbst;
 
 ![3D-Wasserfall](bilder/22-wasserfall-3d.png)
 
-**Ansicht → Wasserfall (2D/3D)** zeigt Spektrum und Wasserfall jeder Quelle (Empfänger oder Scope des Funkgeräts; oben wählbar). **2D:** Mausrad zoomt, Ziehen verschiebt, Klick stimmt ab, der Durchlassbereich ist hell hinterlegt. **3D:** die letzten Zeilen als Landschaft – Ziehen dreht, Mausrad ändert den Abstand. Farben, Pegel, Tempo und 3D-Tiefe unter **F8 → Wasserfall**.
+**Ansicht → Wasserfall (2D/3D)** zeigt Spektrum und Wasserfall jeder Quelle (Empfänger oder Scope des Funkgeräts; oben wählbar). **2D:** Mausrad zoomt, Ziehen verschiebt, Klick stimmt ab, der Durchlassbereich ist hell hinterlegt. **3D:** die letzten Zeilen als Landschaft – Ziehen dreht, Mausrad ändert den Abstand. Farben, Pegel, Tempo und 3D-Tiefe unter **F8 → Wasserfall**. Auch im Fenster **Empfänger** stimmt ein Klick in den kleinen Wasserfall den Empfänger auf die angeklickte Frequenz ab. Liefert eine Quelle nur wenige Zeilen je Sekunde (viele OpenWebRX-Server senden 5), zeichnet Wellenwerk jede Zeile mehrfach, damit der Wasserfall gleichmäßig läuft.
+
+Empfänger-Ton wird mit etwa einer halben Sekunde Vorlauf abgespielt; bei stockender Internetverbindung wächst der Puffer selbst (bis 2 s). Bricht die Verbindung zu einem Empfänger ab, verbindet Wellenwerk sich von selbst neu. Nach einem Neustart oder einer Aktualisierung werden die vorher verbundenen Geräte und Empfänger wieder verbunden – mit der zuletzt eingestellten Frequenz und Betriebsart.
 
 ### Fernbetrieb-Audio
 
@@ -410,7 +413,23 @@ Einstellungen unter **F8 → Zugang & API**.
 
 > **Senden** (PTT, CW, Winlink über Funk) dürfen Assistenten nur, wenn **„KI-Assistenten dürfen senden“** eingeschaltet ist. Für alles, was ausgesendet wird, bleibt die Funkamateurin bzw. der Funkamateur verantwortlich.
 
-## 19. Probleme lösen
+## 19. Fehlerbericht und Aktualisierung
+
+**F8 → Fehler & Updates.**
+
+**Fehlerbericht per E-Mail:** Wellenwerk sammelt Programmfehler aus Dienst, Oberfläche und Desktop-Programm im **Fehlerprotokoll** (**Hilfe → Fehlerprotokoll**). Mit *Fehler automatisch per E-Mail melden* geht etwa eine Minute nach einem Fehler eine Nachricht an die eingetragene Adresse – höchstens eine je eingestelltem Zeitraum (Vorgabe 30 Minuten) und höchstens 20 am Tag. Gleiche Fehler werden zusammengefasst, Passwörter und Schlüssel unkenntlich gemacht. Für den Versand ein E-Mail-Konto eintragen (SMTP-Server, Port, Benutzername, Passwort – z. B. bei freenet `mx.freenet.de`, Port 587, STARTTLS). Ohne Konto versucht Wellenwerk, die Nachricht direkt zuzustellen; das lehnen viele Anbieter ab. **Testnachricht senden** prüft die Einstellungen.
+
+**Aktualisierung:** Bei jedem Start sieht Wellenwerk nach, ob es auf GitHub eine neuere Version gibt.
+
+| Einstellung | Verhalten |
+|---|---|
+| beim Start automatisch installieren (Vorgabe) | Desktop-Programm: lädt das passende Paket (mit Prüfsumme), installiert es und startet neu – ein kleines Fenster zeigt den Fortschritt, **Überspringen** startet die bisherige Version. Server (Linux, aus dem Quellcode): tauscht die Programmdateien aus, installiert geänderte Python-Pakete und startet neu; der alte Stand liegt als Sicherung in `data/update/`. |
+| nur melden | Hinweis in der Oberfläche; installieren über **Hilfe → Nach Updates suchen**. |
+| nicht prüfen | keine Abfrage |
+
+Was neu ist oder behoben wurde, zeigt das Fortschrittsfenster schon während des Ladens; beim ersten Start der neuen Version erscheint es noch einmal als Hinweis (jederzeit wieder: **Hilfe → Neuerungen dieser Version**). Ein Server, der dauerhaft läuft, prüft zusätzlich einmal am Tag. Während gesendet wird, installiert Wellenwerk nicht. Unter macOS braucht das Programm Schreibrecht im Programme-Ordner; sonst öffnet Wellenwerk das neue Installationsabbild zum Hineinziehen. Unter Linux wird ein .deb-Paket mit `pkexec` (Passwortabfrage) installiert, ein AppImage einfach ersetzt.
+
+## 20. Probleme lösen
 
 | Problem | Lösung |
 |---|---|
@@ -422,5 +441,6 @@ Einstellungen unter **F8 → Zugang & API**.
 | Panadapter bleibt leer | Icom: Scope im Gerät einschalten, „CI-V USB Port“ auf Unlinked, 115200 Baud, Haken „Panadapter“ im Verbinden-Dialog. IQ: richtigen Stereo-Eingang wählen. |
 | WSJT-X-QSOs kommen nicht an | In WSJT-X UDP-Server `127.0.0.1`, Port 2237; die Statuszeile unten zeigt „WSJT-X“ grün, sobald Daten ankommen. |
 | Cluster verbindet nicht | Rufzeichen in den Optionen eintragen; anderen Server probieren. |
+| Etwas funktioniert nicht wie erwartet | **Hilfe → Fehlerprotokoll** ansehen; **Herunterladen** speichert es als Textdatei zum Weitergeben. |
 
 Die Statuszeile unten zeigt jederzeit Funkgerät, Cluster, WSJT-X und Rotor – ein Rechtsklick darauf öffnet die passenden Einstellungen.

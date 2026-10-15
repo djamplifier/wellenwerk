@@ -509,10 +509,9 @@ function createPanadapter(root) {
     // Wasserfall
     const WH = wf.clientHeight; if (wf.width !== W || wf.height !== WH) { wf.width = W; wf.height = WH; wctx = wf.getContext("2d"); }
     if (!wctx) wctx = wf.getContext("2d"); if (!WH) return;
-    wctx.drawImage(wf, 0, 0, W, WH - 1, 0, 1, W, WH - 1);
-    const img = wctx.createImageData(W, 1);
-    for (let x = 0; x < W; x++) { const v = Math.min(1, (line.data[Math.floor(x / W * n)] - line.min) / span * g); const [r, gg, b] = wfColor(v); img.data.set([r, gg, b, 255], 4 * x); }
-    wctx.putImageData(img, 0, 0);
+    const row = new Uint8ClampedArray(W * 4);
+    for (let x = 0; x < W; x++) { const v = Math.min(1, (line.data[Math.floor(x / W * n)] - line.min) / span * g); const [r, gg, b] = wfColor(v); row.set([r, gg, b, 255], 4 * x); }
+    wfPush(wctx, W, WH, row, line.name === "IQ" ? 1 : wfRows("pa:" + (line.radio || "")));
     status();
   };
   const tune = e => { if (!last) return; const r = e.currentTarget.getBoundingClientRect(); setFreq(Math.round((last.low + (e.clientX - r.left) / r.width * (last.high - last.low)) / 10) * 10); };

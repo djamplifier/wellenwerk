@@ -8,8 +8,7 @@ async function rxPlay(id) {
   const P = { id, mute: store.get("rx.mute." + id, false), level: 0, pcm: new Set() };
   RX.players.set(id, P);
   P.ctx = new AudioContext();
-  await P.ctx.audioWorklet.addModule("/static/sdr-worklet.js");
-  P.node = new AudioWorkletNode(P.ctx, "ww-pcm-player", { outputChannelCount: [1] });
+  P.node = P.ctx.createGain(); P.push = pcmScheduler(P.ctx, P.node);
   P.gain = P.ctx.createGain(); P.dest = P.ctx.createMediaStreamDestination(); P.an = P.ctx.createAnalyser(); P.an.fftSize = 1024;
   P.node.connect(P.gain).connect(P.ctx.destination); P.node.connect(P.dest); P.node.connect(P.an);
   rxGain(id);
@@ -18,11 +17,40 @@ async function rxPlay(id) {
     P.ws.onmessage = e => { const dv = new DataView(e.data), rate = dv.getUint32(0, true), s = new Int16Array(e.data, 4), f = new Float32Array(s.length);
       for (let i = 0; i < s.length; i++) f[i] = s[i] / 32768;
       P.pcm.forEach(fn => { try { fn(f, rate); } catch (err) { console.error(err); } });   // Dekoder bekommen den Ton direkt, ohne Umweg ueber die Wiedergabe
-      P.node.port.postMessage({ pcm: f, rate }, [f.buffer]); };
+      P.push(f, rate); };
     P.ws.onclose = () => { if (RX.players.get(id) === P) setTimeout(open, 2000); }; };
   open();
-  if (P.ctx.state !== "running") document.addEventListener("pointerdown", () => P.ctx.resume(), { once: true });
+  if (P.ctx.state !== "running") ["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, () => P.ctx.resume(), { once: true }));
   WW.emit("rx"); return P;
+}
+// Wiedergabe: Bloecke auf die Abtastrate der Soundkarte umrechnen (lueckenlos ueber Blockgrenzen) und mit Vorlauf
+// im Audio-Thread einplanen. Laeuft ohne AudioWorklet (also auch ueber http) und stockt nicht, wenn die Oberflaeche
+// gerade beschaeftigt ist. Der Vorlauf waechst nach einem Aussetzer (0,5 s … 2 s); laeuft der Empfaenger etwas
+// schneller als die Soundkarte, wird minimal schneller abgespielt statt Bloecke zu verwerfen.
+// Zwei Tiefpaesse hinter der Umrechnung entfernen die Spiegelfrequenzen der linearen Interpolation (klingt sonst rau).
+function pcmScheduler(ctx, dest) {
+  let next = 0, lead = 0.5, ph = 0, last = 0, okSince = 0, rin = 0;
+  const lp = [0, 1].map(() => new BiquadFilterNode(ctx, { type: "lowpass", Q: 0.6 })); lp[0].connect(lp[1]).connect(dest);
+  const push = (f, rate) => {
+    const R = ctx.sampleRate, now = ctx.currentTime;
+    st.blocks++; if (st.t && now - st.t > st.maxGap) st.maxGap = now - st.t; st.t = now;
+    if (rate !== rin) { rin = rate; lp.forEach(x => x.frequency.value = Math.min(rate, R) * 0.45); }
+    if (ctx.state !== "running") { next = 0; return; }
+    if (next < now + 0.02) { if (next) { lead = Math.min(2, lead + 0.2); st.underruns++; } next = now + lead; okSince = now; }
+    else if (now - okSince > 60 && lead > 0.5) { lead = Math.max(0.5, lead - 0.05); okSince = now; }   // lange stabil: Vorlauf wieder verkleinern
+    st.lead = lead; const ahead = next - now;
+    if (ahead > lead + 1.5) return;                                           // weit voraus (z. B. nach Pause): Block auslassen
+    const adj = Math.max(-0.01, Math.min(0.01, (ahead - lead) * 0.02));
+    const step = rate / R * (1 + adj), len = f.length, o = new Float32Array(Math.ceil((len - ph) / step) + 1);
+    let p = ph, k = 0;
+    for (; p < len - 1; p += step) { const i = Math.floor(p), a = i < 0 ? last : f[i], b = f[i + 1]; o[k++] = a + (b - a) * (p - i); }
+    ph = p - len; last = f[len - 1];
+    if (!k) return;
+    const buf = ctx.createBuffer(1, k, R); buf.copyToChannel(o.subarray(0, k), 0);
+    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(lp[0]); src.start(next); next += k / R;
+  };
+  const st = push.stats = { blocks: 0, underruns: 0, maxGap: 0, lead, t: 0 };   // fuer Fehlersuche
+  return push;
 }
 function rxStop(id) { const P = RX.players.get(id); if (!P) return; RX.players.delete(id); try { P.ws.onclose = null; P.ws.close(); P.ctx.close(); } catch { } WW.emit("rx"); }
 function rxGain(id) { const P = RX.players.get(id); if (!P || !P.gain) return; const r = (WW.radios || []).find(x => x.id === id), af = r?.state?.levels?.AF ?? 0.8;
@@ -141,11 +169,16 @@ function createReceivers(root) {
     if (e.target.classList.contains("rx-sync")) { WW.settings = await api("/api/settings", { method: "PUT", body: e.target.checked ? { sync_on: true, sync_master: WW.current, sync_slave: id, sync_offset: 0, sync_mode: true } : { sync_on: false } }); } });
   // Wasserfall je Empfaenger
   const wfs = new Map();
-  const line = l => { const c = root.querySelector(`[data-id="${CSS.escape(l.radio)}"] .rx-wf`); if (!c) return; const W = c.clientWidth, H = c.clientHeight; if (!W || !H) return;
-    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; } const g = c.getContext("2d"); g.drawImage(c, 0, 0, W, H - 1, 0, 1, W, H - 1);
-    const img = g.createImageData(W, 1), n = l.data.length, span = (l.max - l.min) || 1;
-    for (let x = 0; x < W; x++) { const v = Math.max(0, Math.min(1, (l.data[Math.floor(x / W * n)] - l.min) / span)); const [r, gg, b] = wfColor(v); img.data.set([r, gg, b, 255], 4 * x); }
-    g.putImageData(img, 0, 0); const s = (WW.radios || []).find(r => r.id === l.radio)?.state; if (s?.freq) { g.fillStyle = "rgba(255,80,80,.9)"; g.fillRect((s.freq - l.low) / (l.high - l.low) * W, 0, 1, 1); } };
+  // Klick in den Wasserfall stimmt diesen Empfaenger auf die angeklickte Frequenz ab
+  root.addEventListener("click", e => { const c = e.target.closest(".rx-wf"); if (!c) return; const id = c.closest("[data-id]")?.dataset.id, l = wfs.get(id); if (!l) return;
+    const r = c.getBoundingClientRect(), hz = Math.round((l.low + (e.clientX - r.left) / r.width * (l.high - l.low)) / 10) * 10;
+    api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz } }).catch(err => toast(err.message, true)); });
+  root.addEventListener("mousemove", e => { const c = e.target.closest(".rx-wf"); if (!c) return; const l = wfs.get(c.closest("[data-id]")?.dataset.id); if (!l) return;
+    const r = c.getBoundingClientRect(); c.title = `${((l.low + (e.clientX - r.left) / r.width * (l.high - l.low)) / 1000).toFixed(1)} kHz – klicken zum Abstimmen`; });
+  const line = l => { wfs.set(l.radio, l); const c = root.querySelector(`[data-id="${CSS.escape(l.radio)}"] .rx-wf`); if (!c) return; const W = c.clientWidth, H = c.clientHeight; if (!W || !H) return;
+    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; } const g = c.getContext("2d"); const row = new Uint8ClampedArray(W * 4), n = l.data.length, span = (l.max - l.min) || 1;
+    for (let x = 0; x < W; x++) { const v = Math.max(0, Math.min(1, (l.data[Math.floor(x / W * n)] - l.min) / span)); const [r, gg, b] = wfColor(v); row.set([r, gg, b, 255], 4 * x); }
+    wfPush(g, W, H, row, wfRows("rx:" + l.radio)); const s = (WW.radios || []).find(r => r.id === l.radio)?.state; if (s?.freq) { g.fillStyle = "rgba(255,80,80,.9)"; g.fillRect((s.freq - l.low) / (l.high - l.low) * W, 0, 1, 1); } };
   let tt = 0; const offs = [WW.on("radios", draw), WW.on("rx", draw), WW.on("spectrum", line), WW.on("rig-any", m => { const it = root.querySelector(`[data-id="${CSS.escape(m.radio)}"]`); if (!it) return;
     const f = it.querySelector(".rx-f"); if (document.activeElement !== f) f.value = ((m.rig.freq || 0) / 1000).toFixed(2); it.querySelector(".rx-s").textContent = fmtS(m.rig.meters?.STRENGTH);
     const ms = it.querySelector(".rx-m"); if (document.activeElement !== ms && m.rig.mode) ms.value = m.rig.mode; })];

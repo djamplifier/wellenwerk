@@ -27,7 +27,8 @@ Wellenwerk is a program for the radio station: radio control, logbook, digital m
 16. [Keyboard shortcuts](#16-keyboard-shortcuts)
 17. [Data, backup and moving](#17-data-backup-and-moving)
 18. [Access, API and AI assistants](#18-access-api-and-ai-assistants)
-19. [Troubleshooting](#19-troubleshooting)
+19. [Error reports and updates](#19-error-reports-and-updates)
+20. [Troubleshooting](#20-troubleshooting)
 
 The screenshots show the German interface; the English one is laid out identically.
 
@@ -155,7 +156,9 @@ Wellenwerk computes spectrum, waterfall and audio (USB, LSB, CW, AM, FM) itself;
 
 ![3D waterfall](bilder/22-wasserfall-3d.png)
 
-**View → Waterfall (2D/3D)** shows spectrum and waterfall of every source (receiver or radio scope; selectable at the top). **2D:** mouse wheel zooms, dragging pans, a click tunes, the passband is highlighted. **3D:** the latest lines as a landscape – dragging rotates, the mouse wheel changes the distance. Colours, levels, speed and 3D depth under **F8 → Waterfall**.
+**View → Waterfall (2D/3D)** shows spectrum and waterfall of every source (receiver or radio scope; selectable at the top). **2D:** mouse wheel zooms, dragging pans, a click tunes, the passband is highlighted. **3D:** the latest lines as a landscape – dragging rotates, the mouse wheel changes the distance. Colours, levels, speed and 3D depth under **F8 → Waterfall**. In the **Receivers** window, too, a click into the small waterfall tunes that receiver to the clicked frequency. If a source delivers only a few lines per second (many OpenWebRX servers send 5), Wellenwerk draws each line several times so the waterfall scrolls smoothly.
+
+Receiver audio plays with about half a second of buffer; on a stuttering internet connection the buffer grows by itself (up to 2 s). If the connection to a receiver drops, Wellenwerk reconnects by itself. After a restart or an update, the radios and receivers connected before are connected again – with the last frequency and mode.
 
 ### Remote audio
 
@@ -416,7 +419,23 @@ Settings under **F8 → Access & API**.
 
 > AI assistants may only **transmit** (PTT, CW, Winlink over radio) if **“AI assistants (MCP) may transmit”** is switched on. The radio amateur remains responsible for everything that is transmitted.
 
-## 19. Troubleshooting
+## 19. Error reports and updates
+
+**F8 → Errors & updates.**
+
+**Error report by e-mail:** Wellenwerk collects program errors from the service, the interface and the desktop program in the **error log** (**Help → Error log**). With *Report errors automatically by e-mail*, a message goes to the entered address about a minute after an error – at most one per set period (default 30 minutes) and at most 20 a day. Identical errors are combined, passwords and keys are blanked out. Enter an e-mail account for sending (SMTP server, port, user name, password). Without an account Wellenwerk tries to deliver the message directly; many providers reject that. **Send test message** checks the settings.
+
+**Updates:** at every start Wellenwerk checks whether there is a newer version on GitHub.
+
+| Setting | Behaviour |
+|---|---|
+| install automatically at start (default) | Desktop program: downloads the matching package (checksum verified), installs it and restarts – a small window shows the progress, **Skip** starts the current version. Server (Linux, from source): replaces the program files, installs changed Python packages and restarts; the previous version is kept as a backup in `data/update/`. |
+| only notify | Notice in the interface; install via **Help → Check for updates**. |
+| do not check | no check |
+
+What is new or fixed is shown in the progress window while downloading, and once more at the first start of the new version (any time again: **Help → What's new in this version**). A server that runs permanently also checks once a day. Wellenwerk does not install while transmitting. On macOS the program needs write access to the Applications folder; otherwise Wellenwerk opens the new disk image for dragging. On Linux a .deb package is installed with `pkexec` (password prompt), an AppImage is simply replaced.
+
+## 20. Troubleshooting
 
 | Problem | Solution |
 |---|---|
@@ -428,5 +447,6 @@ Settings under **F8 → Access & API**.
 | Panadapter stays empty | Icom: switch on the scope in the radio, “CI-V USB Port” to Unlinked, 115200 baud, tick “Panadapter” in the Connect dialog. IQ: choose the right stereo input. |
 | WSJT-X QSOs do not arrive | In WSJT-X UDP server `127.0.0.1`, port 2237; the status bar at the bottom shows “WSJT-X” in green as soon as data arrives. |
 | Cluster does not connect | Enter your callsign in the options; try another server. |
+| Something does not work as expected | Look at **Help → Error log**; **Download** saves it as a text file to pass on. |
 
 The status bar at the bottom always shows radio, cluster, WSJT-X and rotator – a right-click on it opens the matching settings.

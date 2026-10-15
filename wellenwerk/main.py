@@ -39,6 +39,8 @@ from .chat import Chat
 from .access import Access, AccessMiddleware, COOKIE, LOGIN_HTML
 from .plugins import PluginHost, PluginError
 from .winlink.message import Message as WlMessage
+from .errorlog import ErrorLog
+from .updater import Updater, restart_process
 
 VERSION = "1.2.1"
 BASE = Path(__file__).resolve().parent.parent
@@ -63,9 +65,13 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100", lang="",
                 sync_on=False, sync_master="", sync_slave="", sync_offset=0, sync_mode=True,
                 access_password="", api_token="", mcp_allow_tx=False, plugins={},
                 catemu_on=False, catemu_kind="pty" if os.name != "nt" else "serial", catemu_port=4590, catemu_device="",
-                callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False)
-SECRETS = ("access_password", "api_token", "wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
-BOOLS = ("mcp_allow_tx", "catemu_on", "sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
+                callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False,
+                # Fehlerbericht per E-Mail und Aktualisierung
+                err_mail_on=False, err_mail_to="", err_mail_interval=30, err_ui=True,
+                smtp_host="", smtp_port=587, smtp_security="starttls", smtp_user="", smtp_pass="", smtp_from="",
+                update_mode="auto")
+SECRETS = ("access_password", "api_token", "wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api", "smtp_pass")
+BOOLS = ("mcp_allow_tx", "catemu_on", "sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo", "err_mail_on", "err_ui")
 MASK = "••••••"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("ww")
@@ -79,6 +85,9 @@ def load_cfg() -> dict:
 
 
 cfg = load_cfg()
+errors = ErrorLog(DATA, cfg, VERSION, SECRETS)
+errors.install()
+updater = Updater(BASE, DATA, VERSION, cfg)
 
 
 def apply_links():
@@ -434,12 +443,15 @@ async def lifespan(app):
     await asyncio.to_thread(cty.load)
     await rotor_spawn()
     await radios.autoconnect()
+    asyncio.create_task(reconnect_previous())
     if cfg.get("cw_out") == "winkey" and cfg.get("winkey_device"):
         try:
             await winkey.connect(cfg["winkey_device"], int(cfg.get("winkey_wpm") or 22))
         except ConnectionError as e:
             log.warning("WinKeyer: %s", e)
-    tasks = [asyncio.create_task(cluster.run_forever()), asyncio.create_task(rotor.run_forever()), asyncio.create_task(auto_backup_loop())]
+    tasks = [asyncio.create_task(cluster.run_forever()), asyncio.create_task(rotor.run_forever()), asyncio.create_task(auto_backup_loop()),
+             asyncio.create_task(errors.run()), asyncio.create_task(update_loop())]
+    ingest_desktop_errors()
     await restart_n1mm()
     await apply_catemu()
     plugin_host.load_backends(app)
@@ -448,14 +460,57 @@ async def lifespan(app):
         transport = await wsjtx.listen(int(cfg["wsjtx_port"]), on_wsjtx_adif, on_wsjtx_status, on_wsjtx_decode)
     except OSError as e:
         log.warning("WSJT-X UDP-Port nicht verfuegbar: %s", e)
+    APP_RUN["transport"] = transport
     yield
     for t in tasks:
         t.cancel()
-    await radios.stop_all()
+    await stop_children()
+
+
+APP_RUN: dict = {}
+RECONNECT = DATA / "wieder-verbinden.json"
+
+
+async def reconnect_previous():
+    """Vor dem letzten Beenden verbundene Geraete/Empfaenger wieder verbinden (z. B. nach Neustart oder Aktualisierung)."""
+    try:
+        st = json.loads(RECONNECT.read_text())
+        RECONNECT.unlink()
+    except (OSError, ValueError):
+        return
+    for pid in st.get("ids") or []:
+        if pid in radios.active or not any(p["id"] == pid for p in radios.profiles):
+            continue
+        try:
+            await radios.connect(pid)
+            t, rp = (st.get("tune") or {}).get(pid) or {}, radios.active.get(pid)
+            if rp and getattr(rp, "rig", None) and t.get("freq"):     # zuletzt eingestellte Frequenz und Betriebsart
+                if t.get("mode") and t["mode"] != rp.rig.state.get("mode"):
+                    await rp.rig.set_mode(t["mode"])
+                await rp.rig.set_freq(int(t["freq"]))
+        except Exception as e:
+            log.warning("Wiederverbinden %s: %s", pid, e)
+    if st.get("current") in radios.active:
+        radios.current = st["current"]
+        await broadcast({"type": "radios"})
+
+
+async def stop_children():
+    """Funkgeraete-, Rotor- und Hilfsprozesse beenden (Programmende und Neustart nach einer Aktualisierung).
+    Welche Geraete verbunden waren, wird gemerkt und beim naechsten Start wieder verbunden."""
+    try:
+        tune = {pid: {k: (rp.rig.state or {}).get(k) for k in ("freq", "mode")} for pid, rp in radios.active.items() if getattr(rp, "rig", None)}
+        RECONNECT.write_text(json.dumps(dict(ids=list(radios.active), current=radios.current, tune=tune)))
+    except Exception:
+        pass
+    try:
+        await radios.stop_all()
+    except Exception as e:
+        log.warning("Beenden: %s", e)
     if ROTCTLD["proc"] and ROTCTLD["proc"].poll() is None:
         ROTCTLD["proc"].terminate()
-    if transport:
-        transport.close()
+    if APP_RUN.get("transport"):
+        APP_RUN["transport"].close()
 
 
 app = FastAPI(title="Wellenwerk", version=VERSION, lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None,
@@ -592,7 +647,7 @@ async def put_settings(new: dict):
     if new.get("locator") and not geo.valid_grid(new["locator"]):
         raise HTTPException(400, "Locator ungueltig (z. B. JO31ab)")
     for k in ("cluster_port", "wsjtx_port", "rot_port", "rot_model", "rig_poll_ms", "winkey_wpm", "n1mm_port", "backup_keep",
-              "wl_telnet_port", "ardop_port", "vara_port", "agw_port", "agw_radio_port", "sync_offset", "catemu_port", "adif_udp_port"):
+              "wl_telnet_port", "ardop_port", "vara_port", "agw_port", "agw_radio_port", "sync_offset", "catemu_port", "adif_udp_port", "smtp_port", "err_mail_interval"):
         if k in new:
             new[k] = int(new[k])
     for k in BOOLS:
@@ -1718,6 +1773,157 @@ async def sstv_get(name: str):
 async def sstv_delete(name: str):
     _sstv_file(name).unlink()
     return {"ok": True}
+
+
+# ---------- Fehlerprotokoll ----------
+def ingest_desktop_errors():
+    """Abstuerze, die das Desktop-Programm notiert hat, waehrend der Dienst nicht lief."""
+    f = DATA / "desktop-errors.jsonl"
+    try:
+        lines = f.read_text(encoding="utf-8").splitlines()
+        f.unlink()
+    except OSError:
+        return
+    for line in lines[-50:]:
+        try:
+            e = json.loads(line)
+            errors.add("desktop", str(e.get("message", "")), str(e.get("detail", "")), str(e.get("where", "")))
+        except Exception:
+            pass
+
+
+@app.get("/api/errors")
+async def errors_list(limit: int = 200):
+    """Fehlerprotokoll (neueste zuerst) und Stand des E-Mail-Versands."""
+    return dict(entries=list(reversed(errors.entries))[:max(1, min(limit, 1000))],
+                mail=dict(enabled=errors.enabled(), to=cfg.get("err_mail_to", ""), pending=len(errors.pending), last=errors.last_result),
+                system=errors.system_info())
+
+
+_ERR_RATE = collections.deque(maxlen=60)
+
+
+@app.post("/api/errors")
+async def errors_add(body: dict, request: Request):
+    """Fehler melden (Oberflaeche, Desktop-Programm, Erweiterungen). source: ui|desktop|plugin, level: error|meldung."""
+    now = time.time()
+    _ERR_RATE.append(now)
+    if len(_ERR_RATE) == _ERR_RATE.maxlen and now - _ERR_RATE[0] < 60:
+        return {"ok": False, "throttled": True}
+    src = str(body.get("source") or "ui")[:20]
+    level = "meldung" if body.get("level") == "meldung" else "error"
+    if level == "meldung" and not cfg.get("err_ui", True):
+        return {"ok": False}
+    e = errors.add(src, str(body.get("message") or "")[:2000], str(body.get("detail") or "")[:20000],
+                   str(body.get("where") or "")[:300] + (f" · {request.headers.get('user-agent', '')[:120]}" if src == "ui" else ""), level)
+    return {"ok": bool(e)}
+
+
+@app.delete("/api/errors")
+async def errors_clear():
+    errors.clear()
+    return {"ok": True}
+
+
+@app.post("/api/errors/test")
+async def errors_test(body: dict | None = None):
+    """Testnachricht an die eingetragene Adresse (vorher gespeicherte Einstellungen werden benutzt)."""
+    if not (cfg.get("err_mail_to") or "").strip():
+        raise HTTPException(400, "Keine Empfängeradresse eingetragen")
+    try:
+        return {"ok": True, "result": await errors.send([], test=True)}
+    except Exception as e:
+        raise HTTPException(502, f"Senden fehlgeschlagen: {e}")
+
+
+@app.post("/api/errors/send")
+async def errors_send_now():
+    """Alle noch nicht gemeldeten Fehler sofort senden."""
+    if not (cfg.get("err_mail_to") or "").strip():
+        raise HTTPException(400, "Keine Empfängeradresse eingetragen")
+    batch = list(errors.pending) or list(reversed(errors.entries))[:20]
+    if not batch:
+        raise HTTPException(400, "Das Fehlerprotokoll ist leer")
+    try:
+        r = await errors.send(batch)
+    except Exception as e:
+        raise HTTPException(502, f"Senden fehlgeschlagen: {e}")
+    errors.pending = [x for x in errors.pending if x not in batch]
+    return {"ok": True, "result": r}
+
+
+# ---------- Aktualisierung ----------
+async def update_loop():
+    """Beim Start und danach taeglich nach einer neuen Version sehen; je nach Einstellung installieren oder Hinweis zeigen."""
+    await asyncio.sleep(float(os.environ.get("WW_UPDATE_DELAY", "10")))
+    while True:
+        mode = cfg.get("update_mode") or "auto"
+        if mode != "off":
+            st = await updater.check()
+            if st.get("error"):
+                log.info("Aktualisierung: %s", st["error"])
+            elif st["available"]:
+                if mode == "auto" and updater.kind() == "source" and not (rig.state.get("ptt")):
+                    try:
+                        await update_and_restart()
+                    except Exception as e:
+                        log.error("Aktualisierung auf %s fehlgeschlagen: %s", st["latest"], e)
+                        updater.state["error"] = str(e)
+                await broadcast({"type": "update", "update": updater.public()})
+        await asyncio.sleep(24 * 3600)
+
+
+async def update_and_restart():
+    def prog(txt):
+        asyncio.run_coroutine_threadsafe(broadcast({"type": "notice", "text": txt}), loop)
+    loop = asyncio.get_running_loop()
+    await broadcast({"type": "notice", "text": f"Wellenwerk wird auf Version {updater.state['latest']} aktualisiert …"})
+    ver = await updater.install_source(prog)
+    await broadcast({"type": "notice", "text": f"Version {ver} installiert – Wellenwerk startet neu"})
+    await asyncio.sleep(1)
+    await stop_children()
+    restart_process()
+
+
+@app.get("/api/update")
+async def update_state():
+    """Installierte und neueste Version; mode: desktop = Desktop-Programm installiert, source = dieser Dienst selbst."""
+    return updater.public()
+
+
+@app.get("/api/update/notes")
+async def update_notes(version: str = ""):
+    """Neuerungen einer Version (Text der Veroeffentlichung, Markdown); ohne Angabe die installierte Version."""
+    return await asyncio.to_thread(updater.notes_for, version or VERSION)
+
+
+@app.post("/api/update/check")
+async def update_check():
+    await updater.check()
+    return updater.public()
+
+
+@app.post("/api/update/install")
+async def update_install():
+    """Nur fuer Server aus dem Quellcode: neue Version installieren und neu starten."""
+    if updater.kind() != "source":
+        raise HTTPException(400, "Dieses Wellenwerk aktualisiert sich über das Desktop-Programm bzw. ein neues Installationspaket.")
+    if rig.state.get("ptt"):
+        raise HTTPException(409, "Nicht während des Sendens")
+    await updater.check()
+    if not updater.state.get("available"):
+        raise HTTPException(400, updater.state.get("error") or "Keine neuere Version vorhanden")
+    asyncio.create_task(_guarded_update())
+    return {"ok": True, "version": updater.state["latest"]}
+
+
+async def _guarded_update():
+    try:
+        await update_and_restart()
+    except Exception as e:
+        log.error("Aktualisierung fehlgeschlagen: %s", e)
+        updater.state["error"] = str(e)
+        await broadcast({"type": "notice", "text": f"Aktualisierung fehlgeschlagen: {e}", "bad": True})
 
 
 @app.post("/api/shutdown")

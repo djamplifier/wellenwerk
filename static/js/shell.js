@@ -180,6 +180,9 @@ const MENU_WINDOW = (appId) => ({ label: "Fenster", items: [
 const MENU_HELP = { label: "Hilfe", items: [
   { label: "Anleitung", icon: "i-info", act: () => window.open("/static/hilfe.html", "_blank", "width=1100,height=860") },
   { label: "Tastenkürzel", act: () => showKeys() },
+  { label: "Fehlerprotokoll", act: () => showErrorLog() },
+  { label: "Nach Updates suchen", act: () => checkUpdates(true) },
+  { label: "Neuerungen dieser Version", act: () => showWhatsNew() },
   { label: "Lizenzen und Fremdkomponenten", act: () => window.open("/static/hilfe.html?d=lizenzen", "_blank", "width=1000,height=800") },
   { label: "Über Wellenwerk", act: () => info("Über Wellenwerk", `<p><b>Wellenwerk</b> v${esc(WW.version)} – Stationssteuerung, Logbuch und Digitalbetrieb für Funkamateure.</p>
     <p>Freie Software unter der <b>GNU General Public License 3</b> (oder später). Verwendet u. a. <b>Hamlib</b> (LGPL), Zeichentabellen aus <b>fldigi</b> (GPL),
@@ -241,7 +244,7 @@ function runAccel(a) {
 function openOptions(tab = "station") {
   const s = WW.settings, o = store.get("opts", {});
   const d = dialog({ title: "Programmoptionen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Speichern", "save", "primary"]], body: `
-    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["wf", "Wasserfall"], ["plugins", "Erweiterungen"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["theme", "Darstellung"]]
+    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["wf", "Wasserfall"], ["plugins", "Erweiterungen"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["support", "Fehler & Updates"], ["theme", "Darstellung"]]
       .map(([k, l]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${l}</button>`).join("")}</div>
     <div class="dtab ${tab === "station" ? "" : "hidden"}" data-t="station"><div class="grid2">
       <label>Rufzeichen<input name="callsign" value="${esc(s.callsign)}"></label><label>Locator<input name="locator" value="${esc(s.locator)}"></label>
@@ -308,6 +311,7 @@ function openOptions(tab = "station") {
       <label>3D: Höhe der Spitzen<input type="number" step="0.1" min="0.2" max="4" name="wf_height" data-local data-wf value="${w.height}"></label>
       <p class="hint wide">Wasserfall-Fenster: Mausrad = zoomen, Ziehen = verschieben, Klick = abstimmen. 3D: Ziehen dreht, Mausrad ändert den Abstand.</p>`; })()}</div></div>
     <div class="dtab ${tab === "plugins" ? "" : "hidden"}" data-t="plugins"><div class="pl-opts"></div></div>
+    <div class="dtab ${tab === "support" ? "" : "hidden"}" data-t="support">${supportOptionsHtml(s)}</div>
     <div class="dtab ${tab === "access" ? "" : "hidden"}" data-t="access"><div class="grid2">
       <label>Passwort für Zugriffe von anderen Rechnern (leer = keins)<input name="access_password" type="password" autocomplete="new-password" value="${esc(s.access_password || "")}"></label><span></span>
       <p class="hint wide">An diesem Rechner ist keine Anmeldung nötig. Von Tablet, Handy oder einem anderen PC aus fragt Wellenwerk dann einmal nach dem Passwort. Unbedingt setzen, bevor Wellenwerk aus dem Internet erreichbar ist.</p>
@@ -350,6 +354,7 @@ function openOptions(tab = "station") {
   const wkSt = () => { const w = WW.winkey || {}; d.querySelector(".wk-st").textContent = w.connected ? `verbunden an ${w.device}${w.version ? ", Firmware " + w.version : ""}` : (w.error || "nicht verbunden"); };
   api("/api/hamlib/ports").then(ps => { const sel = d.querySelector(".wk-dev"), cur = sel.value; sel.innerHTML = `<option value="">– wählen –</option>` + ps.map(p => `<option value="${esc(p.device)}" ${p.device === cur ? "selected" : ""}>${esc(p.device)}${p.desc ? " – " + esc(p.desc) : ""}</option>`).join("") + (cur && !ps.some(p => p.device === cur) ? `<option selected>${esc(cur)}</option>` : ""); }).catch(() => { });
   pluginOptions(d.querySelector(".pl-opts"));
+  supportOptionsInit(d);
   const mcpCfg = () => api("/api/access/mcp_config").then(c => { d.querySelector(".ac-mcp").value = JSON.stringify(c, null, 2); }).catch(() => { });
   mcpCfg();
   d.querySelector(".ac-new").onclick = async () => { if (WW.settings.api_token && !confirm("Neuen Schlüssel erzeugen? Der alte wird ungültig.")) return; const r = await post("/api/access/new_token"); d.querySelector(".ac-tok").value = r.api_token; WW.settings.api_token = "••••••"; mcpCfg(); toast("Neuer API-Schlüssel – jetzt kopieren, er wird später nicht mehr angezeigt"); };

@@ -114,6 +114,8 @@ class OpenWebRXRig(SdrRig):
 
     async def run(self):
         self.say(f"verbinde mit {self.p.get('url')}")
+        self.center = self.rate = 0                      # bei Neuverbindung: Ausschnitt kommt neu vom Server
+        self.adpcm.reset()
         try:
             self.ws = await websockets.connect(self._uri(), max_size=None, ping_interval=None, open_timeout=12, user_agent_header="Wellenwerk")
         except Exception as e:

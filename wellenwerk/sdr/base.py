@@ -184,14 +184,33 @@ class SdrProc:
 
     async def start(self):
         async def runner():
+            # Bricht eine bestehende Verbindung ab (Netz, Server-Neustart, Zeitueberschreitung), wird sie mit wachsender
+            # Pause neu aufgebaut. Scheitert schon die erste Verbindung, bleibt es beim Fehler (Meldung an den Nutzer).
+            ever, delay = False, 3
             try:
-                await self.rig.run()
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                self.rig.state.update(connected=False, error=str(e) or type(e).__name__)
-                self.rig.say(f"getrennt: {e}")
-                await self.rig.changed(True)
+                while True:
+                    t0 = asyncio.get_running_loop().time()
+                    try:
+                        await self.rig.run()
+                        raise ConnectionError("Verbindung beendet")
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as e:
+                        ever = ever or bool(self.rig.state.get("connected"))
+                        self.rig.state.update(connected=False, error=str(e) or type(e).__name__)
+                        self.rig.say(f"getrennt: {e}")
+                        await self.rig.changed(True)
+                    if not ever:
+                        break
+                    if asyncio.get_running_loop().time() - t0 > 120:
+                        delay = 3
+                    self.rig.say(f"neuer Verbindungsversuch in {delay} s")
+                    try:
+                        await self.rig.close()
+                    except Exception:
+                        pass
+                    await asyncio.sleep(delay)
+                    delay = min(60, delay * 2)
             finally:
                 self.proc.code = 1
         self.task = asyncio.create_task(runner())

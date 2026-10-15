@@ -45,9 +45,9 @@ function createWfPanel(root) {
     c.fillStyle = "rgba(255,255,255,.6)"; c.font = "10px sans-serif"; const stp = niceStep((view[1] - view[0]) / 7);
     for (let f = Math.ceil(view[0] / stp) * stp; f < view[1]; f += stp) { const x = fx(f, W); c.fillRect(x, 0, 1, 5); c.fillText((f / 1e6).toFixed(stp < 1000 ? 4 : 3), x + 2, 11); }
     if (s.freq) { c.fillStyle = "rgba(255,80,80,.9)"; c.fillRect(fx(s.freq, W), 0, 1.5, H); }
-    if (!FH) return; const g = fall.getContext("2d"); g.drawImage(fall, 0, 0, W, FH - 1, 0, 1, W, FH - 1);
-    const img = g.createImageData(W, 1); for (let x = 0; x < W; x++) { const k = norm(val(x), L) * 4; img.data[x * 4] = lut[k]; img.data[x * 4 + 1] = lut[k + 1]; img.data[x * 4 + 2] = lut[k + 2]; img.data[x * 4 + 3] = 255; }
-    g.putImageData(img, 0, 0);
+    if (!FH) return; const g = fall.getContext("2d");
+    const row = new Uint8ClampedArray(W * 4); for (let x = 0; x < W; x++) { const k = norm(val(x), L) * 4; row[x * 4] = lut[k]; row[x * 4 + 1] = lut[k + 1]; row[x * 4 + 2] = lut[k + 2]; row[x * 4 + 3] = 255; }
+    wfPush(g, W, FH, row, wfRows("wf:" + l.radio));
   };
   // ---------- 3D (WebGL2) ----------
   const COLS = 512;
@@ -102,7 +102,7 @@ function createWfPanel(root) {
   // ---------- Bedienung ----------
   const tune = hz => { const id = src(); (id && id !== WW.current ? api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz } }) : post("/api/rig/freq", { hz })).catch(e => toast(e.message, true)); };
   [spec, fall].forEach(cv => {
-    cv.addEventListener("click", e => { if (!view || cv._dragged) return; const r = cv.getBoundingClientRect(); tune(Math.round(view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0]))); });
+    cv.addEventListener("click", e => { if (!view || cv._dragged) return; const r = cv.getBoundingClientRect(); tune(Math.round((view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0])) / 10) * 10); });
     cv.addEventListener("wheel", e => { if (!view || !last) return; e.preventDefault(); const r = cv.getBoundingClientRect(), at = view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0]), k = e.deltaY > 0 ? 1.25 : 0.8;
       let a = at - (at - view[0]) * k, b = at + (view[1] - at) * k; if (b - a > last.high - last.low) [a, b] = [last.low, last.high]; if (b - a < 500) return;
       if (a < last.low) { b += last.low - a; a = last.low; } if (b > last.high) { a -= b - last.high; b = last.high; } view = [a, b]; }, { passive: false });
