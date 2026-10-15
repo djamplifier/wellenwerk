@@ -39,7 +39,7 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 cluster_host="dxc.ve7cc.net", cluster_port=23, cluster_cmds="",
                 wsjtx_port=2237,
                 rot_enabled=False, rot_host="127.0.0.1", rot_port=4533, rot_park=0,
-                rot_model=0, rot_device="", rot_speed="",
+                rot_model=0, rot_device="", rot_speed="", rot_offset=0, rot_stop="north", rot_min_az="", rot_max_az="", rot_log=False,
                 rig_poll_ms=250, rig_dualvfo=False,
                 cw_out="rig", winkey_device="", winkey_wpm=22,
                 fwd_targets="", fwd_format="adif", wsjtx_forward="", n1mm_port=0, backup_dir="", backup_keep=30,
@@ -49,7 +49,7 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 clublog_email="", clublog_pass="", clublog_api="",
                 callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False)
 SECRETS = ("hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
-BOOLS = ("callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
+BOOLS = ("rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
 MASK = "••••••"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("ww")
@@ -294,6 +294,15 @@ async def on_rotor(st):
 
 
 rotor = Rotor(cfg["rot_host"], int(cfg["rot_port"]), bool(cfg["rot_enabled"]), on_rotor)
+ROTLOG = DATA / "rotor.log"
+
+
+def apply_rotor_opts():
+    rotor.configure(cfg.get("rot_offset") or 0, cfg.get("rot_stop") or "north", cfg.get("rot_min_az"), cfg.get("rot_max_az"),
+                    ROTLOG if cfg.get("rot_log") else None)
+
+
+apply_rotor_opts()
 async def on_cluster_line(line, key):
     await broadcast({"type": "cluster_line", "line": line, "key": key})
 
@@ -457,6 +466,7 @@ async def put_settings(new: dict):
     CFG_PATH.write_text(json.dumps(cfg, indent=2))
     apply_poll()
     apply_links()
+    apply_rotor_opts()
     await restart_n1mm()
     if "backup_dir" in new:
         BACKUP_WAKE.set()
@@ -1749,6 +1759,11 @@ def _backup_to(name: str, dst: Path):
     with out:
         logbooks.get(name).db.backup(out)
     out.close()
+
+
+@app.get("/api/rotor/log")
+async def rotor_log():
+    return Response(ROTLOG.read_text(encoding="utf-8")[-200000:] if ROTLOG.exists() else "", media_type="text/plain; charset=utf-8")
 
 
 @app.get("/api/calendar")

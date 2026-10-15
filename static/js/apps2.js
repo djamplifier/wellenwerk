@@ -69,10 +69,16 @@ async function openRotorConnect() {
     <label>Hersteller<select id="ro-mfg">${mfgs.map(m => `<option>${esc(m)}</option>`).join("")}</select></label><label>Rotor / Protokoll<select id="ro-model"></select></label>
     <label>Port<select id="ro-dev">${ports.map(p => `<option value="${esc(p.device)}" ${p.device === s.rot_device ? "selected" : ""}>${esc(p.device)} ${esc(p.desc)}</option>`).join("")}<option value="">–</option></select></label>
     <label>Geschwindigkeit<select id="ro-speed"><option value="">Standard</option>${[1200, 2400, 4800, 9600, 19200, 38400].map(v => `<option ${String(v) === String(s.rot_speed) ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label>Anschlag<select id="ro-stop"><option value="north" ${s.rot_stop !== "south" ? "selected" : ""}>Norden (0° … 360°)</option><option value="south" ${s.rot_stop === "south" ? "selected" : ""}>Süden (−180° … +180°)</option></select></label>
+    <label>Azimut-Versatz (Kalibrierung, Grad)<input id="ro-off" type="number" step="0.5" value="${esc(s.rot_offset || 0)}"></label>
+    <label>Drehbereich von (Grad, leer = vom Rotor)<input id="ro-min" type="number" value="${esc(s.rot_min_az ?? "")}" placeholder="z. B. 0"></label><label>bis (Grad)<input id="ro-max" type="number" value="${esc(s.rot_max_az ?? "")}" placeholder="z. B. 450"></label>
+    <label class="chkrow wide"><input type="checkbox" id="ro-log" ${s.rot_log ? "checked" : ""}> Rotorbewegungen protokollieren <button type="button" id="ro-showlog">Protokoll anzeigen</button></label>
+    <p class="hint wide">Versatz: zeigt der Rotor z. B. 10° zu viel an, −10 eintragen. Drehbereich bei Rotoren mit Überlauf (z. B. 0–450°) – Wellenwerk wählt dann den kürzeren Weg innerhalb des Bereichs.</p>
     <p class="hint wide">Steuerung über Hamlib (${models.length} Rotor-Typen, z. B. Yaesu GS-232, SPID, ERC, EA4TX ARS, PstRotator). Zum Testen: Hamlib → Dummy.</p></div>` });
   const fill = () => { $("#ro-model", d).innerHTML = models.filter(m => m.mfg === $("#ro-mfg", d).value).map(m => `<option value="${m.id}" ${m.id === +s.rot_model ? "selected" : ""}>${esc(m.model)}</option>`).join(""); };
   $("#ro-mfg", d).onchange = fill; const cur = models.find(m => m.id === +s.rot_model); $("#ro-mfg", d).value = cur ? cur.mfg : (mfgs.includes("Yaesu") ? "Yaesu" : mfgs[0]); fill();
-  d.querySelector('[value="ok"]').onclick = async e => { e.preventDefault(); try { WW.settings = await api("/api/settings", { method: "PUT", body: { rot_enabled: true, rot_model: +$("#ro-model", d).value, rot_device: $("#ro-dev", d).value, rot_speed: $("#ro-speed", d).value } }); toast("Rotor wird verbunden …"); d.close(); } catch (err) { toast(err.message, true); } };
+  d.querySelector('[value="ok"]').onclick = async e => { e.preventDefault(); try { WW.settings = await api("/api/settings", { method: "PUT", body: { rot_enabled: true, rot_model: +$("#ro-model", d).value, rot_device: $("#ro-dev", d).value, rot_stop: $("#ro-stop", d).value, rot_offset: $("#ro-off", d).value || "0", rot_min_az: $("#ro-min", d).value, rot_max_az: $("#ro-max", d).value, rot_log: $("#ro-log", d).checked, rot_speed: $("#ro-speed", d).value } }); toast("Rotor wird verbunden …"); d.close(); } catch (err) { toast(err.message, true); } };
+  $("#ro-showlog", d).onclick = () => window.open("/api/rotor/log", "_blank", "width=700,height=600");
   d.querySelector('[value="off"]').onclick = async e => { e.preventDefault(); WW.settings = await api("/api/settings", { method: "PUT", body: { rot_enabled: false } }); d.close(); };
 }
 function createRotDials(root) {

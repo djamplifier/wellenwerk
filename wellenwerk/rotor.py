@@ -22,6 +22,34 @@ class Rotor:
                           model="", min_az=0, max_az=360, min_el=0, max_el=90, el_capable=False)
         self._wake = asyncio.Event()
 
+    # Einstellungen: Azimut-Versatz (Kalibrierung), Anschlag Nord/Sued, eigener Drehbereich, Protokoll
+    offset = 0.0
+    stop_side = "north"
+    raw_az = None
+    limits: tuple | None = None
+    logfile = None
+
+    def configure(self, offset=0.0, stop="north", min_az=None, max_az=None, logfile=None):
+        self.offset, self.stop_side, self.logfile = float(offset or 0), stop or "north", logfile
+        self.limits = (float(min_az), float(max_az)) if min_az not in (None, "") and max_az not in (None, "") else None
+        self._wake.set()
+
+    def _range(self):
+        if self.limits:
+            return self.limits
+        if self.stop_side == "south":                    # Anschlag im Sueden: Rotor zaehlt -180..+180
+            return (-180.0, 180.0)
+        return (self.caps.get("min_az", 0), self.caps.get("max_az", 360))
+
+    def _log(self, text: str):
+        if self.logfile:
+            try:
+                from datetime import datetime
+                with open(self.logfile, "a", encoding="utf-8") as f:
+                    f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S}  {text}\n")
+            except OSError:
+                pass
+
     def reconfigure(self, host: str, port: int, enabled: bool):
         if (host, port, enabled) != (self.host, self.port, self.enabled):
             self.host, self.port, self.enabled = host, port, enabled
@@ -89,6 +117,8 @@ class Rotor:
                     await self._load_caps()
                 kv, _ = await self._cmd("p")
                 az, el = float(kv.get("azimuth", 0)), float(kv.get("elevation", 0))
+                self.raw_az = az
+                az = (az + self.offset) % 360        # Kalibrierung: angezeigte Richtung
                 moving = last_az is not None and abs(az - last_az) > 0.05
                 if self.target is not None and abs(((az - self.target) + 180) % 360 - 180) < 1.0 and not moving:
                     self.target = None
@@ -109,26 +139,36 @@ class Rotor:
             except asyncio.TimeoutError:
                 pass
 
+    def device_az(self, want: float) -> float:
+        """Geraeteposition fuer die gewuenschte Richtung: Versatz abziehen, im Drehbereich bleiben und
+        bei Ueberlauf-Rotoren (z. B. 0..450) den kuerzeren Weg von der aktuellen Stellung nehmen."""
+        base = (want - self.offset) % 360
+        lo, hi = self._range()
+        cands = [base + k * 360 for k in (-2, -1, 0, 1, 2) if lo - 0.05 <= base + k * 360 <= hi + 0.05]
+        if not cands:
+            raise RotorError(f"{want:.0f}° liegt außerhalb des Drehbereichs ({lo:.0f}° bis {hi:.0f}°)")
+        cur = self.raw_az if self.raw_az is not None else cands[0]
+        return min(cands, key=lambda c: abs(c - cur))
+
     async def set_pos(self, az: float, el: float | None = None):
         if not self.enabled:
             raise RotorError("Rotor ist in den Einstellungen nicht aktiviert")
-        az = az % 360
-        lo, hi = self.caps.get("min_az", 0), self.caps.get("max_az", 360)
-        if az < lo:
-            az += 360
-        if az > hi:
-            az -= 360
+        want = az % 360
+        az = self.device_az(want)
         el = 0.0 if el is None else max(self.caps.get("min_el", 0), min(self.caps.get("max_el", 90) or 0, el))
         await self._cmd(f"P {az:.1f} {el:.1f}")
-        self.target = az % 360
+        self._log(f"drehen auf {want:.1f}° (Gerät {az:.1f}°) El {el:.1f}°")
+        self.target = want
         self._wake.set()
 
     async def stop(self):
         await self._cmd("S")
+        self._log("Stopp")
         self.target = None
         self._wake.set()
 
     async def park(self):
         await self._cmd("K")
+        self._log("Parken")
         self.target = None
         self._wake.set()
