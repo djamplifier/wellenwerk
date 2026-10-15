@@ -29,7 +29,7 @@ from pathlib import Path
 
 log = logging.getLogger("ww.errors")
 # Annahmestelle fuer Rueckmeldungen (relay/worker.js); daraus werden Issues auf GitHub
-REPORT_URL = __import__("os").environ.get("WW_REPORT_URL", "")
+REPORT_URL = __import__("os").environ.get("WW_REPORT_URL", "https://wellenwerk-meldungen.maadclaw.workers.dev")
 KEEP = 1000                     # Eintraege in errors.jsonl
 _SECRET_RE = re.compile(r"(?i)((?:pass(?:word|wort)?|pwd|token|api[_-]?key|secret)[\"']?\s*[:=]\s*[\"']?|(?:bearer|basic)\s+)([^\s\"'&,;]{3,})")
 

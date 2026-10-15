@@ -98,6 +98,7 @@ class OpenWebRXRig(SdrRig):
         self.adpcm, self.fftc = Adpcm(), Adpcm()
         self.out_rate = 12000
         self.cfg_event = asyncio.Event()
+        self.prof_event = asyncio.Event()
         self.state["levels"].update(SQL=0.0)
         self.state["sdr"]["url"] = self.p.get("url", "")
 
@@ -116,6 +117,7 @@ class OpenWebRXRig(SdrRig):
         self.say(f"verbinde mit {self.p.get('url')}")
         self.center = self.rate = 0                      # bei Neuverbindung: Ausschnitt kommt neu vom Server
         self.adpcm.reset()
+        self.prof_event.clear()
         try:
             self.ws = await websockets.connect(self._uri(), max_size=None, ping_interval=None, open_timeout=12, user_agent_header="Wellenwerk")
         except Exception as e:
@@ -149,19 +151,13 @@ class OpenWebRXRig(SdrRig):
                 if not self.state["connected"]:
                     self.state.update(connected=True, error="")
                     self.say(f"verbunden, Ausschnitt {(self.center - self.rate / 2) / 1e6:.3f}–{(self.center + self.rate / 2) / 1e6:.3f} MHz")
-                    if not self._covers(self.state["freq"]) and not self.params.get("freq"):
-                        self.state["freq"] = int(self.center + (v.get("start_offset_freq") or 0))
                     await self._send({"type": "dspcontrol", "params": {"squelch_level": -150}})
-                    try:
-                        await self.tune()
-                    except RigError as e:          # Wunschfrequenz hier nicht empfangbar: auf den Ausschnitt des Betreibers gehen
-                        self.say(str(e))
-                        self.state["freq"] = int(self.center + (v.get("start_offset_freq") or 0))
-                        await self.tune()
+                    asyncio.ensure_future(self._first_tune(int(self.center + (v.get("start_offset_freq") or 0))))
                 self.cfg_event.set()
                 await self.changed(True)
         elif t == "profiles":
             self.profiles = v or []
+            self.prof_event.set()
             self._ranges()
             await self.changed(True)
             want = self.params.get("profile")
@@ -214,6 +210,27 @@ class OpenWebRXRig(SdrRig):
             data8 = [int(min(255, max(0, (v + 150) * 255 / 130))) for v in vals]
             self.on_spectrum(dict(name="OpenWebRX", low=self.center - self.rate / 2, high=self.center + self.rate / 2,
                                   center=self.center, span=self.rate, min=60, max=230, data=data8))
+
+    async def _first_tune(self, fallback: int):
+        """Nach dem Verbinden (auch Neuverbinden) die gewuenschte Frequenz einstellen. Liegt sie nicht im aktuellen
+        Ausschnitt, erst die Profilliste des Servers abwarten (kommt nach der Konfiguration) und dann umschalten."""
+        try:
+            if self.state.get("freq") and not self._covers(self.state["freq"]):
+                try:
+                    await asyncio.wait_for(self.prof_event.wait(), 8)
+                except asyncio.TimeoutError:
+                    pass
+            if not self.state.get("freq"):
+                self.state["freq"] = fallback
+            try:
+                await self.tune()
+            except RigError as e:              # Wunschfrequenz hier nicht empfangbar: auf den Ausschnitt des Betreibers gehen
+                self.say(str(e))
+                self.state["freq"] = int(self.center + (fallback - self.center if self._covers(fallback) else 0))
+                await self.tune()
+            await self.changed(True)
+        except Exception as e:
+            self.say(f"Abstimmen: {e}")
 
     def _ranges(self):
         """Empfangbare Bereiche: aktueller Ausschnitt plus Baender, die in Profilnamen vorkommen (z. B. „40m“, „7 MHz“)."""
