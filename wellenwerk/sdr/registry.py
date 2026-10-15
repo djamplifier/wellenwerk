@@ -1,8 +1,12 @@
 """Empfaenger-Arten. Neue Arten (auch aus Erweiterungen) melden sich mit register() an."""
 from .kiwi import KiwiRig
 from .openwebrx import OpenWebRXRig
+from .rtltcp import RtlTcpRig
+from .hl2 import Hl2Rig
 
-TYPES = {"kiwisdr": dict(cls=KiwiRig, label="KiwiSDR", needs="url"), "openwebrx": dict(cls=OpenWebRXRig, label="OpenWebRX", needs="url")}
+TYPES = {"kiwisdr": dict(cls=KiwiRig, label="KiwiSDR", needs="url"), "openwebrx": dict(cls=OpenWebRXRig, label="OpenWebRX", needs="url"),
+         "rtltcp": dict(cls=RtlTcpRig, label="RTL-SDR (rtl_tcp)", needs=""),
+         "hl2": dict(cls=Hl2Rig, label="Hermes Lite 2 / openHPSDR (Empfang)", needs="")}
 
 
 def register(kind: str, cls, label: str, needs: str = "url"):

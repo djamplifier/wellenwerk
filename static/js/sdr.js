@@ -47,7 +47,7 @@ function sdrPicker(root, done) {
       <label class="chk"><input type="checkbox" class="sp-band" ${st.band ? "checked" : ""}> empfängt aktuelle Frequenz</label></div>
     <div class="tablewrap sp-wrap"><table class="grid sp-t"><thead><tr><th>Art</th><th>Name</th><th>Ort</th><th>km</th><th>Plätze</th><th></th></tr></thead><tbody><tr><td colspan="6" class="hint">Liste wird geladen …</td></tr></tbody></table></div>
     <fieldset><legend>Empfänger direkt eintragen</legend><div class="grid2">
-      <label>Art<select class="sp-mtype">${SDR_TYPES.filter(t => t[0] !== "websdr").map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></label>
+      <label>Art<select class="sp-mtype"></select></label>
       <label>Adresse<input class="sp-url" placeholder="http://empfaenger.example:8073"></label>
       <label class="wide">Parameter (optional, mit ; getrennt)<input class="sp-par" placeholder="z. B. password=…; span=200; freq=7074; mode=USB; user=Name"></label>
       <div class="ctl-row wide"><button type="button" class="sp-go primary">Als Hauptgerät verbinden</button><button type="button" class="sp-go2">Als zweiten Empfänger</button></div></div></fieldset>
@@ -73,6 +73,9 @@ function sdrPicker(root, done) {
     else connect(x.type, x.url, `freq=${((WW.rig.freq || 7074000) / 1000).toFixed(3)}; mode=${WW.rig.mode || "USB"}; user=${WW.station?.callsign || WW.settings.callsign || "Wellenwerk"}`, b.dataset.a, x.name); });
   $(".sp-go", root).onclick = () => connect($(".sp-mtype", root).value, $(".sp-url", root).value.trim(), $(".sp-par", root).value, "main");
   $(".sp-go2", root).onclick = () => connect($(".sp-mtype", root).value, $(".sp-url", root).value.trim(), $(".sp-par", root).value, "second");
+  const HINT = { kiwisdr: "http://empfaenger.example:8073", openwebrx: "http://empfaenger.example:8073/", rtltcp: "127.0.0.1:1234 (rtl_tcp)", hl2: "leer = automatisch suchen, sonst IP-Adresse" };
+  api("/api/sdr/kinds").then(ks => { const sel = $(".sp-mtype", root); sel.innerHTML = ks.map(k => `<option value="${esc(k.kind)}">${esc(k.label)}</option>`).join("");
+    sel.onchange = () => { $(".sp-url", root).placeholder = HINT[sel.value] || ""; }; sel.onchange(); }).catch(() => { });
   load();
 }
 
