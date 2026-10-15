@@ -77,8 +77,8 @@ function selfTest(url) {
 
 app.whenReady().then(async () => {
   // Soundkarte (Digitalbetrieb, SSTV, Sprachspeicher) ohne Rueckfrage im Programm erlauben
-  session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(["media", "clipboard-sanitized-write", "fullscreen", "notifications"].includes(perm)));
-  session.defaultSession.setPermissionCheckHandler((wc, perm) => ["media", "clipboard-sanitized-write", "fullscreen"].includes(perm));
+  session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(["media", "speaker-selection", "clipboard-sanitized-write", "fullscreen", "notifications"].includes(perm)));
+  session.defaultSession.setPermissionCheckHandler((wc, perm) => ["media", "speaker-selection", "clipboard-sanitized-write", "fullscreen"].includes(perm));
   // Programm-Menues bringt die Oberflaeche selbst mit; macOS braucht trotzdem die Standard-Bearbeiten-Befehle
   Menu.setApplicationMenu(process.platform === "darwin" ? Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]) : null);
   try { createWindow(await startServer()); }

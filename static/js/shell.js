@@ -262,6 +262,7 @@ function openOptions(tab = "station") {
       <input id="acc-target" placeholder="z. B. NB, 20m, USB, logbook" style="width:180px"><button type="button" id="acc-add">Hinzufügen</button></div></div>
     <div class="dtab ${tab === "comms" ? "" : "hidden"}" data-t="comms"><div class="grid2">
       <label>Anzeige-Aktualisierung (ms)<input name="rig_poll_ms" type="number" min="100" max="2000" value="${s.rig_poll_ms || 250}"></label>
+      <label class="wide">STUN-Server für Fernbetrieb-Audio außerhalb des Heimnetzes (leer = nur Heimnetz)<input name="rtc_stun" value="${esc(s.rtc_stun || "")}" placeholder="z. B. stun:stun.l.google.com:19302"></label>
       <label class="wide chkrow"><input type="checkbox" name="rig_dualvfo" ${s.rig_dualvfo ? "checked" : ""}> Beide VFOs bei jeder Aktualisierung lesen (Satellitenbetrieb)</label>
       <p class="hint wide">PTT über DTR/RTS eines COM-Ports, Handshake und CI-V-Adresse stellst du je Funkgerät im Verbinden-Dialog ein.</p></div></div>
     <div class="dtab ${tab === "wheel" ? "" : "hidden"}" data-t="wheel"><div class="grid2">

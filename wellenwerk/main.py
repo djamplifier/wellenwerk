@@ -51,7 +51,7 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100",
                 clublog_email="", clublog_pass="", clublog_api="",
                 wl_call="", wl_password="", wl_telnet_host="server.winlink.org", wl_telnet_port=8772, wl_ptt="rig",
                 ardop_host="127.0.0.1", ardop_port=8515, ardop_bw="2000MAX", vara_host="127.0.0.1", vara_port=8300, vara_bw="2300",
-                agw_host="127.0.0.1", agw_port=8000, agw_radio_port=0,
+                agw_host="127.0.0.1", agw_port=8000, agw_radio_port=0, rtc_stun="",
                 callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False)
 SECRETS = ("wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api")
 BOOLS = ("rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo")
@@ -1991,17 +1991,63 @@ async def stats():
     return book.stats()
 
 
+# Fernbetrieb-Audio: Vermittlung von WebRTC-Angeboten zwischen dem Stationsfenster (Soundkarte am Funkgeraet)
+# und entfernten Fenstern. Das Audio selbst fliesst direkt zwischen den Browsern.
+WS_IDS: dict = {}
+AUDIO_STATION: dict = {}
+
+
+async def _audio_station_changed():
+    await broadcast(dict(type="audio_station", available=bool(AUDIO_STATION), name=AUDIO_STATION.get("name", ""),
+                         id=AUDIO_STATION.get("id", "")))
+
+
+async def _ws_message(websocket: WebSocket, text: str):
+    try:
+        m = json.loads(text)
+    except ValueError:
+        return
+    me = WS_IDS.get(websocket)
+    if m.get("type") == "station":
+        if m.get("on"):
+            AUDIO_STATION.clear()
+            AUDIO_STATION.update(id=me, ws=websocket, name=str(m.get("name") or "Station")[:60])
+        elif AUDIO_STATION.get("ws") is websocket:
+            AUDIO_STATION.clear()
+        await _audio_station_changed()
+    elif m.get("type") == "rtc":
+        to = m.get("to")
+        target = AUDIO_STATION.get("ws") if to == "station" else next((w for w, i in WS_IDS.items() if i == to), None)
+        if target is None:
+            await websocket.send_json(dict(type="rtc", kind="error", text="Keine Station hat ihr Audio freigegeben"))
+            return
+        m["from"] = me
+        try:
+            await target.send_json(m)
+        except Exception:
+            pass
+
+
 @app.websocket("/ws")
 async def ws(websocket: WebSocket):
     await websocket.accept()
     clients.add(websocket)
+    WS_IDS[websocket] = os.urandom(6).hex()
     try:
+        await websocket.send_json(dict(type="hello", id=WS_IDS[websocket], audio_station=bool(AUDIO_STATION),
+                                       audio_station_name=AUDIO_STATION.get("name", "")))
         while True:
-            await websocket.receive_text()
+            await _ws_message(websocket, await websocket.receive_text())
     except WebSocketDisconnect:
         pass
     finally:
         clients.discard(websocket)
+        gone = WS_IDS.pop(websocket, None)
+        if AUDIO_STATION.get("ws") is websocket:
+            AUDIO_STATION.clear()
+            await _audio_station_changed()
+        if gone:
+            await broadcast(dict(type="rtc_gone", id=gone))
 
 
 STATIC = BASE / "static"

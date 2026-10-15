@@ -394,7 +394,8 @@ function rigMenus() {
       { label: "KW-Datenbank", check: () => panelOpen("rig", "swdata"), act: () => togglePanel("rig", "swdata") },
       { label: "Bandübersicht", check: () => panelOpen("rig", "bandscope"), act: () => togglePanel("rig", "bandscope") },
       { label: "Panadapter", check: () => panelOpen("rig", "panadapter"), act: () => togglePanel("rig", "panadapter") },
-      { label: "Speicherkanäle", check: () => panelOpen("rig", "memories"), act: () => togglePanel("rig", "memories") }, "-",
+      { label: "Speicherkanäle", check: () => panelOpen("rig", "memories"), act: () => togglePanel("rig", "memories") },
+      { label: "Fernbetrieb-Audio", check: () => panelOpen("rig", "remoteaudio"), act: () => togglePanel("rig", "remoteaudio") }, "-",
       "Schema", ...Object.keys(SCHEMES).map(s => ({ label: s, act: () => { store.set("rc.scheme", s); if (RC.layout) { RC.layout.scheme = { base: s }; saveRigLayout(); } } })), "-",
       { label: "Vollbild", key: "F11", act: fullScreen }] },
     { label: "Bänder", items: [...PLAN_NAMES.map(p => ({ label: p[1], act: () => { store.set("rc.plan", p[0]); WW.emit("rc-layout"); } })), "-", { label: "Bandspreizung aus", act: () => { RC.bsp = false; WW.emit("rc-layout"); } }] },
@@ -406,7 +407,7 @@ function rigMenus() {
     { label: "Scannen", items: [{ label: "Scanner …", icon: "i-scan", act: openScanner }, { label: "Scanner stoppen", act: () => stopScan("gestoppt") }] },
     { label: "Abstimmen", items: [{ label: "Feinabstimmung 2 zeigen", check: () => store.get("rc.fine2", false), act: () => { store.set("rc.fine2", !store.get("rc.fine2", false)); WW.emit("rc-layout"); } },
       ...[1, 10, 100, 1000].map(s => ({ label: `Mausrad-Schritt ${s} Hz`, act: () => { const o = store.get("opts", {}); o.wheel = s; store.set("opts", o); } }))] },
-    { label: "Extras", items: [{ label: "Panadapter", icon: "i-wave", act: () => addPanel("rig", "panadapter") }, { label: "Layout anpassen …", key: "Strg+F8", act: openCustomize }, { label: "Programmoptionen …", key: "F8", act: () => openOptions() }, { label: "Sprach-Keyer …", icon: "i-mic", act: openVoiceKeyer }, { label: "CW-Keyer (Digitalbetrieb)", act: () => switchApp("dm") }] },
+    { label: "Extras", items: [{ label: "Panadapter", icon: "i-wave", act: () => addPanel("rig", "panadapter") }, { label: "Layout anpassen …", key: "Strg+F8", act: openCustomize }, { label: "Programmoptionen …", key: "F8", act: () => openOptions() }, { label: "Sprach-Keyer …", icon: "i-mic", act: openVoiceKeyer }, { label: "Fernbetrieb-Audio", icon: "i-mic", act: () => addPanel("rig", "remoteaudio") }, { label: "CW-Keyer (Digitalbetrieb)", act: () => switchApp("dm") }] },
     MENU_WINDOW("rig"), MENU_HELP,
   ];
   APPS.rig.toolbar = [

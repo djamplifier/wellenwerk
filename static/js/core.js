@@ -131,6 +131,10 @@ function connectWs() {
       case "wsjtx": WW.wsjtx = m.wsjtx; WW.emit("wsjtx", m.wsjtx); break;
       case "decode": WW.decodes.unshift(m.decode); if (WW.decodes.length > 500) WW.decodes.pop(); WW.emit("decode", m.decode); break;
       case "winlink": WW.emit("winlink", m); break;
+      case "hello": WW.wsId = m.id; WW.audioStation = { available: m.audio_station, name: m.audio_station_name }; WW.emit("audio-station"); break;
+      case "audio_station": WW.audioStation = m; WW.emit("audio-station"); break;
+      case "rtc": WW.emit("rtc", m); break;
+      case "rtc_gone": WW.emit("rtc-gone", m.id); break;
       case "rotor": WW.rotor = m.rotor; WW.emit("rotor", m.rotor); break;
       case "winkey": WW.winkey = m.winkey; WW.emit("winkey", m.winkey); break;
       case "stations": if (window.PRG) PRG.stations = m.stations; WW.emit("stations", m.stations); break;
@@ -142,7 +146,7 @@ function connectWs() {
       case "qso_changed": case "qso_deleted": case "reload": WW.emit("reload"); break;
     }
   };
-  ws.onopen = () => refreshState();
+  ws.onopen = () => { WW.ws = ws; refreshState(); WW.emit("ws-open"); };
   ws.onclose = () => { WW.emit("offline"); setTimeout(connectWs, 2000); };
 }
 async function loadCaps() {
@@ -244,3 +248,4 @@ function modeTable() {
   return t;
 }
 function rstFor(mode) { const t = modeTable(), m = (mode || "").toUpperCase(); return m in t ? t[m] : (["CW", "RTTY", "PSK31"].includes(m) ? "599" : "59"); }
+function wsSend(m) { if (WW.ws && WW.ws.readyState === 1) WW.ws.send(JSON.stringify(m)); }

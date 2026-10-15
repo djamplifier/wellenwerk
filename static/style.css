@@ -365,3 +365,8 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .wl-log { flex: 1; min-height: 120px; overflow: auto; border: 1px solid var(--line2); background: var(--panel2); padding: 4px 6px; font-family: "Share Tech Mono", ui-monospace, monospace; font-size: 12px; }
 .wl-l span { opacity: .6; } .wl-l.ok { color: var(--ok); } .wl-l.err { color: var(--bad); } .wl-l.warn { color: #d08a00; }
 .wl-comp textarea { font-family: "Share Tech Mono", ui-monospace, monospace; } .chip { display: inline-flex; gap: 4px; align-items: center; border: 1px solid var(--line2); border-radius: 10px; padding: 1px 6px; }
+/* Fernbetrieb-Audio */
+.ra { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow: auto; } .ra fieldset { border: 1px solid var(--line2); padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.ra legend { font-weight: 700; padding: 0 4px; } .ra-meter { width: 120px; height: 8px; background: var(--panel2); border: 1px solid var(--line2); } .ra-meter i { display: block; height: 100%; width: 0; background: var(--ok); }
+.ra-ptt { min-width: 160px; padding: 10px 14px; font-weight: 700; user-select: none; touch-action: none; } .ra-ptt.on { background: var(--bad); color: #fff; border-color: var(--bad); }
+.ra .ok { color: var(--ok); } .ra .bad { color: var(--bad); }
