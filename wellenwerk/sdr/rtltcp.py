@@ -28,6 +28,10 @@ class RtlTcpRig(IqRig):
         self.r = self.w = None
         self.proc = None
         self.offset = int(float(self.params.get("offset", 0)))
+        if self.params.get("direct"):                          # Direktabtastung: Kurzwelle
+            self.state["sdr"]["ranges"] = [[500_000, 28_800_000]]
+        else:                                                  # Tuner 24 MHz .. 1,766 GHz (Konverter verschiebt)
+            self.state["sdr"]["ranges"] = [[24_000_000 - self.offset, 1_766_000_000 - self.offset]] if self.offset >= 0 else [[0, 1_766_000_000]]
 
     def _addr(self):
         a = (self.p.get("url") or "127.0.0.1:1234").replace("rtl_tcp://", "").replace("tcp://", "").strip("/")

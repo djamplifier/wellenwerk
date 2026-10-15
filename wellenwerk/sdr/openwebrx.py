@@ -143,6 +143,7 @@ class OpenWebRXRig(SdrRig):
             if v.get("profile_id") and v.get("sdr_id"):
                 self.profile = f"{v['sdr_id']}|{v['profile_id']}"
             if self.center and self.rate:
+                self._ranges()
                 if not self.state["connected"]:
                     self.state.update(connected=True, error="")
                     self.say(f"verbunden, Ausschnitt {(self.center - self.rate / 2) / 1e6:.3f}–{(self.center + self.rate / 2) / 1e6:.3f} MHz")
@@ -159,6 +160,8 @@ class OpenWebRXRig(SdrRig):
                 await self.changed(True)
         elif t == "profiles":
             self.profiles = v or []
+            self._ranges()
+            await self.changed(True)
             want = self.params.get("profile")
             if want:
                 p = next((x for x in self.profiles if x["id"] == want or want.lower() in x.get("name", "").lower()), None)
@@ -209,6 +212,18 @@ class OpenWebRXRig(SdrRig):
             data8 = [int(min(255, max(0, (v + 150) * 255 / 130))) for v in vals]
             self.on_spectrum(dict(name="OpenWebRX", low=self.center - self.rate / 2, high=self.center + self.rate / 2,
                                   center=self.center, span=self.rate, min=60, max=230, data=data8))
+
+    def _ranges(self):
+        """Empfangbare Bereiche: aktueller Ausschnitt plus Baender, die in Profilnamen vorkommen (z. B. „40m“, „7 MHz“)."""
+        from ..bands import BANDS
+        rng = [[self.center - self.rate / 2, self.center + self.rate / 2]] if self.rate else []
+        for p in self.profiles:
+            name = p.get("name", "")
+            for b, lo, hi, _ in BANDS:
+                if re.search(rf"(?<![\d.]){re.escape(b)}\b", name, re.I) or any(lo <= float(x.replace(",", ".")) * 1e6 <= hi
+                                                                                    for x in re.findall(r"(\d+(?:[.,]\d+)?)\s*MHz", name, re.I)):
+                    rng.append([lo, hi])
+        self.state["sdr"]["ranges"] = rng
 
     def _covers(self, f) -> bool:
         return bool(self.rate) and abs(f - self.center) < self.rate / 2 * 0.98

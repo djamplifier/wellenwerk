@@ -40,6 +40,7 @@ class KiwiRig(SdrRig):
         self.zoom = 8
         self.wf_lines = 0
         self.state["sdr"]["url"] = self.p.get("url", "")
+        self.state["sdr"]["ranges"] = [[0, 30_000_000]]
 
     def _uri(self, which: str, prefix: str = "") -> str:
         host, port, tls = kiwi_base(self.p.get("url", ""))
@@ -124,6 +125,7 @@ class KiwiRig(SdrRig):
                 raise RigError("KiwiSDR leitet auf einen anderen Empfänger um")
             if name == "bandwidth":
                 self.bandwidth = int(float(value))
+                self.state["sdr"]["ranges"] = [[0, self.bandwidth]]
             elif name == "audio_rate" and which == "SND":
                 self.audio_rate = int(float(value))
                 await self._send(ws, f"SET AR OK in={self.audio_rate} out=48000")

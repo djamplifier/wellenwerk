@@ -14,9 +14,15 @@ const PLAN_NAMES = [["R1-HF", "160m – 10m (Region 1)", "R1", 10], ["R1-ALL", "
   ["R2-ALL", "160m – 70cm (Region 2)", "R2", 99], ["R3-HF", "160m – 10m (Region 3)", "R3", 10], ["R3-ALL", "160m – 70cm (Region 3)", "R3", 99]];
 function currentPlan() {
   const key = store.get("rc.plan", "R1-HF"), p = PLAN_NAMES.find(x => x[0] === key) || PLAN_NAMES[0];
+  const rng = rxRanges();
+  if (rng) {   // Empfaenger (WebSDR/SDR): alle Baender der Region, aber nur die empfangbaren
+    const bands = BANDPLANS[p[2]].filter(b => rng.some(([lo, hi]) => b[1] * 1000 < hi && b[2] * 1000 > lo));
+    return { key: p[0], title: `${p[1].replace(/ – .*\(/, " (").replace("160m (", "Empfänger (")} · ${bands.length} Bänder empfangbar`, bands: bands.length ? bands : BANDPLANS[p[2]].slice(0, 1) };
+  }
   const bands = BANDPLANS[p[2]].filter(b => p[3] === 99 || b[2] <= 30000);
   return { key: p[0], title: p[1], bands };
 }
+function rxRanges() { const r = WW.rig || {}; return r.receiver && r.sdr && Array.isArray(r.sdr.ranges) && r.sdr.ranges.length ? r.sdr.ranges : null; }
 
 // ---------- Schemata (Farben der Geraeteanzeige) ----------
 const SCHEMES = {
@@ -137,7 +143,8 @@ function createFace(root) {
     if (e.target.closest(".x")) { act(`/api/radios/${t.dataset.id}/disconnect`); return; }
     if (t.dataset.id === "+") openConnect(); else act(`/api/radios/${t.dataset.id}/select`); });
   const rebuild = () => { applyScheme(rc); buildButtons(rc); buildTuning(rc); renderFace(rc); };
-  const offs = [WW.on("rig", () => renderFace(rc)), WW.on("rig-local", () => renderFace(rc)), WW.on("rc-layout", rebuild), WW.on("caps", () => loadRigLayout()),
+  let rkey = JSON.stringify(rxRanges());
+  const offs = [WW.on("rig", () => { const k = JSON.stringify(rxRanges()); if (k !== rkey) { rkey = k; RC.bsp = false; buildTuning(rc); renderTabs(rc); } renderFace(rc); }), WW.on("rig-local", () => renderFace(rc)), WW.on("rc-layout", rebuild), WW.on("caps", () => loadRigLayout()),
     WW.on("radios", () => renderTabs(rc)), WW.on("spots", () => renderBars(rc)), WW.on("spot", () => renderBars(rc)), WW.on("quicksave", () => renderBars(rc))];
   const clk = setInterval(() => { const n = new Date(); $(".rc-date", rc).textContent = n.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     $(".rc-time", rc).textContent = n.toLocaleTimeString("de-DE") + "  ·  " + n.toISOString().slice(11, 19) + " UTC"; }, 1000);
@@ -147,9 +154,23 @@ function createFace(root) {
   return () => { offs.forEach(f => f()); clearInterval(clk); ro.disconnect(); };
 }
 function renderTabs(rc) {
-  const conn = WW.radios.filter(r => r.connected);
+  const conn = WW.radios.filter(r => r.connected), cur = WW.radios.find(r => r.id === WW.current);
   $(".rc-tabs", rc).innerHTML = conn.map(r => `<span class="rc-tab${r.id === WW.current ? " on" : ""}" data-id="${r.id}" title="${esc(r.mfg || "")} ${esc(r.model_name || "")}">${esc(r.name)}<b class="x" title="Trennen">×</b></span>`).join("")
-    + `<span class="rc-tab add" data-id="+" title="Funkgerät verbinden">＋ Verbinden</span>`;
+    + `<span class="rc-tab add" data-id="+" title="Funkgerät verbinden">＋ Verbinden</span>`
+    + (cur && cur.kind === "sdr" && ["kiwisdr", "openwebrx"].includes(cur.sdr_type) ? `<select class="rc-srv" title="Empfänger wechseln"><option value="">${esc(cur.name)}</option><option value="__load" disabled>Liste wird geladen …</option></select>` : "");
+  const sel = $(".rc-srv", rc); if (!sel) return;
+  const f = WW.rig.freq || 7074000, curKey = (() => { try { const u = new URL(cur.url.includes("://") ? cur.url : "http://" + cur.url); return u.hostname.toLowerCase() + (["", "80", "443", "8073"].includes(u.port) ? "" : ":" + u.port) + u.pathname.replace(/\/$/, ""); } catch { return cur.url; } })();
+  api(`/api/sdr/receivers?type=${cur.sdr_type}&free=true&khz=${cur.sdr_type === "kiwisdr" ? f / 1000 : 0}&limit=40`).then(r => {
+    sel.innerHTML = `<option value="">${esc(cur.name)}</option>` + r.receivers.filter(x => x.key !== curKey).map((x, i) =>
+      `<option value="${i}">${esc(x.name.slice(0, 60))}${x.km != null ? ` · ${x.km} km` : ""}${x.users_max ? ` · ${x.users}/${x.users_max}` : ""}</option>`).join("") + `<option value="__list">Alle Empfänger …</option>`;
+    sel._list = r.receivers.filter(x => x.key !== curKey); }).catch(() => { });
+  sel.onchange = async () => { const v = sel.value; if (!v) return; if (v === "__list") { sel.value = ""; return openConnect(null, "sdr"); }
+    const x = sel._list[+v]; sel.disabled = true; toast(`wechsle zu ${x.name.slice(0, 50)} …`);
+    try { await post("/api/radios", { ...cur, url: x.url, name: x.name.slice(0, 60), params: `freq=${(f / 1000).toFixed(3)}; mode=${WW.rig.mode || "USB"}; user=${WW.station?.callsign || "Wellenwerk"}` });
+      await post(`/api/radios/${cur.id}/connect`); if (cur.role !== "second") await post(`/api/radios/${cur.id}/select`); await loadRadios(); rxSync?.(); toast("Empfänger gewechselt"); }
+    catch (e) { toast(`${e.message} – zurück zu ${cur.name}`, true);      // vorherigen Empfaenger wiederherstellen
+      try { await post("/api/radios", { ...cur }); await post(`/api/radios/${cur.id}/connect`); if (cur.role !== "second") await post(`/api/radios/${cur.id}/select`); } catch { }
+      await loadRadios(); rxSync?.(); } };
 }
 function modeList() {
   const m = (WW.caps.modes || []).filter(x => !["WFM", "AMS", "ECSSUSB", "ECSSLSB", "FAX", "SAM", "SAL", "SAH", "DSB"].includes(x));

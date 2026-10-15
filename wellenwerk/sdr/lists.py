@@ -37,7 +37,11 @@ def _dist(lat1, lon1, lat2, lon2):
 
 
 def _norm_url(u: str) -> str:
-    return (u or "").strip().rstrip("/").lower().replace("https://", "http://")
+    """Gleiche Empfaenger trotz unterschiedlicher Schreibweise erkennen (http/https, Standardports 80/8073, Schraegstrich)."""
+    from urllib.parse import urlparse
+    p = urlparse((u or "").strip() if "://" in (u or "") else "http://" + (u or "").strip())
+    port = "" if p.port in (None, 80, 443, 8073) else f":{p.port}"
+    return f"{(p.hostname or '').lower()}{port}{p.path.rstrip('/')}"
 
 
 def receivers(data_dir: Path, home=None) -> list[dict]:
@@ -80,6 +84,8 @@ def receivers(data_dir: Path, home=None) -> list[dict]:
         except (ValueError, TypeError) as e:
             log.warning("KiwiSDR-Liste unlesbar: %s", e)
     res = list(out.values())
+    for r in res:
+        r["key"] = _norm_url(r["url"])
     for r in res:
         r["km"] = _dist(home[0], home[1], r.get("lat"), r.get("lon")) if home else None
     res.sort(key=lambda r: (r["km"] is None, r["km"] or 0))

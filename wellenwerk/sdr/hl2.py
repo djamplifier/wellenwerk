@@ -69,6 +69,7 @@ class Hl2Rig(IqRig):
         self.queue: asyncio.Queue = asyncio.Queue(maxsize=50)
         self._acc = []
         self.gain = int(float(self.params.get("gain", 20)))
+        self.state["sdr"]["ranges"] = [[0, 38_400_000]]
 
     async def set_center(self, hz: int):
         self.center = hz           # HL2: NCO direkt auf die Mittenfrequenz

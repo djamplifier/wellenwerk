@@ -115,7 +115,7 @@ function createWorkspace(appId) {
   SHELL.dv[appId] = dv;
   const saved = store.get(`layout.${appId}`, null);
   let ok = false;
-  if (saved) { try { dv.fromJSON(saved); ok = dv.panels.length > 0; } catch (e) { console.warn("Layout", e); } }
+  if (saved) { try { dv.fromJSON(saved); ok = dv.panels.length > 0; fixTitles(appId, dv); } catch (e) { console.warn("Layout", e); } }
   if (!ok) { dv.clear(); app.layout(dv); }
   let t; dv.onDidLayoutChange(() => { clearTimeout(t); t = setTimeout(() => { try { store.set(`layout.${appId}`, dv.toJSON()); } catch { } refreshToolbar(); refreshMenuChecks(); }, 400); });
   dv.onDidRemovePanel(() => { refreshToolbar(); refreshMenuChecks(); });
@@ -144,11 +144,13 @@ function dockAll(appId = SHELL.active) {   // schwebende und ausgelagerte Fenste
     .forEach(d => dv.addPanel({ ...d, position: anchor ? { referencePanel: anchor.id, direction: "within" } : undefined }));
   toast(`${loose.length} Fenster angedockt`);
 }
+// gespeicherte Anordnungen enthalten die Fenstertitel ihrer Version: immer die aktuellen (ggf. uebersetzten) setzen
+function fixTitles(appId, dv) { for (const p of dv.panels) { const d = APPS[appId]?.panels?.[p.api.component]; if (d && p.title !== d.title) p.api.setTitle(d.title); } }
 function saveLayoutAs(slot, appId = SHELL.active) { store.set(`layout${slot}.${appId}`, dvApi(appId).toJSON()); toast(`Anordnung als Layout ${slot} gespeichert`); }
 function loadLayout(slot, appId = SHELL.active) {
   const j = store.get(`layout${slot}.${appId}`, null);
   if (!j) { saveLayoutAs(slot, appId); return; }
-  const dv = dvApi(appId); dv.clear(); dv.fromJSON(j); toast(`Layout ${slot}`);
+  const dv = dvApi(appId); dv.clear(); dv.fromJSON(j); fixTitles(appId, dv); toast(`Layout ${slot}`);
 }
 
 // ---------- Programme wechseln ----------

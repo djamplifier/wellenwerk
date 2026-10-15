@@ -156,7 +156,10 @@ async function loadCaps() {
   WW.capsModel = WW.rig.model; WW.emit("caps", WW.caps);
 }
 async function loadRadios() {
-  const r = await api("/api/radios"); WW.radios = r.radios; WW.current = r.current; WW.emit("radios", r);
+  const r = await api("/api/radios"); const changed = r.current !== WW.current; WW.radios = r.radios; WW.current = r.current;
+  const cur = r.radios.find(x => x.id === r.current);       // Zustand des (neuen) aktuellen Geraets sofort uebernehmen
+  if (changed && cur?.state) { WW.rig = { ...cur.state, band: bandFor(cur.state.freq) }; WW.emit("rig", WW.rig); }
+  WW.emit("radios", r);
 }
 async function loadLogbooks() {
   const r = await api("/api/logbooks"); WW.logbooks = r.logbooks;

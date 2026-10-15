@@ -388,3 +388,4 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 /* FreeDV */
 .fdv { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow: auto; } .fd-sync { color: var(--bad); font-size: 18px; } .fd-sync.ok { color: var(--ok); }
 .fd-lvl { display: block; height: 100%; width: 0; background: var(--ok); } .fd-ptt { min-width: 160px; padding: 10px 14px; font-weight: 700; } .fd-ptt.on { background: var(--bad); color: #fff; }
+.rc-srv { margin-left: 8px; max-width: 320px; background: #1d2228; color: #dfe6ee; border: 1px solid #3a424c; font-size: 12px; }
