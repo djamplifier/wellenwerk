@@ -1,7 +1,8 @@
 """Empfaenger-Arten. Neue Arten (auch aus Erweiterungen) melden sich mit register() an."""
 from .kiwi import KiwiRig
+from .openwebrx import OpenWebRXRig
 
-TYPES = {"kiwisdr": dict(cls=KiwiRig, label="KiwiSDR", needs="url")}
+TYPES = {"kiwisdr": dict(cls=KiwiRig, label="KiwiSDR", needs="url"), "openwebrx": dict(cls=OpenWebRXRig, label="OpenWebRX", needs="url")}
 
 
 def register(kind: str, cls, label: str, needs: str = "url"):
