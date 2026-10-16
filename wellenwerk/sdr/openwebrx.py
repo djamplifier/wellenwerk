@@ -16,6 +16,10 @@ from .base import SdrRig
 
 OWRX_MODES = {"USB": "usb", "PKTUSB": "usb", "RTTY": "usb", "LSB": "lsb", "PKTLSB": "lsb", "CW": "cw", "CWR": "cw",
               "AM": "am", "SAM": "sam", "FM": "nfm"}
+# Dekoder des OpenWebRX, die Wellenwerk anbietet: digitale Sprache (Kennungen, Talker Alias, Textnachrichten) und
+# Datendienste (APRS, Funk-Sensoren/Wetterstationen ueber rtl_433, Wettersonden). Name -> Anzeige
+OWRX_DECODERS = {"dmr": "DMR", "dstar": "D-STAR", "ysf": "YSF (C4FM)", "nxdn": "NXDN", "p25": "P25", "m17": "M17",
+                 "packet": "APRS / Packet", "ism": "Funksensoren 433/868 MHz", "sonde": "Wettersonden"}
 IDX = [-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8]
 STEP = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118,
         130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796, 876, 963, 1060,
@@ -94,6 +98,11 @@ def name_spans(name: str, exact: bool = False) -> list:
             out.append([lo * 1e6, hi * 1e6])
     if exact:
         return out
+    # Sammelbegriffe: VHF = 2 m (und Umgebung), UHF = 70 cm, „2m“/„70cm“ ueber die Bandliste
+    if re.search(r"(?<![\w-])VHF\b", name, re.I):
+        out.append([136e6, 174e6])
+    if re.search(r"(?<![\w-])UHF\b", name, re.I):
+        out.append([420e6, 450e6])
     for b, lo, hi, _ in BANDS:
         if re.search(rf"(?<![\d.]){re.escape(b)}\b", name, re.I) or any(lo <= float(x.replace(",", ".")) * 1e6 <= hi
                                                                           for x in re.findall(rf"{num}\s*MHz", name, re.I)):
@@ -117,6 +126,7 @@ class OpenWebRXRig(SdrRig):
         self.adpcm, self.fftc = Adpcm(), Adpcm()
         self.out_rate = 12000
         self.cfg_event = asyncio.Event()
+        self.owrx_modes, self.decoder, self._last_dec = {}, "", ("", 0.0)
         self.prof_event = asyncio.Event()
         self.state["levels"].update(SQL=0.0)
         self.state["sdr"]["url"] = self.p.get("url", "")
@@ -192,6 +202,17 @@ class OpenWebRXRig(SdrRig):
                 p = next((x for x in self.profiles if x["id"] == want or want.lower() in x.get("name", "").lower()), None)
                 if p:
                     await self._send({"type": "selectprofile", "params": {"profile": p["id"]}})
+        elif t == "modes" and isinstance(v, list):
+            self.owrx_modes = {m.get("modulation"): m for m in v if isinstance(m, dict)}
+            self.state["sdr"]["decoders"] = [dict(id=k, label=n) for k, n in OWRX_DECODERS.items() if k in self.owrx_modes]
+            await self.changed(True)
+        elif t in ("metadata", "secondary_demod") and self.decoder:
+            txt = json.dumps(v, sort_keys=True)
+            now = asyncio.get_running_loop().time()
+            if txt == self._last_dec[0] and now - self._last_dec[1] < 2:   # digitale Sprache meldet je Rahmen
+                return
+            self._last_dec = (txt, now)
+            self.emit_decode(dict(decoder=self.decoder, kind=t, freq=self.state.get("freq"), value=v))
         elif t == "smeter":
             try:
                 db = 10 * math.log10(max(float(v), 1e-20))
@@ -286,9 +307,11 @@ class OpenWebRXRig(SdrRig):
             except asyncio.TimeoutError:
                 pass
         cands = sorted((p for p in self.profiles if hit(p) < 9), key=hit)
+        if not cands:                                    # Namen sagen nichts: noch nicht besuchte Profile durchprobieren
+            cands = [p for p in self.profiles if p["id"] not in self.seen and p["id"] != self.profile]
         loop = asyncio.get_running_loop()
         stop = loop.time() + 25                          # insgesamt nicht ewig suchen
-        for p in cands[:4]:
+        for p in cands[:6]:
             if loop.time() > stop:
                 break
             # der Server geht oft erst auf das Profil, das auf dem Geraet gerade laeuft, und einige Sekunden spaeter auf das gewuenschte
@@ -318,9 +341,35 @@ class OpenWebRXRig(SdrRig):
             await self._switch_profile(f)
         lo, hi = self.passband()
         sql = self.state["levels"].get("SQL", 0)
-        await self._send({"type": "dspcontrol", "params": {"low_cut": lo, "high_cut": hi, "offset_freq": int(f - self.center),
-                                                            "mod": OWRX_MODES.get(self.state["mode"], "usb"),
-                                                            "squelch_level": -150 if not sql else -130 + sql * 100}})
+        par = {"low_cut": lo, "high_cut": hi, "offset_freq": int(f - self.center), "mod": OWRX_MODES.get(self.state["mode"], "usb"),
+               "secondary_mod": False, "squelch_level": -150 if not sql else -130 + sql * 100}
+        m = self.owrx_modes.get(self.decoder) if self.decoder else None
+        if m:                                            # Dekoder: eigene Modulation bzw. Grundmodulation + Zweitdemodulator
+            if m.get("type") == "digimode":
+                par.update(mod=(m.get("underlying") or ["nfm"])[0], secondary_mod=self.decoder, squelch_level=-150)
+            else:
+                par.update(mod=self.decoder, squelch_level=-150)
+            bp = m.get("bandpass") or {}
+            if bp.get("low_cut") is not None:
+                par.update(low_cut=bp["low_cut"], high_cut=bp["high_cut"])
+        await self._send({"type": "dspcontrol", "params": par})
+
+    async def set_mode(self, mode: str, passband: int = 0):
+        if self.decoder:                                 # Betriebsart von Hand gewaehlt: Dekoder aus
+            self.decoder = ""
+            self.state["sdr"]["decoder"] = ""
+        await super().set_mode(mode, passband)
+
+    async def set_decoder(self, mode: str) -> str:
+        mode = (mode or "").lower()
+        if mode and mode not in self.owrx_modes:
+            raise RigError(f"Dieser OpenWebRX bietet den Dekoder „{OWRX_DECODERS.get(mode, mode)}“ nicht an")
+        self.decoder = mode
+        self.state["sdr"]["decoder"] = mode
+        self._last_dec = ("", 0.0)
+        await self.tune()
+        await self.changed(True)
+        return mode
 
     async def apply_level(self, name, value):
         if name == "SQL":

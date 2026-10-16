@@ -49,6 +49,8 @@ function sigRfAm(lines, f) {
 function sigOnClick(radioId, f, e, tapId, rfLines) {
   if (e && e.altKey) return false;                                   // Alt+Klick: nur abstimmen
   if (wfOpts().sig === false) return false;
+  const dr = sigRadio(tapId || radioId), decs = dr?.state?.sdr?.decoders || [];
+  if (decs.length && f > 30e6) { const list = sigProbeList(f, decs); if (list.length) { sigProbe({ radio: dr.id, ctl: radioId || dr.id, rf: f, x: e?.clientX, y: e?.clientY }, list, decs); return true; } }
   const st = sigState(radioId), inv = SIG_SB[st.mode];
   if (inv === undefined) return false;                               // AM/FM/CW: wie bisher direkt abstimmen
   const dial = Math.round(inv ? f + 1500 : f - 1500);
@@ -63,6 +65,52 @@ function sigOnDmClick(af, e) {
   sigIdentify({ radio: WW.current, dmTap: true, fc: af, rf: dial ? (inv ? dial - af : dial + af) : 0, dial, inverted: inv, x: e?.clientX, y: e?.clientY, settle: 0 });
 }
 
+// ---------- VHF/UHF: Dekoder des Empfaengers (OpenWebRX) durchprobieren ----------
+const SIG_FIXED = ["packet", "ism", "sonde"];              // nach Frequenz eindeutig: Dekoder bleibt an, Meldungen kommen in Abstaenden
+function sigProbeList(f, decs) {
+  const has = id => decs.some(d => d.id === id), near = (a, t = 8000) => Math.abs(f - a) < t, L = [];
+  if ([144800000, 144390000, 144575000, 145825000, 144640000, 144660000, 432500000].some(a => near(a))) L.push("packet");
+  if ((f >= 433.05e6 && f <= 434.79e6) || (f >= 868e6 && f <= 868.6e6) || (f >= 314e6 && f <= 316e6) || (f >= 915e6 && f <= 928e6)) L.push("ism");
+  if (f >= 400e6 && f <= 406.1e6) L.push("sonde");
+  if (f >= 50e6) L.push("dmr", "dstar", "ysf", "m17", "nxdn", "p25");
+  return [...new Set(L)].filter(has);
+}
+async function sigProbe(o, list, decs) {
+  sigCancel();
+  const R = SIG.run = { o, stop: false, card: sigCard(o) }, c = R.card, body = $(".sig-body", c), name = id => (decs.find(d => d.id === id) || {}).label || id;
+  const fx = SIG_FIXED.includes(list[0]) ? list[0] : "";
+  const f = fx === "ism" ? (Math.abs(o.rf - 433.92e6) < 60e3 ? 433920000 : Math.abs(o.rf - 868.3e6) < 300e3 ? 868300000 : o.rf) : Math.round(o.rf / 6250) * 6250;   // Kanalraster
+  const setDec = m => api(`/api/radios/${encodeURIComponent(o.radio)}/rig/decoder`, { method: "POST", body: { mode: m } });
+  const msgs = [];
+  R.un = WW.on("decode", d => { if (d.radio !== o.radio || R.stop) return; msgs.push(d); R.onMsg?.(d); });
+  try { await sigRig(o.ctl, "mode", { mode: "FM", passband: 0 }); await sigRig(o.ctl, "freq", { hz: f }); } catch (e) { body.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
+  let found = "";
+  if (fx) { found = fx; await setDec(fx).catch(e => { body.innerHTML = `<div class="err">${esc(e.message)}</div>`; found = null; }); if (found === null) return; }
+  else {
+    for (let i = 0; i < list.length && !R.stop; i++) {
+      const id = list[i]; body.innerHTML = `<div class="hint">prüfe ${esc(name(id))} … (${i + 1}/${list.length})</div>`; sigProgress(R, (i + 0.3) / list.length);
+      try { await setDec(id); } catch { continue; }
+      const t0 = Date.now(); while (!R.stop && Date.now() - t0 < 3500 && !msgs.some(d => d.decoder === id)) await new Promise(r => setTimeout(r, 150));
+      if (msgs.some(d => d.decoder === id)) { found = id; break; }
+    }
+    if (R.stop) return;
+    if (!found) { await setDec("").catch(() => { });
+      body.innerHTML = `<div class="sig-res weak"><span class="sig-name">kein digitales Signal erkannt</span></div><div class="hint">Geprüft: ${list.map(name).map(esc).join(", ")}. Vermutlich analoges FM oder gerade Sendepause – Empfänger steht auf FM.</div><div class="hint sig-db"></div><div class="sig-act"></div>`;
+      $(".sig-bar", c).classList.add("done"); sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbHtml(f, { id: "FSK" }, 0, !!bandFor(f)); });
+      const b = document.createElement("button"); b.textContent = "Nochmal"; b.onclick = () => sigProbe(o, list, decs); $(".sig-act", body).appendChild(b); return; }
+  }
+  $(".sig-bar", c).classList.add("done"); sigProgress(R, 1);
+  body.innerHTML = `<div class="sig-res sure"><span class="sig-name">${esc(name(found))}</span><span class="sig-conf">${fx ? "nach Frequenz" : "Synchronmuster erkannt"}</span></div>
+    <div class="hint">Dekoder des Empfängers läuft · ${fmtMHz(f)} MHz · Meldungen auch im Fenster „Datenempfang“</div>
+    <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(name(found))}</b><i class="grow"></i><button type="button" class="sig-live-x">Dekoder aus</button></div><pre translate="no"></pre></div>
+    <div class="hint sig-db"></div><div class="sig-act"></div>`;
+  const pre = $("pre", body); let lines = [];
+  const add = d => { if (d.decoder !== found) return; lines.push(`${new Date((d.t || Date.now() / 1000) * 1000).toLocaleTimeString(I18N.locale)}  ${decSummary(d)}`); lines = lines.slice(-60); pre.textContent = lines.join("\n"); pre.scrollTop = 1e9; };
+  pre.textContent = fx ? "warte auf die nächste Aussendung …" : ""; msgs.forEach(add); R.onMsg = add;
+  $(".sig-live-x", body).onclick = async () => { await setDec("").catch(() => { }); R.onMsg = null; body.querySelector(".sig-live").classList.add("off"); $(".sig-live-x", body).remove(); };
+  sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbHtml(f, { id: found === "packet" ? "PACKET" : "FSK" }, 0, !!bandFor(f)); });
+  SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - f) > 3000).concat({ rf: f, label: name(found), until: Date.now() + 60000, radio: o.radio });
+}
 function sigCancel() { const R = SIG.run; if (!R) return; R.stop = true; try { R.un?.(); } catch { } try { R.live?.un?.(); } catch { } R.card?.remove(); SIG.run = null; }
 // Nach der Erkennung (Option „automatisch umschalten“): AM/Seitenband einstellen bzw. den Inhalt live in der Karte mitschreiben
 async function sigAuto(R, res) {

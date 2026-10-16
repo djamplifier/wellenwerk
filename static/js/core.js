@@ -190,6 +190,7 @@ function connectWs() {
           const p = WW._fpend; if (p && Date.now() - p.t < 1500 && m.rig.connected && m.rig.freq !== p.hz) m.rig = { ...m.rig, freq: p.hz };
           WW.rig = m.rig; if (modelChanged) loadCaps(); WW.emit("rig", WW.rig);
         }
+        { const r = (WW.radios || []).find(x => x.id === m.radio); if (r) r.state = m.rig; }   // Zustand aller Geraete aktuell halten
         WW.emit("rig-any", m); break;
       case "radios": loadRadios(); break;
       case "spot": WW.spots.unshift(m.spot); if (WW.spots.length > 300) WW.spots.pop(); WW.emit("spot", m.spot); break;
@@ -207,6 +208,7 @@ function connectWs() {
       case "winkey": WW.winkey = m.winkey; WW.emit("winkey", m.winkey); break;
       case "stations": if (window.PRG) PRG.stations = m.stations; WW.emit("stations", m.stations); break;
       case "spectrum": WW.emit("spectrum", m); break;
+      case "decode": WW.emit("decode", m.decode); break;
       case "favorites": WW.emit("favorites"); break;
       case "notice": toast(m.text, m.bad); break;
       case "update": WW.update = m.update; WW.emit("update", m.update); break;

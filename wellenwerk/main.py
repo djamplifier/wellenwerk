@@ -1,5 +1,6 @@
 """Wellenwerk - Webserver: Rig Control, Logbuch, DX-Cluster, WSJT-X, Karte."""
 import asyncio
+from collections import deque
 import collections
 import itertools
 import json
@@ -419,6 +420,19 @@ def on_sdr_audio(radio_id, pcm: bytes, rate: int):
 
 
 radios = radmod.RadioManager(DATA, on_rig, on_spectrum=on_spectrum, on_audio=on_sdr_audio)
+
+# Dekodierte Meldungen der Empfaenger (DMR/D-STAR-Kennungen, APRS, Funksensoren, Wettersonden): an alle Fenster, die letzten 300 merken
+SDR_DECODES: deque = deque(maxlen=300)
+
+
+def on_sdr_decode(radio_id: str, msg: dict):
+    msg = dict(msg, radio=radio_id, t=round(time.time(), 1))
+    SDR_DECODES.append(msg)
+    asyncio.ensure_future(broadcast({"type": "decode", "decode": msg}))
+
+
+from .sdr import base as _sdrbase  # noqa: E402
+_sdrbase.DECODE["sink"] = on_sdr_decode
 if not radios.profiles:          # erster Start: Demo-Geraet zum Ausprobieren
     radios.upsert(dict(name="Demo-Funkgerät", model=1, mfg="Hamlib", model_name="Dummy", autoconnect=True))
 rig = _RigProxy()
@@ -2789,11 +2803,24 @@ async def radio_rig_cmd(pid: str, what: str, body: dict):
         return await _rig(r.set_level(str(body["name"]), float(body["value"])))
     if what == "func":
         return await _rig(r.set_func(str(body["name"]), bool(body["on"])))
+    if what == "decoder":                    # eingebauter Dekoder des Empfaengers (OpenWebRX: DMR, D-STAR, APRS, Funksensoren ...)
+        if not hasattr(r, "set_decoder"):
+            raise HTTPException(400, "Dieses Gerät hat keine eingebauten Dekoder")
+        try:
+            return {"decoder": await r.set_decoder(str(body.get("mode") or ""))}
+        except RigError as e:
+            raise HTTPException(400, str(e))
     if what == "span":                       # Breite des Wasserfalls (nur Empfaenger/SDR; 0 = ganzer Bereich)
         if not hasattr(r, "set_span"):
             raise HTTPException(400, "Breite ist bei diesem Gerät nicht einstellbar")
         return {"span": await r.set_span(int(body.get("hz") or 0))}
     raise HTTPException(404, "unbekannter Befehl")
+
+
+@app.get("/api/sdr/decodes", tags=["Empfänger (SDR)"])
+async def sdr_decodes(limit: int = 300):
+    """Zuletzt dekodierte Meldungen der Empfaenger (neueste zuletzt)."""
+    return list(SDR_DECODES)[-max(1, min(limit, 300)):]
 
 
 @app.get("/api/sdr/kinds", tags=["Empfänger (SDR)"])

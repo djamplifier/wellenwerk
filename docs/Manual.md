@@ -198,6 +198,12 @@ Where Wellenwerk can decode by itself, it decodes on trial to confirm; readable 
 
 **Signal database:** below the result the card lists known signals that occur on this frequency with matching modulation and width – from an extract of the *Signal Identification Wiki* ([sigidwiki.com](https://www.sigidwiki.com), about 550 entries: name, frequencies, modulation, bandwidth). A click opens the description with audio sample and waterfall picture.
 
+**VHF/UHF: DMR, D-STAR, APRS, wireless sensors, radiosondes.** Many OpenWebRX receivers (e.g. “OpenWebRX+”) have their own decoders. Wellenwerk uses them: a click above 30 MHz sets the receiver to FM and the channel raster and then tries
+- by frequency: **APRS** (144.800 MHz etc.), **wireless sensors** of weather stations, thermometers etc. (433.05–434.79 MHz and 868 MHz, decoded with rtl_433 on the server), **radiosondes** (400–406 MHz, if the server offers them),
+- otherwise the digital voice systems **DMR, D-STAR, YSF (C4FM), M17, NXDN, P25** one after the other – the decoder that finds a sync pattern wins.
+
+The card shows the messages live: for DMR time slot, source → target and talker alias, for D-STAR the callsigns and text message, for APRS callsign, text and position, for sensors model, temperature (in °C), humidity, wind, rain. All messages are collected in **View → Data reception**; a decoder can also be chosen there by hand. A receiver reports which decoders it offers. Note: you hear digital voice only if the server outputs it; Wellenwerk shows the IDs and texts.
+
 **Alt+click** only tunes, without identification. In AM, FM and CW a click tunes directly as before. Switch on/off and set the maximum duration under **F8 → Waterfall**. The identification is a well-founded estimate, not proof: with very weak or overlapping signals it prefers to report “unknown signal” with guesses.
 
 ### Remote audio

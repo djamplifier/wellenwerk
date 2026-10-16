@@ -27,6 +27,10 @@ def parse_params(text: str) -> dict:
     return out
 
 
+# Ziel fuer dekodierte Meldungen (DMR, APRS, Funksensoren ...): main setzt DECODE["sink"] = fn(radio_id, meldung)
+DECODE = {"sink": None}
+
+
 class SdrRig:
     kind = "sdr"
     MODES = ["USB", "LSB", "CW", "CWR", "AM", "SAM", "FM", "PKTUSB", "PKTLSB", "RTTY"]
@@ -60,6 +64,17 @@ class SdrRig:
                     ui_levels=ui_levels, ui_funcs=[dict(name=n, label=FUNCS.get(n, n)) for n in self.FUNCS_SET],
                     ui_ops=[], ui_choices=[dict(name="AGC", label="AGC", options=[dict(value=a, label=AGC_NAMES[a]) for a in (0, 2, 6, 3)])],
                     meters=["STRENGTH"], receiver=True)
+
+    def emit_decode(self, msg: dict):
+        if DECODE["sink"]:
+            try:
+                DECODE["sink"](self.p["id"], msg)
+            except Exception as e:
+                log.debug("Dekoder-Meldung: %s", e)
+
+    async def set_decoder(self, mode: str) -> str:
+        """Dekoder des Empfaengers ein-/ausschalten (\"\" = aus). Rueckgabe: eingeschalteter Dekoder."""
+        raise RigError("Dieser Empfänger hat keine eingebauten Dekoder")
 
     def say(self, text: str):
         self.log.append(time.strftime("%H:%M:%S ") + text)

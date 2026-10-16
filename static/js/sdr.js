@@ -190,3 +190,42 @@ function createReceivers(root) {
   draw(); return () => offs.forEach(f => f());
 }
 APPS.rig.panels.receivers = { title: "Empfänger", create: createReceivers, dock: { ref: "face", dir: "right" }, size: { width: 460 } };
+
+// ---------- Fenster „Datenempfang“: Meldungen der Empfaenger-Dekoder (OpenWebRX: DMR, D-STAR, YSF, APRS, Funksensoren, Wettersonden) ----------
+const DEC_LABEL = { dmr: "DMR", dstar: "D-STAR", ysf: "YSF", nxdn: "NXDN", p25: "P25", m17: "M17", packet: "APRS", ism: "Sensor", sonde: "Sonde" };
+function decTempC(v) { if (v.temperature_C != null) return +v.temperature_C; if (v.temperature_F != null) return (v.temperature_F - 32) * 5 / 9; if (v.temp != null) return +v.temp; return null; }
+// eine Zeile Text je Meldung
+function decSummary(d) {
+  const v = d.value; if (v == null) return ""; if (typeof v !== "object") return String(v);
+  const j = (...a) => a.filter(x => x !== undefined && x !== null && x !== "").join(" · ");
+  const pos = v.lat != null && v.lon != null ? `${Math.abs(v.lat).toFixed(4)}°${v.lat >= 0 ? "N" : "S"} ${Math.abs(v.lon).toFixed(4)}°${v.lon >= 0 ? "E" : "W"}` : "";
+  if (d.decoder === "packet") return j(`${v.source || "?"} → ${v.destination || "?"}`, v.comment || v.data, pos);
+  if (d.decoder === "ism") { const t = decTempC(v);
+    return j(v.model, v.id != null ? "ID " + v.id : "", v.channel != null ? "Kanal " + v.channel : "", t != null ? t.toFixed(1) + " °C" : "", v.humidity != null ? v.humidity + " % Feuchte" : "",
+      v.wind_avg_km_h != null ? v.wind_avg_km_h + " km/h Wind" : "", v.rain_mm != null ? v.rain_mm + " mm Regen" : "", v.pressure_hPa != null ? v.pressure_hPa + " hPa" : "", v.battery_ok === 0 ? "Batterie schwach" : ""); }
+  if (d.decoder === "sonde") return j(v.type || v.model, v.id || v.serial, pos, v.alt != null ? Math.round(v.alt) + " m" : "", v.temp != null ? (+v.temp).toFixed(1) + " °C" : "", v.vel_v != null ? (+v.vel_v).toFixed(1) + " m/s" : "");
+  if (d.decoder === "dstar") return j(v.ourcall && `${v.ourcall} → ${v.yourcall || "CQCQCQ"}`, v.departure && `über ${v.departure}${v.destination ? " / " + v.destination : ""}`, v.message, pos);
+  if (d.decoder === "dmr") return j(v.slot != null ? "Zeitschlitz " + v.slot : "", v.type === "group" ? "Gruppe" : v.type, v.source != null && `${v.source} → ${v.target ?? "?"}`, v.talkeralias, v.sync);
+  if (d.decoder === "ysf") return j(v.source && `${v.source} → ${v.target || "ALL"}`, v.up && "über " + v.up, v.mode, pos);
+  return Object.entries(v).filter(([k, x]) => x !== "" && x != null && typeof x !== "object" && !/^(mode|timestamp|color|raw|protocol)$/.test(k)).slice(0, 8).map(([k, x]) => `${k}=${x}`).join(" · ");
+}
+function createDecodes(root) {
+  root.innerHTML = `<div class="pane-tb"><select class="dc-rx" title="Empfänger"></select><select class="dc-mode" title="Dekoder"></select><button class="dc-clr">Leeren</button><span class="hint dc-hint"></span></div>
+    <div class="tablewrap"><table class="grid dc-t"><thead><tr><th>Zeit</th><th>Art</th><th>MHz</th><th>Inhalt</th></tr></thead><tbody></tbody></table></div>`;
+  let rows = [];
+  const rxs = () => (WW.radios || []).filter(r => isSdr(r) && r.connected && r.state?.sdr?.decoders?.length);
+  const fill = () => { const sel = $(".dc-rx", root), cur = sel.value || store.get("dc.rx", "") || (rxs().find(r => r.id === WW.current) || rxs()[0] || {}).id || "";
+    sel.innerHTML = rxs().map(r => `<option value="${esc(r.id)}" ${r.id === cur ? "selected" : ""}>${esc(r.name)}</option>`).join("") || `<option value="">kein Empfänger mit Dekodern</option>`;
+    const r = rxs().find(x => x.id === sel.value), d = r?.state?.sdr || {};
+    $(".dc-mode", root).innerHTML = `<option value="">Dekoder aus</option>` + (d.decoders || []).map(x => `<option value="${x.id}" ${x.id === d.decoder ? "selected" : ""}>${esc(x.label)}</option>`).join("");
+    $(".dc-hint", root).textContent = r ? "" : "Dekoder bietet z. B. ein OpenWebRX-Empfänger (Datei → Empfänger)."; };
+  const draw = () => { $("tbody", root).innerHTML = rows.slice(-200).reverse().map(d => `<tr><td>${new Date(d.t * 1000).toLocaleTimeString(I18N.locale)}</td><td>${esc(DEC_LABEL[d.decoder] || d.decoder)}</td><td>${d.freq ? (d.freq / 1e6).toFixed(4) : ""}</td><td translate="no">${esc(decSummary(d))}</td></tr>`).join("")
+    || `<tr><td colspan="4" class="hint">Noch keine Meldungen. Dekoder wählen (z. B. APRS auf 144,800 MHz, Funksensoren auf 433,92 MHz) oder im Wasserfall auf ein Signal klicken.</td></tr>`; };
+  $(".dc-rx", root).onchange = e => { store.set("dc.rx", e.target.value); fill(); };
+  $(".dc-mode", root).onchange = e => api(`/api/radios/${$(".dc-rx", root).value}/rig/decoder`, { method: "POST", body: { mode: e.target.value } }).catch(err => { toast(err.message, true); fill(); });
+  $(".dc-clr", root).onclick = () => { rows = []; draw(); };
+  api("/api/sdr/decodes").then(l => { rows = l.concat(rows); draw(); }).catch(() => { });
+  const offs = [WW.on("decode", d => { rows.push(d); if (rows.length > 500) rows.splice(0, 100); draw(); }), WW.on("radios", fill), WW.on("rig-any", () => { const k = rxs().map(r => r.id + ":" + (r.state.sdr.decoder || "") + (r.state.sdr.decoders || []).length).join(); if (k !== fill.k && document.activeElement !== $(".dc-mode", root)) { fill.k = k; fill(); } })];
+  fill(); draw(); return () => offs.forEach(f => f());
+}
+APPS.rig.panels.decodes = { title: "Datenempfang", create: createDecodes, dock: { ref: "face", dir: "right" }, size: { width: 520 } };

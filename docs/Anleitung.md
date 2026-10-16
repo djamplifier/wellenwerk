@@ -192,6 +192,12 @@ Wo Wellenwerk selbst dekodieren kann, wird zur Bestätigung probehalber dekodier
 
 **Signal-Datenbank:** Unter dem Ergebnis nennt die Karte bekannte Signale, die auf dieser Frequenz mit passender Modulation und Breite vorkommen – aus einem Auszug des *Signal Identification Wiki* ([sigidwiki.com](https://www.sigidwiki.com), rund 550 Einträge: Name, Frequenzen, Modulation, Bandbreite). Ein Klick öffnet die Beschreibung mit Hörprobe und Wasserfallbild.
 
+**VHF/UHF: DMR, D-STAR, APRS, Funksensoren, Wettersonden.** Viele OpenWebRX-Empfänger (z. B. „OpenWebRX+“) haben eigene Dekoder. Wellenwerk nutzt sie: Ein Klick oberhalb von 30 MHz stellt den Empfänger auf FM und das Kanalraster und probiert dann
+- nach Frequenz: **APRS** (144,800 MHz u. a.), **Funksensoren** von Wetterstationen, Thermometern usw. (433,05–434,79 MHz und 868 MHz, Auswertung mit rtl_433 auf dem Server), **Wettersonden** (400–406 MHz, falls der Server sie anbietet),
+- sonst nacheinander die digitalen Sprachverfahren **DMR, D-STAR, YSF (C4FM), M17, NXDN, P25** – der Dekoder, der ein Synchronmuster findet, gewinnt.
+
+Die Karte zeigt die Meldungen live: bei DMR Zeitschlitz, Quelle → Ziel und Talker Alias, bei D-STAR die Rufzeichen und Textnachricht, bei APRS Rufzeichen, Text und Position, bei Sensoren Modell, Temperatur (in °C), Feuchte, Wind, Regen. Alle Meldungen sammelt das Fenster **Ansicht → Datenempfang**; dort lässt sich ein Dekoder auch von Hand wählen. Welche Dekoder ein Empfänger bietet, meldet er selbst. Hinweis: Sprache digitaler Verfahren hörst du nur, wenn der Server sie ausgibt; Wellenwerk zeigt die Kennungen und Texte.
+
 **Alt+Klick** stimmt nur ab, ohne Erkennung. In AM, FM und CW stimmt ein Klick wie bisher direkt ab. Ein- und ausschalten und die Höchstdauer einstellen unter **F8 → Wasserfall**. Die Erkennung ist eine gut begründete Schätzung, kein Beweis: bei sehr schwachen oder sich überlagernden Signalen meldet sie lieber „unbekanntes Signal“ mit Vermutungen.
 
 ### Fernbetrieb-Audio
