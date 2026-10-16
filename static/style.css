@@ -250,8 +250,8 @@ fieldset { border: 1px solid var(--line2); border-radius: 3px; margin: 0 0 6px; 
 .solar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1; padding: 4px; min-height: 0; } .solar-grid > div { display: flex; flex-direction: column; min-height: 0; } .solar-grid canvas, .cy, .hg, .am-cv { flex: 1; width: 100%; min-height: 120px; }
 .bm-wrap { flex: 1; min-height: 0; } .bm { width: 100%; height: 100%; cursor: pointer; }
 .bm-tabs { display: flex; flex-wrap: wrap; gap: 1px; padding: 2px; background: var(--panel2); border-top: 1px solid var(--line2); flex: none; } .bm-tabs button { font-size: 10.5px; padding: 0 5px; }
-.clk { height: 100%; background: #000; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
-.clk-t { font-family: "Share Tech Mono", monospace; font-size: clamp(24px, 9vw, 64px); font-weight: 700; } .clk-s { color: #999; font-size: 12px; }
+.clk { container-type: size; height: 100%; background: #000; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+.clk-t { font-family: "Share Tech Mono", monospace; font-size: clamp(14px, min(18cqw, 42cqh), 110px); font-weight: 700; } .clk-s { color: #999; font-size: 12px; }
 canvas.dial { flex: 1; width: 100%; min-height: 140px; cursor: crosshair; }
 .awards, .qslpanel, .stats { padding: 8px; } .kpis, .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; margin-bottom: 8px; }
 .kpi { background: var(--panel2); border: 1px solid var(--line2); border-radius: 3px; padding: 6px 8px; } .kpi b { display: block; font-size: 24px; color: var(--accent); } .kpi small { font-size: 13px; color: var(--muted); } .kpi .cf { font-size: 11.5px; color: var(--ok); }
@@ -412,3 +412,47 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .wf-tb .wf-span { max-width: 110px; }
 .wf-tb .wf-sl { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; opacity: .85; }
 .wf-tb .wf-sl input { width: 70px; }
+/* ---------- Anpassung an kleinere Bildschirme (Laptop): ww-compact / ww-tight setzt wwFit() ---------- */
+.ww-compact .titlebar { position: absolute; top: 0; right: 0; z-index: 5; background: none; border: 0; padding: 3px 8px; pointer-events: none; }
+.ww-compact .titlebar .logo, .ww-compact .titlebar #wintitle { display: none; }
+.ww-compact .menubar { padding-right: 190px; }
+.ww-compact .toolbar { min-height: 0; padding: 1px 6px; }
+.ww-compact .toolbar button { min-width: 0; padding: 2px 6px; }
+.ww-compact .toolbar button span, .tb-icons button > span { display: none; }
+.ww-compact .toolbar button .ic { width: 20px; height: 20px; }
+.ww-compact .apptabs { padding-top: 2px; } .ww-compact .apptabs button { padding: 2px 10px; }
+.tb-icons.lb-tb button { min-width: 30px; padding: 3px 5px; }
+.ww-tight .ww-dock { --dv-tabs-and-actions-container-height: 22px; --dv-tabs-and-actions-container-font-size: 11.5px; }
+.ww-tight .apptabs button { padding: 1px 9px; font-size: 12px; }
+.ww-tight .menubar > * { padding-top: 1px; padding-bottom: 1px; }
+.rc-fine, .rc-fine2, .rc-mainbars { overflow-x: clip; }
+/* Verbinden-Dialog: Felder zweispaltig, damit „Verbinden“ auch auf niedrigen Bildschirmen ohne Scrollen erreichbar ist */
+.cn-grid > div:first-child { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; align-content: start; }
+.cn-grid > div:first-child > .cn-serial:not(.hidden), .cn-grid > div:first-child > .cn-net:not(.hidden) { display: contents; }
+.cn-grid > div:first-child > :is(fieldset, p, .ctl-row, .chkrow, .cn-tpl, input[type=hidden]), .cn-serial > :is(fieldset, input) { grid-column: 1 / -1; }
+.cn-serial > label, .cn-net > label, .cn-grid > div:first-child > label { margin-bottom: 4px; }
+@media (max-height: 760px) { .cn-status { height: 220px; } }
+@media (max-width: 800px) { .cn-grid > div:first-child { grid-template-columns: 1fr; } }
+.cn-grid > div:first-child > details { grid-column: 1 / -1; border: 1px solid var(--line2); border-radius: 3px; padding: 3px 8px; margin: 2px 0 6px; }
+.cn-off summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 12px; } .cn-off[open] summary { margin-bottom: 4px; }
+.cn-serial fieldset { display: flex; flex-wrap: wrap; gap: 2px 18px; }
+.cn-serial fieldset legend { width: 100%; }
+.cn-actions { position: sticky; bottom: -1px; background: var(--panel); padding: 6px 0 2px; margin-top: 4px; border-top: 1px solid var(--line2); z-index: 1; }
+/* ---------- Geraeteanzeige schmal (z. B. als Seitenleiste neben dem Wasserfall, wie bei SDR-Console) ---------- */
+.pane-face { container: face / inline-size; }
+@container face (max-width: 700px) {
+  .rc-face { grid-template-columns: 1fr; grid-template-areas: "c" "l" "r" "d" "s"; gap: 6px; padding: 6px; }
+  .rc-center { grid-area: c; min-width: 0; }
+  .rc-left { grid-area: l; } .rc-right { grid-area: r; } .rc-drops { grid-area: d; }
+  .rc .rc-left, .rc .rc-right, .rc[data-size] .rc-left, .rc[data-size] .rc-right { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
+  .rc-drops { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .rc-status { grid-area: s; display: flex; flex-wrap: wrap; gap: 0 10px; font-size: 10.5px; }
+  .rc-status br { display: none; }
+  .rc-freq { font-size: clamp(28px, 14.5cqw, 64px); }
+  .rc-under { flex-direction: column; align-items: stretch; gap: 4px; } .rc-smeter { width: 100%; min-width: 0; } .rc-sub { text-align: center; }
+  .rc-subf { font-size: clamp(16px, 7cqw, 26px); }
+  .rc-dateline .rc-date, .rc-dateline .rc-time { display: none; } .rc-dateline { justify-content: center; }
+  .rc-mainbars, .rc-fine2 { display: none; }
+  .rc-tuning { flex: none; }
+}
+@media (max-width: 1180px) { .ww-compact .titlebar { display: none; } .ww-compact .menubar { padding-right: 4px; } }

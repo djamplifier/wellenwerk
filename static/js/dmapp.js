@@ -208,10 +208,12 @@ function createDmTx(root) {
 }
 function createDmMacros(root) {
   const draw = () => { const ms = store.get("dm.macros", DM_MACROS_DEFAULT);
-    root.innerHTML = `<div class="dm-mac">${ms.map(([l, t], i) => `<button data-i="${i}" title="${esc(t)}">F${i + 1} ${esc(l)}</button>`).join("")}</div><div class="pane-tb"><button class="dm-med">Bearbeiten …</button><span class="hint">Platzhalter: &lt;CALL&gt; &lt;NAME&gt; &lt;RST&gt; &lt;MYCALL&gt; &lt;MYNAME&gt; &lt;MYQTH&gt; &lt;MYLOC&gt; …</span></div>`; };
-  root.addEventListener("click", e => { const b = e.target.closest("[data-i]"); if (b) dmTx(store.get("dm.macros", DM_MACROS_DEFAULT)[+b.dataset.i][1]); if (e.target.closest(".dm-med")) dmMacroEditor(draw); });
+    root.innerHTML = `<div class="fitw"><div class="dm-mac">${ms.map(([l, t], i) => `<button data-i="${i}" title="${esc(t)}">F${i + 1} ${esc(l)}</button>`).join("")}</div><div class="pane-tb"><button class="dm-med">Bearbeiten …</button><span class="hint">Platzhalter: &lt;CALL&gt; &lt;NAME&gt; &lt;RST&gt; &lt;MYCALL&gt; &lt;MYNAME&gt; &lt;MYQTH&gt; &lt;MYLOC&gt; …</span></div></div>`; };
+  root.addEventListener("click", e => { const b = e.target.closest("[data-i]"); if (b) dmTx(store.get("dm.macros", DM_MACROS_DEFAULT)[+b.dataset.i][1]); if (e.target.closest(".dm-med")) dmMacroEditor(() => { draw(); fit(); }); });
   const key = e => { if (SHELL.active !== "dm" || !/^F([1-9]|1[0-2])$/.test(e.key) || e.key === "F8" || e.key === "F11") return; const ms = store.get("dm.macros", DM_MACROS_DEFAULT), i = +e.key.slice(1) - 1; if (ms[i]) { e.preventDefault(); dmTx(ms[i][1]); } };
-  document.addEventListener("keydown", key); draw(); return () => document.removeEventListener("keydown", key);
+  document.addEventListener("keydown", key); draw();
+  let unfit = null; const fit = () => { unfit?.(); unfit = fitZoom(root, $(".fitw", root), 0.75); }; fit();
+  return () => { document.removeEventListener("keydown", key); unfit?.(); };
 }
 function dmMacroEditor(cb) {
   const ms = store.get("dm.macros", DM_MACROS_DEFAULT);

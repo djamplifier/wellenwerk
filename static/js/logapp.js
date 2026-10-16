@@ -29,6 +29,7 @@ function createLogbook(root, params) {
       <select class="lb-view" title="Gespeicherte Ansichten (Filter, Spalten, Sortierung)"></select></div>
     <div class="tablewrap lb-wrap"><table class="grid lb-grid"><thead></thead><tbody translate="no"></tbody></table></div>
     <div class="lb-foot"><span class="lb-info"></span><i class="grow"></i><span>${esc(name)}</span><span>SQLite</span><span class="lb-count"></span><span class="lb-selc"></span></div>`;
+  fitBar($(".lb-tb", root));
   const cols = () => store.get("log.cols", LOG_DEFAULT_COLS);
   const q = () => { const p = new URLSearchParams({ log: name, limit: 2000, q: $(".lb-q", root).value.trim(), band: $(".lb-band", root).value, mode: $(".lb-mode", root).value, qsl: $(".lb-qsl", root).value, date_from: $(".lb-from", root).value, date_to: $(".lb-to", root).value, cond: $(".lb-cond", root).value.trim() }); return p; };
   const VF = ["q", "band", "mode", "qsl", "from", "to", "cond"];

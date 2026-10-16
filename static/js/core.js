@@ -252,10 +252,13 @@ async function refreshState() {
   WW.emit("state"); WW.emit("rig", WW.rig); WW.emit("rotor", WW.rotor); WW.emit("cluster", WW.cluster); WW.emit("spots"); WW.emit("cluster-info", WW.clusterInfo);
 }
 
+// Vergroesserung der Oberflaeche (CSS-Zoom am <html>): Mauskoordinaten und Fenstergroesse fuer position: fixed umrechnen
+const uiZ = () => +document.documentElement.style.zoom || 1;
 // ---------- Rechtsklick-Menues ----------
 // items: { label, act, icon?, check?: bool|fn, disabled?: bool, sub?: items } | "-" (Trennlinie) | "Text" (Ueberschrift)
 function ctxMenu(e, items) {
   e.preventDefault(); e.stopPropagation(); ctxClose();
+  const Z = uiZ(), VW = innerWidth / Z, VH = innerHeight / Z;
   const build = (list, x, y, level, leftEdge = 0) => {
     const m = document.createElement("div"); m.className = "ctxmenu"; m.dataset.level = level;
     list.forEach((it, i) => {
@@ -266,17 +269,17 @@ function ctxMenu(e, items) {
       b.innerHTML = `<span class="ck">${chk ? "✓" : ""}</span>${it.icon ? icon(it.icon) : '<span class="ic"></span>'}<span class="lb">${esc(it.label)}</span>${it.key ? `<kbd>${esc(it.key)}</kbd>` : ""}${it.sub ? '<span class="arr">▸</span>' : ""}`;
       if (it.disabled) b.disabled = true;
       b.addEventListener("mouseenter", () => { $$(`.ctxmenu`).forEach(x => { if (+x.dataset.level > level) x.remove(); });
-        if (it.sub && !it.disabled) { const r = b.getBoundingClientRect(); build(it.sub, r.right - 2, r.top - 4, level + 1, r.left); } });
+        if (it.sub && !it.disabled) { const r = b.getBoundingClientRect(); build(it.sub, r.right / Z - 2, r.top / Z - 4, level + 1, r.left / Z); } });
       b.addEventListener("click", ev => { ev.stopPropagation(); if (it.sub || it.disabled) return; ctxClose(); try { const r = it.act && it.act(); if (r && r.catch) r.catch(err => toast(err.message, true)); } catch (err) { toast(err.message, true); } });
       m.appendChild(b);
     });
     document.body.appendChild(m);
     const w = m.offsetWidth, hgt = m.offsetHeight;
-    m.style.left = Math.max(4, x + w > innerWidth - 4 ? (level ? leftEdge - w + 2 : innerWidth - w - 4) : x) + "px";
-    m.style.top = Math.max(4, Math.min(y, innerHeight - hgt - 4)) + "px";
+    m.style.left = Math.max(4, x + w > VW - 4 ? (level ? leftEdge - w + 2 : VW - w - 4) : x) + "px";
+    m.style.top = Math.max(4, Math.min(y, VH - hgt - 4)) + "px";
     return m;
   };
-  build(items, e.clientX, e.clientY, 0);
+  build(items, e.clientX / Z, e.clientY / Z, 0);
 }
 function ctxClose() { $$(".ctxmenu").forEach(m => m.remove()); }
 document.addEventListener("mousedown", e => { if (!e.target.closest(".ctxmenu")) ctxClose(); });
@@ -329,3 +332,45 @@ function modeTable() {
 }
 function rstFor(mode) { const t = modeTable(), m = (mode || "").toUpperCase(); return m in t ? t[m] : (["CW", "RTTY", "PSK31"].includes(m) ? "599" : "59"); }
 function wsSend(m) { if (WW.ws && WW.ws.readyState === 1) WW.ws.send(JSON.stringify(m)); }
+
+// ---------- Anpassung an die Bildschirmgroesse ----------
+// Inhalt eines Fensters verkleinern (CSS-Zoom), wenn er nicht hineinpasst – statt Scrollbalken (z. B. Geraeteanzeige auf dem Laptop)
+// shrink: Bereiche, die selbst scrollen und dafuer schrumpfen duerfen (werden beim Messen auf shrinkPx begrenzt)
+function fitZoom(box, el, min = 0.6, shrink = "", shrinkPx = 90) {
+  let raf = 0, self = false;
+  const run = () => { raf = 0; if (!box.isConnected) return; self = true; el.style.zoom = "";
+    const sh = shrink ? [...el.querySelectorAll(shrink)] : []; sh.forEach(x => { x.style.maxHeight = shrinkPx + "px"; });
+    const need = box.scrollHeight, have = box.clientHeight, needW = box.scrollWidth, haveW = box.clientWidth;
+    sh.forEach(x => { x.style.maxHeight = ""; });
+    const z = need && have && needW && haveW ? Math.max(min, Math.min(1, have / need, haveW / needW)) : 1;
+    el.style.zoom = z < 0.99 ? z.toFixed(3) : ""; el.classList.toggle("zoomed", z < 0.99);
+    const size = `${box.clientWidth}x${box.clientHeight}`; requestAnimationFrame(() => { self = false; if (size !== `${box.clientWidth}x${box.clientHeight}`) later(); }); };
+  const later = () => { if (!self && !raf) raf = requestAnimationFrame(run); };
+  const ro = new ResizeObserver(later); ro.observe(box); ro.observe(el); [...el.children].forEach(c => ro.observe(c));   // Inhalt waechst nachtraeglich
+  const off = WW.on("caps", later); later();
+  return () => { ro.disconnect(); off?.(); };
+}
+// Leisten mit beschrifteten Knoepfen: passt die Leiste nicht in eine Zeile, nur Symbole zeigen (Beschriftung als Tooltip)
+function fitBar(bar) {
+  const run = () => { if (!bar.isConnected) return; bar.querySelectorAll("button").forEach(b => { const s = b.querySelector(":scope > span"); if (s && !b.title) b.title = s.textContent; });
+    bar.classList.remove("tb-icons"); const bs = [...bar.querySelectorAll(":scope > button")];
+    const wraps = bs.length > 1 && bs[bs.length - 1].offsetTop > bs[0].offsetTop + 4;
+    if (wraps || bar.scrollWidth > bar.clientWidth + 2) bar.classList.add("tb-icons"); };
+  let raf = 0; const ro = new ResizeObserver(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; run(); }); }); ro.observe(bar); run();
+  bar._fitRun = run; return () => ro.disconnect();
+}
+// Groesse der Oberflaeche: automatisch auf sehr grossen Bildschirmen ohne Systemskalierung (2560/4K bei 100 %) vergroessern
+function wwScale() {
+  let v = (store.get("opts", {}) || {}).uiscale || "auto";
+  if (v === "auto") { const w = Math.max(innerWidth, screen.width || 0); v = devicePixelRatio < 1.5 && w >= 2400 ? Math.max(1, Math.min(2, Math.floor(innerWidth / 1920 / 0.25) * 0.25)) : 1; }
+  return Math.max(0.5, Math.min(3, +v || 1));
+}
+function wwFit() {
+  const de = document.documentElement, sc = wwScale();
+  de.style.zoom = sc !== 1 ? String(sc) : "";
+  const h = innerHeight / sc, w = innerWidth / sc;
+  de.classList.toggle("ww-compact", h < 900 || w < 1280);
+  de.classList.toggle("ww-tight", h < 700);
+}
+addEventListener("resize", () => { cancelAnimationFrame(wwFit.r); wwFit.r = requestAnimationFrame(wwFit); });
+wwFit();

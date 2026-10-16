@@ -8,7 +8,7 @@ const WF_PALETTES = {
   meer: [[0, 5, 10, 40], [0.4, 0, 90, 140], [0.7, 60, 200, 170], [1, 230, 255, 200]],
   nacht: [[0, 0, 0, 0], [0.5, 120, 0, 0], [1, 255, 90, 60]],
 };
-function wfOpts() { return Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, pps: 25, height: 1, sig: true, sigsecs: 15 }, store.get("opts", {}).wf || {}); }
+function wfOpts() { return Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, pps: 25, height: 1, sig: true, sigsecs: 15, side: true }, store.get("opts", {}).wf || {}); }
 function wfLut(name) { const st = WF_PALETTES[name] || WF_PALETTES.klassisch, lut = new Uint8Array(256 * 4);
   for (let i = 0; i < 256; i++) { const v = i / 255; let k = 1; while (k < st.length - 1 && v > st[k][0]) k++; const a = st[k - 1], b = st[k], t = Math.max(0, Math.min(1, (v - a[0]) / ((b[0] - a[0]) || 1)));
     for (let c = 0; c < 3; c++) lut[i * 4 + c] = Math.round(a[c + 1] + (b[c + 1] - a[c + 1]) * t); lut[i * 4 + 3] = 255; } return lut; }
@@ -168,6 +168,26 @@ function createWfPanel(root) {
     if (g3) { gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, g3.tp); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, lut); } })];
   const ro = new ResizeObserver(() => { if (st.mode === "3d") render3d(); }); ro.observe(root);
   return () => { offs.forEach(f => f()); ro.disconnect(); };
+}
+// Geraeteanzeige neben den Wasserfall (wie SDR-Console): beim Oeffnen des Wasserfalls wandert sie schmal nach links,
+// beim Schliessen kommt die vorherige Anordnung zurueck (gespeichert in wf.preLayout).
+function wfSideBefore(dv) {
+  if (wfOpts().side === false || !dv.getPanel("face") || dv.getPanel("waterfall")) return false;
+  store.set("wf.preLayout", dv.toJSON()); wfSideBefore.h = dv.getPanel("face").group.api.height; return true;
+}
+function wfSideAfter(dv) {
+  const face = dv.getPanel("face"), wf = dv.getPanel("waterfall"); if (!face || !wf) return;
+  try { face.api.moveTo({ group: wf.group, position: "left" }); } catch (e) { console.warn("Seitenansicht", e); return; }
+  setTimeout(() => { try { face.group.api.setSize({ width: Math.round(Math.max(300, Math.min(440, innerWidth * 0.27))) });
+    if (wfSideBefore.h) wf.group.api.setSize({ height: wfSideBefore.h }); wf.api.setActive(); } catch { } }, 30);
+}
+function wfSideRestore(dv) {
+  const pre = store.get("wf.preLayout", null); if (!pre) return; store.set("wf.preLayout", null);
+  if (!dv.getPanel("face") || wfOpts().side === false) return;
+  const ids = o => Object.keys(o?.panels || {}).sort().join(), now = dv.toJSON();
+  if (ids(pre) === ids(now)) { try { dv.fromJSON(pre); fixTitles("rig", dv); return; } catch (e) { console.warn(e); } }
+  // In der Zwischenzeit wurden Fenster geoeffnet/geschlossen: Geraeteanzeige nur wieder oben ueber die volle Breite legen
+  try { const face = dv.getPanel("face"); face.api.moveTo({ position: "top" }); } catch { }
 }
 const WF_SPANS = [3000, 6000, 12000, 24000, 48000, 96000, 192000, 384000, 768000, 1536000];
 // SDR, das als Panadapter dem aktuellen Funkgeraet folgt (gleiche Regel wie der Server: pan_sdr_id)

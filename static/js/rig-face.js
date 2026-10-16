@@ -109,6 +109,7 @@ function createFace(root) {
   </div>`;
   const rc = $(".rc", root);
   applyScheme(rc);
+  const unfit = fitZoom(root, rc, 0.8, ".rc-mainbars", 60);                      // kleine Bildschirme: Anzeige verkleinern statt scrollen
   // Frequenz: Mausrad / Klick oben-unten / Tastatur
   const fr = $(".rc-freq", rc);
   fr.addEventListener("wheel", e => {
@@ -151,7 +152,7 @@ function createFace(root) {
   const ro = new ResizeObserver(() => renderBars(rc)); ro.observe(rc);
   if (!RC.layout) loadRigLayout(); else rebuild();
   renderTabs(rc);
-  return () => { offs.forEach(f => f()); clearInterval(clk); ro.disconnect(); };
+  return () => { offs.forEach(f => f()); clearInterval(clk); ro.disconnect(); unfit(); };
 }
 function renderTabs(rc) {
   const conn = WW.radios.filter(r => r.connected), cur = WW.radios.find(r => r.id === WW.current);
@@ -300,8 +301,9 @@ function popupMenu(anchor, items) {
   $$(".popmenu").forEach(p => p.remove());
   const m = h(`<div class="popmenu">${items.map((it, i) => `<button type="button" data-i="${i}" class="${it.on ? "on" : ""}">${it.on ? "✓ " : ""}${esc(it.label)}</button>`).join("") || '<div class="hint">keine Einträge</div>'}</div>`);
   document.body.appendChild(m);
-  const r = anchor.getBoundingClientRect(); m.style.left = Math.min(r.left, innerWidth - m.offsetWidth - 8) + "px";
-  m.style.top = (r.bottom + m.offsetHeight > innerHeight ? Math.max(4, r.top - m.offsetHeight) : r.bottom) + "px";
+  const Z = uiZ(), r0 = anchor.getBoundingClientRect(), r = { left: r0.left / Z, top: r0.top / Z, bottom: r0.bottom / Z }, VW = innerWidth / Z, VH = innerHeight / Z;
+  m.style.left = Math.min(r.left, VW - m.offsetWidth - 8) + "px";
+  m.style.top = (r.bottom + m.offsetHeight > VH ? Math.max(4, r.top - m.offsetHeight) : r.bottom) + "px";
   m.addEventListener("click", e => { const b = e.target.closest("[data-i]"); if (b) { m.remove(); items[+b.dataset.i].act(); } });
   setTimeout(() => document.addEventListener("click", function off(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("click", off); } }), 0);
 }

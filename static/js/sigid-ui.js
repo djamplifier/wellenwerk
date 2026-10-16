@@ -87,13 +87,14 @@ function sigCard(o) {
   c.innerHTML = `<div class="sig-h">${icon("i-wave")}<b>Signalerkennung</b><span class="sig-f hint"></span><i class="grow"></i><button class="sig-x" title="Schließen">×</button></div>
     <div class="sig-bar"><i></i></div><div class="sig-body"><div class="hint">nehme auf …</div></div>`;
   document.body.appendChild(c);
-  const W = 340, x = Math.min(innerWidth - W - 8, Math.max(8, (o.x ?? innerWidth / 2) + 14)), y = Math.min(innerHeight - 200, Math.max(8, (o.y ?? 120) + 14));
+  const Z = uiZ(), VW = innerWidth / Z, VH = innerHeight / Z;
+  const W = 340, x = Math.min(VW - W - 8, Math.max(8, (o.x != null ? o.x / Z : VW / 2) + 14)), y = Math.min(VH - 200, Math.max(8, (o.y != null ? o.y / Z : 120) + 14));
   Object.assign(c.style, { left: x + "px", top: y + "px", width: W + "px" });
   $(".sig-f", c).textContent = o.rf ? fmtMHz(o.rf) + " MHz" : Math.round(o.fc) + " Hz";
   $(".sig-x", c).onclick = sigCancel;
   // verschiebbar am Kopf
-  $(".sig-h", c).addEventListener("pointerdown", e => { if (e.target.closest("button")) return; const sx = e.clientX - c.offsetLeft, sy = e.clientY - c.offsetTop;
-    const mv = ev => { c.style.left = (ev.clientX - sx) + "px"; c.style.top = (ev.clientY - sy) + "px"; }, up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); };
+  $(".sig-h", c).addEventListener("pointerdown", e => { if (e.target.closest("button")) return; const sx = e.clientX / Z - c.offsetLeft, sy = e.clientY / Z - c.offsetTop;
+    const mv = ev => { c.style.left = (ev.clientX / Z - sx) + "px"; c.style.top = (ev.clientY / Z - sy) + "px"; }, up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); };
     addEventListener("pointermove", mv); addEventListener("pointerup", up); });
   return c;
 }

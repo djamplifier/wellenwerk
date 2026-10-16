@@ -84,7 +84,7 @@ More settings:
 - **Share with other computers** – see below.
 - **Frequency offset (transverter, LNB, QO-100)** – see below.
 
-**Frequency offset for transverters and QO-100:** the **Frequency offset** box stores an RX and a TX offset in MHz in the radio profile. Wellenwerk then shows the real frequency everywhere (radio frequency + offset) and converts back when tuning. The **TX offset** applies to the transmit frequency in split operation (VFO B); empty means “same as RX”. The **QO-100** button enters RX 9750 MHz (LNB) and TX 1968 MHz (upconverter 432 → 2400 MHz), **Transverter 2 m** 116 MHz each (28 → 144 MHz). Example QO-100 with split: receive on 10489.550 MHz (radio 739.550 MHz), transmit on 2400.050 MHz (radio 432.050 MHz). Correct the LNB offset for your own LNB's drift if needed (e.g. 9749.982). Programs sharing the radio (WSJT-X …) still see the radio frequency.
+**Frequency offset for transverters and QO-100:** the collapsible **Frequency offset** section (opens automatically when an offset is set) stores an RX and a TX offset in MHz in the radio profile. Wellenwerk then shows the real frequency everywhere (radio frequency + offset) and converts back when tuning. The **TX offset** applies to the transmit frequency in split operation (VFO B); empty means “same as RX”. The **QO-100** button enters RX 9750 MHz (LNB) and TX 1968 MHz (upconverter 432 → 2400 MHz), **Transverter 2 m** 116 MHz each (28 → 144 MHz). Example QO-100 with split: receive on 10489.550 MHz (radio 739.550 MHz), transmit on 2400.050 MHz (radio 432.050 MHz). Correct the LNB offset for your own LNB's drift if needed (e.g. 9749.982). Programs sharing the radio (WSJT-X …) still see the radio frequency.
 
 ![Frequency offset in the Connect dialog](bilder/25-frequenzversatz.png)
 
@@ -209,6 +209,12 @@ For operating from another room or on the road: **View → Remote audio**.
 Audio runs directly between the computers (WebRTC, Opus); outside the home network enter a STUN server in the options (**Communication**).
 
 ## 5. Arranging windows and layouts
+
+**Screen size:** Wellenwerk adapts to the resolution – from laptops (also 4:3, from about 1024 × 660 pixels in the browser) up to 4K:
+- On low or narrow screens headers become more compact; toolbars that do not fit in one row show icons only (label on hover).
+- The radio display shrinks when needed instead of showing scroll bars; clicks on scales and digits still hit exactly.
+- When the **waterfall** is opened, the radio display moves to the left side as a narrow column – frequency, S-meter and buttons stacked, as in SDR-Console – and the waterfall gets the width. Closing the waterfall restores the previous arrangement. Can be switched off under **F8 → Waterfall**.
+- On very large screens without system scaling (e.g. 4K at 100 %) Wellenwerk enlarges the interface automatically; the size can also be set under **F8 → Appearance → Interface size** (80–200 %).
 
 Each area is its own window that can be arranged freely:
 

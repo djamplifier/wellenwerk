@@ -78,7 +78,7 @@ Weitere Einstellungen:
 - **Für andere Rechner freigeben** – siehe unten.
 - **Frequenzversatz (Transverter, LNB, QO-100)** – siehe unten.
 
-**Frequenzversatz für Transverter und QO-100:** Im Feld **Frequenzversatz** werden ein RX- und ein TX-Versatz in MHz im Geräteprofil gespeichert. Wellenwerk zeigt dann überall die tatsächliche Frequenz an (Gerätefrequenz + Versatz) und rechnet beim Abstimmen zurück. Der **TX-Versatz** gilt für die Sendefrequenz im Split-Betrieb (VFO B); leer bedeutet „wie RX“. Der Knopf **QO-100** trägt RX 9750 MHz (LNB) und TX 1968 MHz (Aufwärtsumsetzer 432 → 2400 MHz) ein, **Transverter 2 m** je 116 MHz (28 → 144 MHz). Beispiel QO-100 mit Split: Empfang auf 10489,550 MHz (Gerät 739,550 MHz), Senden auf 2400,050 MHz (Gerät 432,050 MHz). Den LNB-Versatz bei Bedarf um die Ablage des eigenen LNB korrigieren (z. B. 9749,982). Programme, die das Gerät über die Freigabe mitbenutzen (WSJT-X …), sehen weiter die Gerätefrequenz.
+**Frequenzversatz für Transverter und QO-100:** Im aufklappbaren Bereich **Frequenzversatz** (bei eingetragenem Versatz automatisch offen) werden ein RX- und ein TX-Versatz in MHz im Geräteprofil gespeichert. Wellenwerk zeigt dann überall die tatsächliche Frequenz an (Gerätefrequenz + Versatz) und rechnet beim Abstimmen zurück. Der **TX-Versatz** gilt für die Sendefrequenz im Split-Betrieb (VFO B); leer bedeutet „wie RX“. Der Knopf **QO-100** trägt RX 9750 MHz (LNB) und TX 1968 MHz (Aufwärtsumsetzer 432 → 2400 MHz) ein, **Transverter 2 m** je 116 MHz (28 → 144 MHz). Beispiel QO-100 mit Split: Empfang auf 10489,550 MHz (Gerät 739,550 MHz), Senden auf 2400,050 MHz (Gerät 432,050 MHz). Den LNB-Versatz bei Bedarf um die Ablage des eigenen LNB korrigieren (z. B. 9749,982). Programme, die das Gerät über die Freigabe mitbenutzen (WSJT-X …), sehen weiter die Gerätefrequenz.
 
 ![Frequenzversatz im Verbinden-Dialog](bilder/25-frequenzversatz.png)
 
@@ -203,6 +203,12 @@ Für den Betrieb aus einem anderen Raum oder unterwegs: **Ansicht → Fernbetrie
 Das Audio läuft direkt zwischen den Rechnern (WebRTC, Opus); außerhalb des Heimnetzes in den Optionen (**Kommunikation**) einen STUN-Server eintragen.
 
 ## 5. Fenster anordnen und Layouts
+
+**Bildschirmgröße:** Wellenwerk passt sich der Auflösung an – vom Laptop (auch 4:3, ab etwa 1024 × 660 Bildpunkten im Browser) bis 4K:
+- Auf niedrigen oder schmalen Bildschirmen werden Kopfzeilen kompakter; Werkzeugleisten, die nicht in eine Zeile passen, zeigen nur Symbole (Beschriftung beim Darüberfahren).
+- Die Geräteanzeige verkleinert sich bei Bedarf, statt Scrollbalken zu zeigen; Klicks auf Skalen und Ziffern treffen weiterhin genau.
+- Wird der **Wasserfall** geöffnet, wandert die Geräteanzeige schmal an die linke Seite – Frequenz, S-Meter und Tasten untereinander, wie bei SDR-Console – und der Wasserfall bekommt die Breite. Beim Schließen des Wasserfalls springt die vorherige Anordnung zurück. Abschaltbar unter **F8 → Wasserfall**.
+- Auf sehr großen Bildschirmen ohne Systemskalierung (z. B. 4K bei 100 %) vergrößert Wellenwerk die Oberfläche automatisch; die Größe lässt sich unter **F8 → Darstellung → Größe der Oberfläche** auch fest einstellen (80–200 %).
 
 Jeder Bereich ist ein eigenes Fenster, das sich frei anordnen lässt:
 

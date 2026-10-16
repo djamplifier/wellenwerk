@@ -1729,5 +1729,8 @@
 "2. Empf.": "2nd rx",
 "Anonyme Nutzerzählung": "Anonymous user count",
 "Anonym als „online“ mitzählen lassen (Anzeige auf der Wellenwerk-Seite: Zahl der Nutzer und Länder)": "Be counted anonymously as “online” (shown on the Wellenwerk website: number of users and countries)",
-"Alle 10 Minuten meldet Wellenwerk, dass es läuft. Übertragen werden nur eine zufällige Programm-Nummer und die Version; das Land ermittelt der Empfangsdienst (Cloudflare) aus der Verbindung. IP-Adresse, Rufzeichen und Standort werden nicht gespeichert.": "Every 10 minutes Wellenwerk reports that it is running. Only a random program number and the version are sent; the receiving service (Cloudflare) determines the country from the connection. IP address, callsign and location are not stored."
+"Alle 10 Minuten meldet Wellenwerk, dass es läuft. Übertragen werden nur eine zufällige Programm-Nummer und die Version; das Land ermittelt der Empfangsdienst (Cloudflare) aus der Verbindung. IP-Adresse, Rufzeichen und Standort werden nicht gespeichert.": "Every 10 minutes Wellenwerk reports that it is running. Only a random program number and the version are sent; the receiving service (Cloudflare) determines the country from the connection. IP address, callsign and location are not stored.",
+"Größe der Oberfläche": "Interface size",
+"automatisch (große Bildschirme bis 4K vergrößern)": "automatic (enlarge large screens up to 4K)",
+"Geräteanzeige beim Öffnen des Wasserfalls schmal daneben legen (wie SDR-Console), beim Schließen zurück": "When the waterfall opens, put the radio display narrow beside it (as in SDR-Console), back when it closes"
 }

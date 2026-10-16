@@ -61,6 +61,7 @@ function renderToolbar(app) {
   tb.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", () => { const t = app.toolbar[+b.dataset.i]; t.act && t.act(); refreshToolbar(); }));
   (app.toolbar || []).forEach((t, i) => { if (t.init) t.init(tb.querySelector(`[data-i="${i}"]`)); });
   refreshToolbar();
+  tb._fitRun ? tb._fitRun() : fitBar(tb);
 }
 function refreshToolbar() {
   const app = APPS[SHELL.active]; if (!app) return;
@@ -80,8 +81,11 @@ function addPanel(appId, comp, opts = {}) {
     const ref = def.dock.ref && [].concat(def.dock.ref).map(r => dv.getPanel(r)).find(Boolean);
     position = ref ? { referencePanel: ref.id, direction: def.dock.dir || "within" } : def.dock.dir && def.dock.dir !== "within" ? { direction: def.dock.dir } : undefined;
   }
+  const side = appId === "rig" && comp === "waterfall" && !opts.floating && typeof wfSideBefore === "function" && wfSideBefore(dv);
   const p = dv.addPanel({ id, component: comp, title: opts.title || def.title, params: opts.params || {}, position, floating: opts.floating });
-  if (def.size && !opts.floating) setTimeout(() => { try { p.group.api.setSize(def.size); } catch { } }, 30);
+  if (side) wfSideAfter(dv);
+  else if (def.size && !opts.floating) { const fix = () => { try { p.group.api.setSize(def.size); } catch { } };   // nach dem Aufbau, auch wenn der Start langsam ist
+    setTimeout(fix, 30); setTimeout(fix, 400); }
   return p;
 }
 function togglePanel(appId, comp) {
@@ -118,7 +122,7 @@ function createWorkspace(appId) {
   if (saved) { try { dv.fromJSON(saved); ok = dv.panels.length > 0; fixTitles(appId, dv); } catch (e) { console.warn("Layout", e); } }
   if (!ok) { dv.clear(); app.layout(dv); }
   let t; dv.onDidLayoutChange(() => { clearTimeout(t); t = setTimeout(() => { try { store.set(`layout.${appId}`, dv.toJSON()); } catch { } refreshToolbar(); refreshMenuChecks(); }, 400); });
-  dv.onDidRemovePanel(() => { refreshToolbar(); refreshMenuChecks(); });
+  dv.onDidRemovePanel(p => { refreshToolbar(); refreshMenuChecks(); if (appId === "rig" && p.id === "waterfall" && typeof wfSideRestore === "function") setTimeout(() => wfSideRestore(dv), 0); });
   return el;
 }
 function resetLayout(appId = SHELL.active) {
@@ -310,6 +314,7 @@ function openOptions(tab = "station") {
       <label>Farben<select name="wf_palette" data-local data-wf>${[["klassisch", "Klassisch"], ["feuer", "Feuer"], ["meer", "Meer"], ["grau", "Grau"], ["nacht", "Nachtsicht (rot)"]].map(([k, l]) => `<option value="${k}" ${w.palette === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label class="chkrow"><input type="checkbox" name="wf_auto" data-local data-wf ${w.auto ? "checked" : ""}> Pegel automatisch anpassen</label>
       <label>Pegel unten (0–1, ohne Automatik)<input type="number" step="0.05" min="0" max="1" name="wf_lo" data-local data-wf value="${w.lo}"></label><label>Pegel oben<input type="number" step="0.05" min="0" max="1" name="wf_hi" data-local data-wf value="${w.hi}"></label>
+      <label class="chkrow wide"><input type="checkbox" name="wf_side" data-local data-wf ${w.side !== false ? "checked" : ""}> Geräteanzeige beim Öffnen des Wasserfalls schmal daneben legen (wie SDR-Console), beim Schließen zurück</label>
       <label>Laufgeschwindigkeit<select name="wf_pps" data-local data-wf>${[[10, "langsam"], [25, "normal"], [50, "schnell"], [100, "sehr schnell"]].map(([v, l]) => `<option value="${v}" ${+w.pps === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label>SDR als Panadapter für Funkgeräte ohne Scope<select name="pan_sdr"><option value="auto" ${(s.pan_sdr || "auto") === "auto" ? "selected" : ""}>automatisch (erstes verbundenes SDR)</option><option value="off" ${s.pan_sdr === "off" ? "selected" : ""}>aus</option>${(WW.radios || []).filter(r => r.kind === "sdr").map(r => `<option value="${esc(r.id)}" ${s.pan_sdr === r.id ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></label>
       <label>3D: Tiefe (Zeilen, nach Neuöffnen)<input type="number" min="40" max="400" name="wf_depth" data-local data-wf value="${w.depth}"></label>
@@ -348,6 +353,7 @@ function openOptions(tab = "station") {
       <p class="hint wide">Gleicht die S-Meter-Anzeige an das Gerät an. Angezeigt wird Faktor × Messwert + Versatz.</p></div></div>
     <div class="dtab ${tab === "theme" ? "" : "hidden"}" data-t="theme"><div class="grid2">
       <label>Fensterdesign<select name="o_chrome" data-local>${[["office", "Klassisch (hellblau)"], ["light", "Hell"], ["dark", "Dunkel"], ["night", "Nachtsicht (rot)"]].map(([k, l]) => `<option value="${k}" ${(o.chrome || "office") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label>Größe der Oberfläche<select name="o_uiscale" data-local>${[["auto", "automatisch (große Bildschirme bis 4K vergrößern)"], ["0.8", "80 %"], ["0.9", "90 %"], ["1", "100 %"], ["1.1", "110 %"], ["1.25", "125 %"], ["1.5", "150 %"], ["1.75", "175 %"], ["2", "200 %"]].map(([k, l]) => `<option value="${k}" ${String(o.uiscale || "auto") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label>Sprache / Language<select name="lang" translate="no">${Object.entries(I18N.languages).map(([k, l]) => `<option value="${k}" ${I18N.lang === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <p class="hint wide">Farben der Funkgeräte-Anzeige stellst du unter „Layout anpassen“ (Strg+F8) ein.</p></div></div>
     <div class="err"></div>`, onOpen: dd => {
@@ -388,4 +394,4 @@ function openOptions(tab = "station") {
     catch (err) { d.querySelector(".err").textContent = err.message; }
   });
 }
-function applyChrome() { document.documentElement.dataset.chrome = store.get("opts", {}).chrome || "office"; }
+function applyChrome() { document.documentElement.dataset.chrome = store.get("opts", {}).chrome || "office"; wwFit(); }

@@ -19,7 +19,7 @@ function prgRefInput(inp, prog) {
   const close = () => { box?.remove(); box = null; };
   inp.addEventListener("input", () => { clearTimeout(t); const q = inp.value.trim(); if (q.length < 2) return close();
     t = setTimeout(async () => { try { const r = await api(`/api/programs/refs?prog=${prog}&q=${encodeURIComponent(q.split(/[,\s]+/).pop())}`); close(); if (!r.refs.length) return;
-      box = document.createElement("div"); box.className = "prg-suggest"; const rc = inp.getBoundingClientRect(); box.style.left = rc.left + "px"; box.style.top = rc.bottom + 2 + "px"; box.style.minWidth = Math.max(rc.width, 320) + "px";
+      box = document.createElement("div"); box.className = "prg-suggest"; const Z = uiZ(), rc = inp.getBoundingClientRect(); box.style.left = rc.left / Z + "px"; box.style.top = rc.bottom / Z + 2 + "px"; box.style.minWidth = Math.max(rc.width / Z, 320) + "px";
       box.innerHTML = r.refs.map(x => `<button type="button" data-r="${esc(x.ref)}"><b>${esc(x.ref)}</b> ${esc(x.name)} <small>${esc(x.loc || "")}${x.active === false ? " · inaktiv" : ""}</small></button>`).join("");
       box.onmousedown = e => { const b = e.target.closest("[data-r]"); if (!b) return; e.preventDefault(); const parts = inp.value.split(/,\s*/); parts[parts.length - 1] = b.dataset.r; inp.value = parts.join(", "); inp.dispatchEvent(new Event("input", { bubbles: true })); inp.dispatchEvent(new Event("change", { bubbles: true })); close(); };
       document.body.appendChild(box); } catch { } }, 250); });

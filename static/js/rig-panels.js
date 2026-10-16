@@ -254,15 +254,15 @@ async function openConnect(editId, tab) {
         <label>PTT über<select id="cn-ptt"><option value="RIG">CAT-Befehl (Funkgerät)</option><option value="DTR">DTR-Leitung</option><option value="RTS">RTS-Leitung</option><option value="CM108">CM108 (USB-Soundkarte)</option><option value="NONE">keine (VOX)</option></select></label>
         <input id="cn-pttdev" class="hidden" placeholder="Port für PTT (leer = gleicher Port)"></div>
       <div class="cn-net hidden"><label>Adresse (Host:Port)<input id="cn-host" placeholder="192.168.1.20:4532"></label></div>
-      <fieldset><legend>Frequenzversatz (Transverter, LNB, QO-100)</legend>
+      <details class="cn-off"><summary>Frequenzversatz (Transverter, LNB, QO-100)</summary>
         <div class="ctl-row"><label>RX-Versatz MHz<input id="cn-rxoff" placeholder="0" style="width:120px"></label><label>TX-Versatz MHz<input id="cn-txoff" placeholder="wie RX" style="width:120px"></label>
         <button type="button" data-off="qo100" title="LNB 9750 MHz, Aufwärtsumsetzer 432 → 2400 MHz">QO-100</button><button type="button" data-off="tv2m" title="28 MHz → 144 MHz">Transverter 2 m</button><button type="button" data-off="none">keiner</button></div>
-        <p class="hint">Angezeigt wird Gerätefrequenz + Versatz. Der TX-Versatz gilt für die Sendefrequenz im Split-Betrieb (VFO B), leer = wie RX. Beispiel QO-100: RX 9750 (LNB), TX 1968 (432 → 2400 MHz).</p></fieldset>
+        <p class="hint">Angezeigt wird Gerätefrequenz + Versatz. Der TX-Versatz gilt für die Sendefrequenz im Split-Betrieb (VFO B), leer = wie RX. Beispiel QO-100: RX 9750 (LNB), TX 1968 (432 → 2400 MHz).</p></details>
       <label>Weitere Hamlib-Einstellungen<input id="cn-conf" placeholder="z. B. post_write_delay=10, timeout=1000"></label>
       <label class="chkrow"><input type="checkbox" id="cn-auto"> Beim Start immer mit diesem Gerät verbinden</label>
       <label class="chkrow"><input type="checkbox" id="cn-scope"> Panadapter: Scope-Daten vom Gerät empfangen (Icom mit Spektrum, z. B. IC-7300/705/9700)</label>
       <label class="chkrow"><input type="checkbox" id="cn-share"> Für andere Rechner im Heimnetz freigeben (WSJT-X, N1MM, fldigi auf einem anderen PC)</label>
-      <div class="ctl-row"><button type="button" class="primary" id="cn-go">${icon("i-plug")} Verbinden</button><button type="button" id="cn-save">Nur speichern</button><button type="button" id="cn-det">Baudrate suchen</button></div>
+      <div class="ctl-row cn-actions"><button type="button" class="primary" id="cn-go">${icon("i-plug")} Verbinden</button><button type="button" id="cn-save">Nur speichern</button><button type="button" id="cn-det">Baudrate suchen</button></div>
     </div><div><b>Status</b><div class="cn-status" id="cn-st"></div></div></div></div>
     <div class="dtab hidden" data-t="preset"><table class="grid" id="cn-presets"></table></div>
     <div class="dtab hidden" data-t="sdr"><div class="sdr-pick"></div></div>
@@ -295,7 +295,7 @@ async function openConnect(editId, tab) {
     $("#cn-name", d).value = p.name || ""; if (p.device) { if (![...$("#cn-dev", d).options].some(o => o.value === p.device)) { $("#cn-dev", d).value = "__other"; $("#cn-dev2", d).value = p.device; $("#cn-dev2", d).classList.remove("hidden"); } else $("#cn-dev", d).value = p.device; }
     $("#cn-speed", d).value = p.speed || "auto"; $("#cn-civ", d).value = p.civaddr || ""; $("#cn-cts", d).checked = p.handshake === "hardware"; $("#cn-dtr", d).checked = p.dtr_state === "on"; $("#cn-rts", d).checked = p.rts_state === "on";
     $("#cn-ptt", d).value = p.ptt_type || "RIG"; $("#cn-pttdev", d).value = p.ptt_device || ""; $("#cn-host", d).value = p.host || ""; $("#cn-conf", d).value = p.conf || ""; $("#cn-auto", d).checked = !!p.autoconnect; $("#cn-share", d).checked = !!p.share; $("#cn-scope", d).checked = p.scope ?? /icom/i.test(p.mfg || "");
-    $("#cn-rxoff", d).value = p.rx_offset ? offMHz(p.rx_offset) : ""; $("#cn-txoff", d).value = offMHz(p.tx_offset ?? ""); };
+    $("#cn-rxoff", d).value = p.rx_offset ? offMHz(p.rx_offset) : ""; $("#cn-txoff", d).value = offMHz(p.tx_offset ?? ""); $(".cn-off", d).open = !!(p.rx_offset || p.tx_offset); };
   const TPL = {
     wfview: { mfg: "Hamlib", model: 2, name: "wfview Remote", host: "127.0.0.1:4533", hint: "In wfview: <i>Einstellungen → External Control → Enable RigCtld</i> (Port 4533). wfview verbindet sich selbst mit der entfernten Icom-Station (LAN/Internet) und stellt Gerät und Ton bereit; Wellenwerk steuert über diesen Port. Läuft wfview auf einem anderen Rechner, dessen Adresse eintragen. Ton: wfview-Audio als Soundkarte im Digitalbetrieb bzw. Fernbetrieb-Audio wählen." },
     flrig: { mfg: "FLRig", model: 4, name: "FLRig", host: "127.0.0.1:12345", hint: "FLRig muss laufen (XML-RPC, Standardport 12345)." },
