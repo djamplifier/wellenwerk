@@ -457,6 +457,8 @@ Einstellungen unter **F8 → Zugang & API**.
 
 **F8 → Fehler & Updates.**
 
+**Anonyme Nutzerzählung:** Ein laufendes Wellenwerk meldet sich alle 10 Minuten bei der Annahmestelle der Entwickler. Daraus entsteht die Anzeige „Wellenwerk online“ (Zahl der Nutzer und Länder) auf der Seite des Entwicklers. Übertragen werden nur eine zufällige Programm-Nummer (Datei `instanz-id` im Datenordner) und die Versionsnummer. Das Land ermittelt der Empfangsdienst (Cloudflare) aus der Verbindung. Gespeichert werden weder IP-Adresse noch Rufzeichen oder Standort; nach 25 Minuten ohne Meldung verschwindet der Eintrag, beim Beenden sofort. Abschalten: Haken *Anonym als „online“ mitzählen lassen* entfernen.
+
 **Fehlerbericht per E-Mail:** Wellenwerk sammelt Programmfehler aus Dienst, Oberfläche und Desktop-Programm im **Fehlerprotokoll** (**Hilfe → Fehlerprotokoll**). Mit *Fehler automatisch per E-Mail melden* geht etwa eine Minute nach einem Fehler eine Nachricht an die eingetragene Adresse – höchstens eine je eingestelltem Zeitraum (Vorgabe 30 Minuten) und höchstens 20 am Tag. Gleiche Fehler werden zusammengefasst, Passwörter und Schlüssel unkenntlich gemacht. Für den Versand ein E-Mail-Konto eintragen (SMTP-Server, Port, Benutzername, Passwort – z. B. bei freenet `mx.freenet.de`, Port 587, STARTTLS). Ohne Konto versucht Wellenwerk, die Nachricht direkt zuzustellen; das lehnen viele Anbieter ab. **Testnachricht senden** prüft die Einstellungen.
 
 **Aktualisierung:** Bei jedem Start sieht Wellenwerk nach, ob es auf GitHub eine neuere Version gibt.

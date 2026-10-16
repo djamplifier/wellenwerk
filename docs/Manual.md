@@ -463,6 +463,8 @@ Settings under **F8 → Access & API**.
 
 **F8 → Errors & updates.**
 
+**Anonymous user count:** a running Wellenwerk reports to the developers' receiving service every 10 minutes. This produces the “Wellenwerk online” display (number of users and countries) on the developer's website. Only a random program number (file `instanz-id` in the data folder) and the version number are sent. The receiving service (Cloudflare) determines the country from the connection. Neither IP address nor callsign or location is stored; an entry disappears after 25 minutes without a report, immediately on exit. To switch off, untick *Be counted anonymously as “online”*.
+
 **Error report by e-mail:** Wellenwerk collects program errors from the service, the interface and the desktop program in the **error log** (**Help → Error log**). With *Report errors automatically by e-mail*, a message goes to the entered address about a minute after an error – at most one per set period (default 30 minutes) and at most 20 a day. Identical errors are combined, passwords and keys are blanked out. Enter an e-mail account for sending (SMTP server, port, user name, password). Without an account Wellenwerk tries to deliver the message directly; many providers reject that. **Send test message** checks the settings.
 
 **Updates:** at every start Wellenwerk checks whether there is a newer version on GitHub.

@@ -82,6 +82,9 @@ jobs:
         run: python packaging/build.py
       - name: Dienst-Selbsttest
         shell: bash
+        env:
+          WW_PRESENCE_URL: ""        # Testlauf nicht als Nutzer zaehlen
+          WW_REPORT_URL: ""
         run: |
           exe=dist/Wellenwerk/Wellenwerk; [ "$RUNNER_OS" = Windows ] && exe=$exe.exe
           "$exe" --port 8099 --no-browser --data "$RUNNER_TEMP/wwdata" &

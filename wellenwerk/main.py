@@ -41,6 +41,7 @@ from .plugins import PluginHost, PluginError
 from .winlink.message import Message as WlMessage
 from .errorlog import ErrorLog
 from .updater import Updater, restart_process
+from .presence import Presence
 
 VERSION = "1.3.0"
 BASE = Path(__file__).resolve().parent.parent
@@ -69,9 +70,9 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100", lang="",
                 # Fehlerbericht per E-Mail und Aktualisierung
                 err_mail_on=False, err_mail_to="", err_mail_interval=30, err_ui=True,
                 smtp_host="", smtp_port=587, smtp_security="starttls", smtp_user="", smtp_pass="", smtp_from="",
-                update_mode="auto", err_github=False, report_url="")
+                update_mode="auto", err_github=False, report_url="", presence_on=True)
 SECRETS = ("access_password", "api_token", "wl_password", "hamqth_pass", "qrz_pass", "qrz_logbook_key", "eqsl_pass", "lotw_pass", "lotw_cert_pass", "clublog_pass", "clublog_api", "smtp_pass")
-BOOLS = ("mcp_allow_tx", "catemu_on", "sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo", "err_mail_on", "err_ui", "err_github")
+BOOLS = ("presence_on", "mcp_allow_tx", "catemu_on", "sync_on", "sync_mode", "rot_log", "callbook_auto", "auto_qrz", "auto_clublog", "auto_eqsl", "eqsl_counts", "rot_enabled", "rig_dualvfo", "err_mail_on", "err_ui", "err_github")
 MASK = "••••••"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("ww")
@@ -88,6 +89,7 @@ cfg = load_cfg()
 errors = ErrorLog(DATA, cfg, VERSION, SECRETS)
 errors.install()
 updater = Updater(BASE, DATA, VERSION, cfg)
+presence = Presence(DATA, cfg, VERSION)
 
 
 def apply_links():
@@ -492,7 +494,7 @@ async def lifespan(app):
         except ConnectionError as e:
             log.warning("WinKeyer: %s", e)
     tasks = [asyncio.create_task(cluster.run_forever()), asyncio.create_task(rotor.run_forever()), asyncio.create_task(auto_backup_loop()),
-             asyncio.create_task(errors.run()), asyncio.create_task(update_loop())]
+             asyncio.create_task(errors.run()), asyncio.create_task(update_loop()), asyncio.create_task(presence.run())]
     ingest_desktop_errors()
     await restart_n1mm()
     await apply_catemu()
@@ -506,6 +508,7 @@ async def lifespan(app):
     yield
     for t in tasks:
         t.cancel()
+    await presence.bye()
     await stop_children()
 
 
@@ -709,6 +712,8 @@ async def put_settings(new: dict):
         await apply_catemu()
     if "backup_dir" in new:
         BACKUP_WAKE.set()
+    if new.get("presence_on") is False:
+        await presence.bye()
     if "pan_sdr" in new or "sync_on" in new:
         await _pan_refresh()
     await rotor_spawn()

@@ -5,6 +5,9 @@
 function supportOptionsHtml(s) {
   const sel = (name, opts, cur) => `<select name="${name}">${opts.map(([k, l]) => `<option value="${k}" ${String(cur) === k ? "selected" : ""}>${l}</option>`).join("")}</select>`;
   return `<div class="grid2">
+    <fieldset class="wide"><legend>Anonyme Nutzerzählung</legend>
+      <label class="chkrow wide"><input type="checkbox" name="presence_on" ${s.presence_on !== false ? "checked" : ""}> Anonym als „online“ mitzählen lassen (Anzeige auf der Wellenwerk-Seite: Zahl der Nutzer und Länder)</label>
+      <p class="hint wide">Alle 10 Minuten meldet Wellenwerk, dass es läuft. Übertragen werden nur eine zufällige Programm-Nummer und die Version; das Land ermittelt der Empfangsdienst (Cloudflare) aus der Verbindung. IP-Adresse, Rufzeichen und Standort werden nicht gespeichert.</p></fieldset>
     <fieldset class="wide"><legend>Fehlerbericht per E-Mail</legend><div class="grid2">
       <label class="chkrow wide"><input type="checkbox" name="err_mail_on" ${s.err_mail_on ? "checked" : ""}> Fehler automatisch per E-Mail melden</label>
       <label>An E-Mail-Adresse<input name="err_mail_to" type="email" value="${esc(s.err_mail_to || "")}" placeholder="name@beispiel.de"></label>
