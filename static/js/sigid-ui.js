@@ -17,6 +17,36 @@ const sigRadio = id => (WW.radios || []).find(r => r.id === (id || WW.current));
 const sigState = id => sigRadio(id)?.state || WW.rig || {};
 const sigRig = (id, what, body) => id && id !== WW.current ? api(`/api/radios/${encodeURIComponent(id)}/rig/${what}`, { method: "POST", body }) : post(`/api/rig/${what}`, body);
 
+// letzte Spektrumzeilen je Geraet (HF-Spektrum): Signalmitte bestimmen, um genau abzustimmen
+const SIG_LINES = new Map();
+WW.on("spectrum", l => { let a = SIG_LINES.get(l.radio); if (!a) SIG_LINES.set(l.radio, a = []); a.push({ t: Date.now(), l }); while (a.length > 60 || a[0].t < Date.now() - 6000) a.shift(); });
+const sigLines = (id, ms = 6000) => (SIG_LINES.get(id) || []).filter(x => x.t > Date.now() - ms).map(x => x.l);
+// Mitte des Signals nahe f im HF-Spektrum (Maximum ueber die Zeilen, damit auch Bursts wie DMR zaehlen): zusammenhaengende Bereiche
+// ueber dem Rauschen, je Bereich Leistungsschwerpunkt; gewaehlt wird der dem Klick naechste (Mitte hoechstens hw entfernt),
+// so zieht ein starker Nachbarkanal nicht weg. null: kein klares Signal
+function sigRfCenter(lines, f, hw) {
+  if (!lines || !lines.length || !f) return null;
+  const l0 = lines[lines.length - 1], n = l0.data.length, hz = (l0.high - l0.low) / n; if (hz > Math.max(800, hw / 3) || f < l0.low || f > l0.high) return null;
+  const mx = new Float32Array(n).fill(-1e9), avg = new Float32Array(n); let k = 0;
+  for (const l of lines) { if (l.low !== l0.low || l.high !== l0.high || l.data.length !== n) continue; for (let i = 0; i < n; i++) { const v = l.data[i]; if (v > mx[i]) mx[i] = v; avg[i] += v; } k++; }
+  if (!k) return null; for (let i = 0; i < n; i++) avg[i] /= k;
+  const bin = x => Math.max(0, Math.min(n - 1, Math.round((x - l0.low) / hz - 0.5))), fOf = i => l0.low + (i + 0.5) * hz;
+  const ref = [...avg.subarray(bin(f - 8 * hw), bin(f + 8 * hw) + 1)].sort((x, y) => x - y), floor = ref[Math.floor(ref.length * 0.3)];
+  const a = bin(f - 3 * hw), b = bin(f + 3 * hw), best = { d: Infinity };
+  for (let i = a; i <= b; i++) {
+    if (!(mx[i] > floor + 8)) continue;
+    let e = i; while (e < b && mx[e + 1] > floor + 8) e++;
+    let pk = i; for (let q = i; q <= e; q++) if (mx[q] > mx[pk]) pk = q;
+    const thr = mx[pk] - Math.min(12, (mx[pk] - floor) * 0.6); let lo = pk, hi = pk;
+    while (lo > i && mx[lo - 1] >= thr) lo--; while (hi < e && mx[hi + 1] >= thr) hi++;
+    let sw = 0, sf = 0; for (let q = lo; q <= hi; q++) { const w = Math.pow(10, (mx[q] - floor) / 10); sw += w; sf += w * fOf(q); }
+    const c = sf / sw, d = Math.abs(c - f);
+    if (d <= hw && d < best.d) Object.assign(best, { d, center: Math.round(c), bw: Math.round((hi - lo + 1) * hz), snr: Math.round(mx[pk] - floor), res: hz });
+    i = e;
+  }
+  return best.center ? { center: best.center, bw: best.bw, snr: best.snr, res: best.res } : null;
+}
+
 // Tonquelle mit 8 kHz: Empfaenger direkt aus dem Datenstrom, sonst der Eingang des Digitalbetriebs (Soundkarte)
 async function sigTap(o, fn) {
   const r = sigRadio(o.radio);
@@ -50,12 +80,13 @@ function sigOnClick(radioId, f, e, tapId, rfLines) {
   if (e && e.altKey) return false;                                   // Alt+Klick: nur abstimmen
   if (wfOpts().sig === false) return false;
   const dr = sigRadio(tapId || radioId), decs = dr?.state?.sdr?.decoders || [];
-  if (decs.length && f > 30e6) { const list = sigProbeList(f, decs); if (list.length) { sigProbe({ radio: dr.id, ctl: radioId || dr.id, rf: f, x: e?.clientX, y: e?.clientY }, list, decs); return true; } }
+  const st0 = sigState(radioId), ssbSeg = SIG_SB[st0.mode] !== undefined && SIG_NB.some(([a, z]) => f >= a && f <= z);   // Schmalband-Segmente (SSB/CW/Baken): kein Digitalfunk
+  if (decs.length && f > 30e6 && !ssbSeg) { const list = sigProbeList(f, decs); if (list.length) { sigProbe({ radio: dr.id, ctl: radioId || dr.id, rf: f, x: e?.clientX, y: e?.clientY }, list, decs); return true; } }
   const st = sigState(radioId), inv = SIG_SB[st.mode];
   if (inv === undefined) return false;                               // AM/FM/CW: wie bisher direkt abstimmen
   const dial = Math.round(inv ? f + 1500 : f - 1500);
   sigRig(radioId, "freq", { hz: dial }).catch(err => toast(err.message, true));
-  sigIdentify({ radio: tapId || radioId || WW.current, ctl: radioId || WW.current, rfAm: sigRfAm(rfLines, f), fc: 1500, rf: f, dial, inverted: inv, x: e?.clientX, y: e?.clientY, settle: tapId ? 1.8 : 1.2 });
+  sigIdentify({ radio: tapId || radioId || WW.current, ctl: radioId || WW.current, rfAm: sigRfAm(rfLines && rfLines.length ? rfLines : sigLines(tapId || radioId || WW.current, 4000), f), fc: 1500, rf: f, dial, inverted: inv, x: e?.clientX, y: e?.clientY, settle: tapId ? 1.8 : 1.2 });
   return true;
 }
 // Klick im Wasserfall des Digitalbetriebs (Tonfrequenz af): ohne Umstimmen
@@ -66,6 +97,7 @@ function sigOnDmClick(af, e) {
 }
 
 // ---------- VHF/UHF: Dekoder des Empfaengers (OpenWebRX) durchprobieren ----------
+const SIG_NB = [[50e6, 50.5e6], [70e6, 70.25e6], [144e6, 144.5e6], [432e6, 432.5e6], [1296e6, 1296.8e6], [2320e6, 2320.5e6], [10368e6, 10368.5e6], [10489.5e6, 10490e6]];
 const SIG_FIXED = ["packet", "ism", "sonde"];              // nach Frequenz eindeutig: Dekoder bleibt an, Meldungen kommen in Abstaenden
 function sigProbeList(f, decs) {
   const has = id => decs.some(d => d.id === id), near = (a, t = 8000) => Math.abs(f - a) < t, L = [];
@@ -79,7 +111,18 @@ async function sigProbe(o, list, decs) {
   sigCancel();
   const R = SIG.run = { o, stop: false, card: sigCard(o) }, c = R.card, body = $(".sig-body", c), name = id => (decs.find(d => d.id === id) || {}).label || id;
   const fx = SIG_FIXED.includes(list[0]) ? list[0] : "";
-  const f = fx === "ism" ? (Math.abs(o.rf - 433.92e6) < 60e3 ? 433920000 : Math.abs(o.rf - 868.3e6) < 300e3 ? 868300000 : o.rf) : Math.round(o.rf / 6250) * 6250;   // Kanalraster
+  // Digitalfunk: auf die gemessene Signalmitte abstimmen (Klick ist selten genau, DMR/D-STAR brauchen die Mitte auf wenige 100 Hz);
+  // liegt sie nahe am Kanalraster (6,25 kHz), aufs Raster. Ohne Signal im Moment: Raster, die Mitte wird nachgefuehrt, sobald gesendet wird
+  // aufs Raster nur innerhalb der Messgenauigkeit (Aufloesung des Spektrums), echte Ablagen bleiben erhalten
+  const snap = (c, res = 600) => { const r = Math.round(c / 6250) * 6250; return Math.abs(c - r) <= Math.min(1500, Math.max(200, res * 0.65)) ? r : Math.round(c / 50) * 50; };
+  const meas = (at, ms, hw = 7500) => sigRfCenter(sigLines(o.radio, ms), at, hw);
+  const m0 = fx ? null : meas(o.rf, 3000);
+  let f = fx === "ism" ? (Math.abs(o.rf - 433.92e6) < 60e3 ? 433920000 : Math.abs(o.rf - 868.3e6) < 300e3 ? 868300000 : o.rf) : fx ? Math.round(o.rf / 6250) * 6250 : (m0 ? snap(m0.center, m0.res) : Math.round(o.rf / 6250) * 6250);
+  R.track = !fx; R.f0 = f;
+  // waehrend der Pruefung und des Empfangs: Mitte erneut messen und nachstimmen (max. 12,5 kHz vom Klick weg)
+  R.retune = async () => { if (!R.track || R.stop || Date.now() - (R.tuned || 0) < 1500) return false; const m = meas(f, 1500, 4500); if (!m || m.bw < 2000) return false;
+    const nf = snap(m.center, m.res); if (Math.abs(nf - f) < Math.max(300, m.res * 0.6) || Math.abs(nf - o.rf) > 12500) return false;
+    R.tuned = Date.now(); f = nf; await sigRig(o.ctl, "freq", { hz: f }).catch(() => { }); R.onTune?.(f); return true; };
   const setDec = m => api(`/api/radios/${encodeURIComponent(o.radio)}/rig/decoder`, { method: "POST", body: { mode: m } });
   const msgs = [];
   R.un = WW.on("decode", d => { if (d.radio !== o.radio || R.stop) return; msgs.push(d); R.onMsg?.(d); });
@@ -90,44 +133,101 @@ async function sigProbe(o, list, decs) {
     for (let i = 0; i < list.length && !R.stop; i++) {
       const id = list[i]; body.innerHTML = `<div class="hint">prüfe ${esc(name(id))} … (${i + 1}/${list.length})</div>`; sigProgress(R, (i + 0.3) / list.length);
       try { await setDec(id); } catch { continue; }
-      const t0 = Date.now(); while (!R.stop && Date.now() - t0 < 3500 && !msgs.some(d => d.decoder === id)) await new Promise(r => setTimeout(r, 150));
+      let t0 = Date.now(); while (!R.stop && Date.now() - t0 < 3500 && !msgs.some(d => d.decoder === id)) { await new Promise(r => setTimeout(r, 150)); if (await R.retune()) t0 = Date.now(); }
       if (msgs.some(d => d.decoder === id)) { found = id; break; }
     }
     if (R.stop) return;
     if (!found) { await setDec("").catch(() => { });
-      body.innerHTML = `<div class="sig-res weak"><span class="sig-name">kein digitales Signal erkannt</span></div><div class="hint">Geprüft: ${list.map(name).map(esc).join(", ")}. Vermutlich analoges FM oder gerade Sendepause – Empfänger steht auf FM.</div><div class="hint sig-db"></div><div class="sig-act"></div>`;
-      $(".sig-bar", c).classList.add("done"); sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbHtml(f, { id: "FSK" }, 0, !!bandFor(f)); });
+      R.track = false; const fm = await sigFmAnalog(R, o, f, body).catch(e => ({ err: e.message })); if (R.stop) return;
+      body.innerHTML = `<div class="sig-res ${fm.score >= 0.7 ? "sure" : fm.score >= 0.5 ? "maybe" : "weak"}"><span class="sig-name">${esc(fm.label || "kein digitales Signal erkannt")}</span>${fm.score ? `<span class="sig-conf">${sigPct(fm.score)}</span>` : ""}</div>
+        ${fm.facts && fm.facts.length ? `<div class="hint">${fm.facts.map(x => `<span>${esc(x)}</span>`).join(" · ")}</div>` : ""}
+        <div class="hint">Digital geprüft (nichts gefunden): ${list.map(name).map(esc).join(", ")}${fm.err ? ` · Tonanalyse: ${esc(fm.err)}` : ""}. Empfänger steht auf FM.</div><div class="hint sig-db"></div><div class="sig-act"></div>`;
+      $(".sig-bar", c).classList.add("done"); sigProgress(R, 1); if (fm.db !== "FM") sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbHtml(f, { id: fm.db || "FSK" }, 0, !!bandFor(f)); });   // Sprechfunk/Traeger: Datenbank sagt nichts
+      if (fm.label) SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - f) > 3000).concat({ rf: f, label: fm.tag || fm.label, until: Date.now() + 30000, radio: o.radio });
       const b = document.createElement("button"); b.textContent = "Nochmal"; b.onclick = () => sigProbe(o, list, decs); $(".sig-act", body).appendChild(b); return; }
   }
   $(".sig-bar", c).classList.add("done"); sigProgress(R, 1);
   body.innerHTML = `<div class="sig-res sure"><span class="sig-name">${esc(name(found))}</span><span class="sig-conf">${fx ? "nach Frequenz" : "Synchronmuster erkannt"}</span></div>
-    <div class="hint">Dekoder des Empfängers läuft · ${fmtMHz(f)} MHz · Meldungen auch im Fenster „Datenempfang“</div>
+    <div class="hint"><span>Dekoder des Empfängers läuft</span> · <span class="sig-tf">${fmtMHz(f)}</span> MHz · <span>Meldungen auch im Fenster „Datenempfang“</span></div>
+    ${!fx && Math.abs(f - o.rf) >= 500 ? `<div class="hint sig-auto">✓ <span>auf Signalmitte abgestimmt (${f > o.rf ? "+" : "−"}${(Math.abs(f - o.rf) / 1000).toFixed(1)} kHz)</span></div>` : ""}
     <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(name(found))}</b><i class="grow"></i><button type="button" class="sig-live-x">Dekoder aus</button></div><pre translate="no"></pre></div>
     <div class="hint sig-db"></div><div class="sig-act"></div>`;
   const pre = $("pre", body); let lines = [];
-  const add = d => { if (d.decoder !== found) return; lines.push(`${new Date((d.t || Date.now() / 1000) * 1000).toLocaleTimeString(I18N.locale)}  ${decSummary(d)}`); lines = lines.slice(-60); pre.textContent = lines.join("\n"); pre.scrollTop = 1e9; };
+  const add = d => { const sum = d.decoder === found ? decSummary(d) : ""; if (!sum.trim()) return; lines.push(`${new Date((d.t || Date.now() / 1000) * 1000).toLocaleTimeString(I18N.locale)}  ${sum}`); lines = lines.slice(-60); pre.textContent = lines.join("\n"); pre.scrollTop = 1e9; };
   pre.textContent = fx ? "warte auf die nächste Aussendung …" : ""; msgs.forEach(add); R.onMsg = add;
-  $(".sig-live-x", body).onclick = async () => { await setDec("").catch(() => { }); R.onMsg = null; body.querySelector(".sig-live").classList.add("off"); $(".sig-live-x", body).remove(); };
+  // Nachfuehren, solange der Dekoder laeuft (Sender mit Ablage, Drift); Handabstimmen beendet es
+  R.onTune = nf => { const el = $(".sig-tf", body); if (el) el.textContent = fmtMHz(nf); SIG.tags.forEach(t => { if (t.radio === o.radio && t.label === name(found)) t.rf = nf; }); };
+  (async () => { while (!R.stop && R.track && SIG.run === R) { await new Promise(r => setTimeout(r, 1000)); const cur = sigState(o.ctl).freq;
+    if (cur && Math.abs(cur - f) > 50 && Date.now() - (R.tuned || 0) > 2500) { R.track = false; break; } await R.retune(); } })();
+  $(".sig-live-x", body).onclick = async () => { await setDec("").catch(() => { }); R.onMsg = null; R.track = false; body.querySelector(".sig-live").classList.add("off"); $(".sig-live-x", body).remove(); };
   sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbHtml(f, { id: found === "packet" ? "PACKET" : "FSK" }, 0, !!bandFor(f)); });
   SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - f) > 3000).concat({ rf: f, label: name(found), until: Date.now() + 60000, radio: o.radio });
 }
+// Kein Digitalfunk gefunden: Ton nach dem FM-Demodulator ansehen (6 s) – Sprache, Packet/Daten, CTCSS-Unterton, unmodulierter Traeger, Rauschen
+async function sigFmAnalog(R, o, f, body) {
+  body.innerHTML = `<div class="hint">kein Digitalfunk – prüfe analoges FM (Sprache, Unterton, Daten) …</div>`;
+  const rf = sigRfCenter(sigLines(o.radio, 3000), f, 7500), buf = []; let n = 0; const need = 6 * 8000;
+  const un = await sigTap({ radio: o.radio }, x => { if (n < need) { buf.push(Float32Array.from(x)); n += x.length; } });
+  try { const t0 = Date.now(); while (!R.stop && n < need) { if (Date.now() - t0 > 12000) throw new Error("kein Ton vom Empfänger"); sigProgress(R, 0.6 + 0.4 * n / need); await new Promise(r => setTimeout(r, 200)); } }
+  finally { try { un(); } catch { } }
+  if (R.stop) return {};
+  const x = new Float32Array(n); let k = 0; for (const b of buf) { x.set(b, k); k += b.length; }
+  const res = await sigAnalyze(x, { fc: 1500, rf: f }), t = SIGID.fmTones(x), id = res.best?.id || "", facts = [];
+  if (t.ctcss) facts.push(`CTCSS ${String(t.ctcss).replace(".", ",")} Hz`);
+  if (rf) facts.push(`HF-Breite ca. ${(rf.bw / 1000).toFixed(1)} kHz`, `${rf.snr} dB über Rauschen`);
+  const quiet = t.rms < 0.01;
+  if (/^VOICE/.test(id) && res.best.score >= 0.5) return { label: "Analoges FM – Sprechfunk", tag: "FM-Sprache", score: res.best.score, facts, db: "FM" };
+  if (id === "PACKET" || /AFSK|Packet/i.test(res.best?.label || "")) return { label: "FM mit Packet-/APRS-Tönen (AFSK)", tag: "AFSK", score: res.best.score, facts, db: "PACKET" };
+  // nach dem FM-Demodulator ist Rauschen breit und flach – sieht aus wie Mehrtraeger-Digital (OFDM/MT63); das zaehlt hier nicht
+  if (res.best && res.best.score >= 0.6 && !/^(NOISE|UNKNOWN|CARRIER|OFDM|MT63|FREEDV)/.test(id)) return { label: `FM mit Daten: ${res.best.label}`, tag: res.best.label.split(" · ")[0], score: res.best.score * 0.9, facts, db: id };
+  if (t.ctcss) return { label: "FM-Träger mit Unterton (Relais/Funkgerät, gerade ohne Sprache)", tag: "FM + CTCSS", score: 0.7, facts, db: "FM" };
+  if (rf && quiet) return { label: "FM-Träger ohne Modulation", tag: "FM-Träger", score: 0.6, facts, db: "FM" };
+  if (!rf) return { label: "kein Signal (nur Rauschen)", score: 0, facts };
+  if (rf.snr >= 15 && rf.bw >= 4000) return { label: "Signal ohne erkennbaren Inhalt – evtl. anderes Digitalverfahren oder verschlüsselt", tag: "unbekannt", score: 0.3, facts, db: "FSK" };
+  return { label: "schwaches Signal – im FM-Ton nur Rauschen", score: 0.2, facts, db: "FM" };
+}
 function sigCancel() { const R = SIG.run; if (!R) return; R.stop = true; try { R.un?.(); } catch { } try { R.live?.un?.(); } catch { } R.card?.remove(); SIG.run = null; }
+// SSB-Sprache: Abstimmpunkt ist der unterdrueckte Traeger an der Kante des Seitenbands, nicht die Signalmitte.
+// Ton a (Hz) entspricht der HF dial ± a. Gemessene Kante (20 dB unter dem Sprachpegel) liegt bei richtiger Abstimmung ~200 Hz neben dem Traeger.
+// VOICE: Sprache beginnt deutlich hoeher im Ton -> zu tief abgestimmt. Zu hoch abgestimmt schneidet das Empfaengerfilter die Unterkante ab;
+// dann nur bei klar fehlender Oberkante korrigieren (Senderfilter sind verschieden breit). VOICE_INV: falsches Seitenband, Traeger ueber der Oberkante.
+// null: keine sichere Aussage (VOICE) – lieber nicht verstimmen
+function sigSsbCarrier(o, b) {
+  const rfOf = a => Math.round((o.inverted ? o.dial - a : o.dial + a) / 10) * 10, lo = b.vlo, hi = b.vhi;
+  if (b.id === "VOICE_INV") return hi && hi < 2600 ? rfOf(hi + 210) : rfOf(o.fc + 1500);
+  if (!lo || !hi) return null;
+  if (lo > 330) return rfOf(lo - 210);
+  if (hi < 1900 && lo <= 230) return rfOf(hi - 2400);
+  return null;
+}
 // Nach der Erkennung (Option „automatisch umschalten“): AM/Seitenband einstellen bzw. den Inhalt live in der Karte mitschreiben
 async function sigAuto(R, res) {
   const o = R.o, b = res.best; if (wfOpts().sigauto === false || R.stop || !b || b.score < 0.6) return;
-  const c = R.card, af = Math.round(b.center || res.center || o.fc), ctl = o.ctl || o.radio, note = t => $(".sig-body", c)?.insertAdjacentHTML("beforeend", `<div class="hint sig-auto">✓ ${esc(t)}</div>`);
+  const c = R.card, ctl = o.ctl || o.radio, note = t => $(".sig-body", c)?.insertAdjacentHTML("beforeend", `<div class="hint sig-auto">✓ <span>${esc(t)}</span></div>`);
   try {
+    const af = Math.round(b.center || res.center || o.fc);
     if (b.id === "AM" && o.dial && !o.dmTap) { await sigRig(ctl, "mode", { mode: "AM", passband: 0 }); await sigRig(ctl, "freq", { hz: Math.round(o.inverted ? o.dial - af : o.dial + af) }); note("auf AM umgeschaltet"); return; }
-    if (b.id === "VOICE_INV" && o.dial && !o.dmTap) { const sb = o.inverted ? "USB" : "LSB"; await sigRig(ctl, "mode", { mode: sb, passband: 2700 }); await sigRig(ctl, "freq", { hz: Math.round(o.inverted ? o.rf - 1500 : o.rf + 1500) }); note(`auf ${sb} umgeschaltet`); return; }
+    if (b.id === "VOICE_INV" && o.dial && !o.dmTap) { const sb = o.inverted ? "USB" : "LSB", hz = sigSsbCarrier(o, b); await sigRig(ctl, "mode", { mode: sb, passband: 2700 }); await sigRig(ctl, "freq", { hz }); note(`auf ${sb} umgeschaltet · Träger ${fmtMHz(hz)} MHz`); return; }
+    if (b.id === "VOICE" && o.dial && !o.dmTap) { const hz = sigSsbCarrier(o, b); if (hz && Math.abs(hz - o.dial) >= 120) { await sigRig(ctl, "freq", { hz }); note(`auf den Träger nachgestimmt (${(hz > o.dial) ? "+" : "−"}${Math.abs(hz - o.dial)} Hz)`); } return; }
   } catch (e) { note("Umschalten nicht möglich: " + e.message); return; }
   const mode = DM_ALL.includes(b.decode) ? b.decode : DM_ALL.includes(b.id) ? b.id : null;
   if (!mode || DIGI_MODES[mode]?.image) return;
+  // genau abstimmen: Signalmitte auf 1500 Hz im Ton legen (Klick liegt meist etwas daneben; Dekoder fangen so sicher)
+  let af = Math.round(b.center || res.center || o.fc);
+  if (o.dial && !o.dmTap && Math.abs(af - 1500) >= 15 && Math.abs(af - 1500) < 1400) {
+    const d = af - 1500; let dial = Math.round(o.inverted ? o.dial - d : o.dial + d);
+    try { await sigRig(ctl, "freq", { hz: dial }); } catch (e) { note("Nachstimmen nicht möglich: " + e.message); dial = 0; }
+    if (dial && !R.stop) { o.dial = dial; o.rf = Math.round(o.inverted ? dial - 1500 : dial + 1500); b.center = 1500; af = 1500;
+      note(`auf Signalmitte abgestimmt (${d > 0 === !o.inverted ? "+" : "−"}${Math.abs(d)} Hz) · ${fmtMHz(o.rf)} MHz`); $(".sig-f", c).textContent = fmtMHz(o.rf) + " MHz";
+      SIG.tags = SIG.tags.filter(t => !(t.radio === o.radio && Math.abs(t.rf - o.rf) < 1500)); sigTag(o, res); await new Promise(r => setTimeout(r, o.radio !== ctl ? 1500 : 800)); if (R.stop) return; }
+  }
   const box = document.createElement("div"); box.className = "sig-live";
   box.innerHTML = `<div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(DIGI_MODES[mode]?.label || mode)}</b><i class="grow"></i><button type="button" class="sig-live-x">Stopp</button></div><pre translate="no"></pre>`;
   $(".sig-body", c).insertBefore(box, $(".sig-act", c)); const pre = $("pre", box);
   let txt = b.text && b.textScore > 0.6 ? b.text + " " : "", last = Date.now();
   const out = ch => { txt = (txt + ch).slice(-4000); pre.textContent = txt; pre.scrollTop = 1e9; last = Date.now(); };
-  const rx = dmNewRx(mode, af, out, { baud: b.baud, shift: b.shift }); rx.sql = 0.1; if ("sqlv" in rx) rx.sqlv = 0.1;
+  // Wetter-/Behoerdenfunk (Shift ab 400 Hz, z. B. DWD): Zahlengruppen ohne erneutes Ziffernzeichen nach dem Leerzeichen – kein „Unshift on Space“
+  const rx = dmNewRx(mode, af, out, { baud: b.baud, shift: b.shift, usos: !(b.shift >= 400) }); rx.sql = 0.1; if ("sqlv" in rx) rx.sqlv = 0.1;
   pre.textContent = txt || "…";
   const stop = why => { try { R.live?.un?.(); } catch { } R.live = null; box.classList.add("off"); $(".sig-live-x", box).remove(); if (why) $(".sig-live-h b", box).textContent += " – " + why; };
   $(".sig-live-x", box).onclick = () => stop("angehalten");
@@ -240,13 +340,13 @@ function sigRender(R, res, interim) {
   if (!interim) sigActions(R, res, $(".sig-act", body)); else if (res.abort) sigActions(R, { best: { id: "", label: "" } }, $(".sig-act", body));
 }
 function sigActions(R, res, el) {
-  const o = R.o, b = res.best, af = Math.round(b.center || res.center || o.fc), btn = (label, fn, primary) => { const x = document.createElement("button"); x.textContent = label; if (primary) x.className = "primary"; x.onclick = async () => { try { await fn(); } catch (e) { toast(e.message, true); } }; el.appendChild(x); };
+  const o = R.o, b = res.best, afOf = () => Math.round(b.center || res.center || o.fc), btn = (label, fn, primary) => { const x = document.createElement("button"); x.textContent = label; if (primary) x.className = "primary"; x.onclick = async () => { try { await fn(); } catch (e) { toast(e.message, true); } }; el.appendChild(x); };
   const dmMode = DM_ALL.includes(b.decode) ? b.decode : DM_ALL.includes(b.id) ? b.id : null;
   if (dmMode) btn("Im Digitalbetrieb dekodieren", async () => {
     if (b.id === "RTTY" || dmMode === "RTTY") { if (b.baud) store.set("dm.rtty.baud", b.baud); if (b.shift) store.set("dm.rtty.shift", b.shift); }
     switchApp("dm"); dmSetMode(dmMode);
     if (!D.running) await dmStart(isSdr(sigRadio(o.radio)) ? "__sdr" : store.get("dm.in", ""));
-    dmSetFreq(af); sigCancel();
+    dmSetFreq(afOf()); sigCancel();
   }, true);
   if (b.id === "SSTV") btn("SSTV-Empfang öffnen", () => { switchApp("dm"); if (!panelOpen("dm", "sstv")) addPanel("dm", "sstv"); if (!D.running) dmStart(isSdr(sigRadio(o.radio)) ? "__sdr" : store.get("dm.in", "")); sigCancel(); }, true);
   if (b.id === "FREEDV") btn("FreeDV öffnen", () => { const st = store.get("fdv", {}); if (b.freedv) store.set("fdv", { ...st, mode: b.freedv }); switchApp("dm"); if (!panelOpen("dm", "freedv")) addPanel("dm", "freedv"); sigCancel(); }, true);
@@ -256,11 +356,11 @@ function sigActions(R, res, el) {
     if (std && Math.abs(std - o.dial) > 10) btn(`Auf ${fmtMHz(std)} MHz (Standard) abstimmen`, async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "USB", passband: 3000 }); await sigRig(o.ctl || o.radio, "freq", { hz: std }); sigCancel(); });
   }
   if (b.id === "VOICE_INV" && o.dial) {
-    const sb = o.inverted ? "USB" : "LSB", carrier = Math.round(o.inverted ? o.rf - 1500 : o.rf + 1500);
+    const sb = o.inverted ? "USB" : "LSB", carrier = sigSsbCarrier(o, b);
     btn(`Als ${sb} abstimmen`, async () => { await sigRig(o.ctl || o.radio, "mode", { mode: sb, passband: 2700 }); await sigRig(o.ctl || o.radio, "freq", { hz: carrier }); sigCancel(); }, true);
   }
-  if (b.id === "AM" && o.dial) btn("AM einstellen", async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "AM", passband: 0 }); await sigRig(o.ctl || o.radio, "freq", { hz: Math.round(o.inverted ? o.dial - af : o.dial + af) }); sigCancel(); }, true);
-  if (b.id === "CW" && o.dial) btn("CW einstellen", async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "CW", passband: 500 }); await sigRig(o.ctl || o.radio, "freq", { hz: Math.round(o.inverted ? o.dial - af : o.dial + af) }); sigCancel(); });
+  if (b.id === "AM" && o.dial) btn("AM einstellen", async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "AM", passband: 0 }); await sigRig(o.ctl || o.radio, "freq", { hz: Math.round(o.inverted ? o.dial - afOf() : o.dial + afOf()) }); sigCancel(); }, true);
+  if (b.id === "CW" && o.dial) btn("CW einstellen", async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "CW", passband: 500 }); await sigRig(o.ctl || o.radio, "freq", { hz: Math.round(o.inverted ? o.dial - afOf() : o.dial + afOf()) }); sigCancel(); });
   btn("Nochmal", () => sigIdentify({ ...o, settle: 0 }));
 }
 // kurzes Etikett im Wasserfall an der Signalfrequenz (30 s sichtbar)

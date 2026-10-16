@@ -12,6 +12,10 @@ from ..rig import RigError, LEVELS, FUNCS
 class SdrRefused(RigError):
     """Der Server lehnt dauerhaft ab (Passwort, ausser Betrieb, Umleitung) – kein automatischer neuer Versuch."""
 
+class SdrBusy(RigError):
+    """Der Server ist voll – spaeter erneut versuchen, aber mit langer Pause (Betreiber nicht mit Anfragen ueberhaeufen)."""
+
+
 log = logging.getLogger("ww.sdr")
 
 AGC_NAMES = {0: "AUS", 2: "FAST", 6: "MITTEL", 3: "SLOW"}
@@ -225,7 +229,7 @@ class SdrProc:
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:
-                        refused = isinstance(e, SdrRefused)
+                        refused, busy = isinstance(e, SdrRefused), isinstance(e, SdrBusy)
                         ever = ever or bool(self.rig.state.get("connected"))
                         self.rig.state.update(connected=False, error=str(e) or type(e).__name__)
                         self.rig.say(f"getrennt: {e}")
@@ -234,13 +238,15 @@ class SdrProc:
                         break
                     if asyncio.get_running_loop().time() - t0 > 120:
                         delay = 3
+                    if busy:
+                        delay = max(delay, 180)
                     self.rig.say(f"neuer Verbindungsversuch in {delay} s")
                     try:
                         await self.rig.close()
                     except Exception:
                         pass
                     await asyncio.sleep(delay)
-                    delay = min(60, delay * 2)
+                    delay = min(600 if busy else 60, delay * 2)
             finally:
                 self.proc.code = 1
         self.task = asyncio.create_task(runner())

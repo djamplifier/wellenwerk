@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 import websockets
 
 from ..rig import RigError
-from .base import SdrRig
+from .base import SdrBusy, SdrRefused, SdrRig
 
 OWRX_MODES = {"USB": "usb", "PKTUSB": "usb", "RTTY": "usb", "LSB": "lsb", "PKTLSB": "lsb", "CW": "cw", "CWR": "cw",
               "AM": "am", "SAM": "sam", "FM": "nfm"}
@@ -123,6 +123,9 @@ class OpenWebRXRig(SdrRig):
         self.fft_comp, self.audio_comp = "adpcm", "adpcm"
         self.profiles, self.profile = [], ""
         self.seen = {}                                   # Profil-ID -> (Mitte, Breite) der schon besuchten Profile
+        self._prof_t = 0.0                               # Zeit des letzten Profilwechsels (bzw. des Verbindens)
+        self._prof_lock = asyncio.Lock()
+        self._blind = True                               # unbekannte Profile durchprobieren erlaubt (nicht beim ersten Abstimmen)
         self.adpcm, self.fftc = Adpcm(), Adpcm()
         self.out_rate = 12000
         self.cfg_event = asyncio.Event()
@@ -150,6 +153,7 @@ class OpenWebRXRig(SdrRig):
         self.prof_event.clear()
         try:
             self.ws = await websockets.connect(self._uri(), max_size=None, ping_interval=None, open_timeout=12, user_agent_header="Wellenwerk")
+            self._prof_t = asyncio.get_running_loop().time()
         except Exception as e:
             raise RigError(f"OpenWebRX nicht erreichbar: {e}")
         await self._send("SERVER DE CLIENT client=wellenwerk type=receiver")
@@ -201,7 +205,7 @@ class OpenWebRXRig(SdrRig):
             if want:
                 p = next((x for x in self.profiles if x["id"] == want or want.lower() in x.get("name", "").lower()), None)
                 if p:
-                    await self._send({"type": "selectprofile", "params": {"profile": p["id"]}})
+                    asyncio.ensure_future(self._select_profile(p["id"]))
         elif t == "modes" and isinstance(v, list):
             self.owrx_modes = {m.get("modulation"): m for m in v if isinstance(m, dict)}
             self.state["sdr"]["decoders"] = [dict(id=k, label=n) for k, n in OWRX_DECODERS.items() if k in self.owrx_modes]
@@ -225,7 +229,10 @@ class OpenWebRXRig(SdrRig):
             self.say(f"Fehler: {v}")
             await self.changed(True)
         elif t == "backoff":
-            raise RigError(f"OpenWebRX: {v or 'zu viele Nutzer'}")
+            why = str(j.get("reason") or v or "")
+            if "ban" in why.lower():      # vom Betreiber gesperrt: Neuversuche wuerden nur stoeren
+                raise SdrRefused("OpenWebRX: der Betreiber hat diese Internet-Adresse gesperrt (Client address banned) – kein automatischer Neuversuch")
+            raise SdrBusy(f"OpenWebRX: {'zu viele Nutzer' if not why or 'many' in why.lower() else why}")
         elif t == "receiver_details" and isinstance(v, dict):
             self.state["sdr"]["info"] = re.sub(r"<[^>]+>", "", str(v.get("receiver_name", "")))[:100]
 
@@ -271,7 +278,11 @@ class OpenWebRXRig(SdrRig):
             if not self.state.get("freq"):
                 self.state["freq"] = fallback
             try:
-                await self.tune()
+                self._blind = False            # gespeicherte Frequenz passt evtl. gar nicht zu diesem Server: nicht blind suchen
+                try:
+                    await self.tune()
+                finally:
+                    self._blind = True
             except RigError as e:              # Wunschfrequenz hier nicht empfangbar: auf den Ausschnitt des Betreibers gehen
                 self.say(str(e))
                 self.state["freq"] = int(self.center + (fallback - self.center if self._covers(fallback) else 0))
@@ -292,6 +303,18 @@ class OpenWebRXRig(SdrRig):
     def _covers(self, f) -> bool:
         return bool(self.rate) and abs(f - self.center) < self.rate / 2 * 0.98
 
+    async def _select_profile(self, pid):
+        """Profil wechseln, hoechstens alle 10,5 s: OpenWebRX+ wertet Wechsel in kuerzerem Abstand (auch kurz nach dem
+        Verbinden) als Roboter und sperrt die Internet-Adresse fuer 12 Stunden (bot_ban_enabled)."""
+        loop = asyncio.get_running_loop()
+        async with self._prof_lock:                     # nacheinander, auch wenn mehrere Abstimmungen gleichzeitig kommen
+            wait = self._prof_t + 10.5 - loop.time()
+            if wait > 0:
+                self.say(f"Profilwechsel in {wait:.0f} s (Schutz vor der Bot-Sperre des Servers)")
+                await asyncio.sleep(wait)
+            self._prof_t = loop.time()
+            await self._send({"type": "selectprofile", "params": {"profile": pid}})
+
     async def _switch_profile(self, f):
         def hit(p):     # 0 = schon besucht und passt, 1 = Bereich im Namen passt, 2 = nur Band/MHz-Zahl im Namen
             c = self.seen.get(p["id"])
@@ -307,15 +330,15 @@ class OpenWebRXRig(SdrRig):
             except asyncio.TimeoutError:
                 pass
         cands = sorted((p for p in self.profiles if hit(p) < 9), key=hit)
-        if not cands:                                    # Namen sagen nichts: noch nicht besuchte Profile durchprobieren
+        if not cands and self._blind:                    # Namen sagen nichts: noch nicht besuchte Profile durchprobieren
             cands = [p for p in self.profiles if p["id"] not in self.seen and p["id"] != self.profile]
         loop = asyncio.get_running_loop()
-        stop = loop.time() + 25                          # insgesamt nicht ewig suchen
-        for p in cands[:6]:
+        stop = loop.time() + 50                          # insgesamt nicht ewig suchen (je Wechsel mind. 10,5 s Abstand)
+        for p in cands[:4]:
             if loop.time() > stop:
                 break
             # der Server geht oft erst auf das Profil, das auf dem Geraet gerade laeuft, und einige Sekunden spaeter auf das gewuenschte
-            await self._send({"type": "selectprofile", "params": {"profile": p["id"]}})
+            await self._select_profile(p["id"])
             end, settled = min(stop, loop.time() + 15), None
             while loop.time() < end:
                 if self.profile == p["id"] and self._covers(f):

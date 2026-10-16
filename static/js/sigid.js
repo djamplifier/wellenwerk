@@ -447,6 +447,17 @@ const SIGID = (() => {
     FT8: "FT8", FT4: "FT4", WSPR: "WSPR", JT9: "JT9", JT65: "JT65", SSTV: "SSTV", FAX: "Wetterfax (HF-FAX)", VOICE: "Sprache (SSB)", VOICE_INV: "Sprache – anderes Seitenband", FREEDV: "FreeDV (digitale Sprache)",
     AM: "AM (Träger + Seitenband)", OFDM: "Mehrträger-Digital (OFDM)", NOISE: "kein Signal erkennbar", UNKNOWN: "unbekanntes Signal", ALE: "ALE (2G, 8-FSK)" };
 
+  // Sprache (SSB): unterste und oberste belegte Tonfrequenz – daraus ergibt sich die Lage des unterdrueckten Traegers
+  // (Seitenband liegt etwa 300..2700 Hz neben dem Traeger; die Mitte des Signals ist bei SSB nicht der Abstimmpunkt)
+  function voiceEdges(occ) {   // Schwelle: 20 dB unter dem Sprachpegel (mind. 5 dB ueber dem Rauschen)
+    const { P, df, floor } = occ, Pw = smooth(P, Math.round(40 / df)), mid = [];
+    for (let i = Math.round(300 / df); i < Math.round(3300 / df); i++) mid.push(Pw[i]);
+    const thr = Math.max(floor * 3, pct(mid, 0.9) * 0.01), run = Math.round(60 / df), i0 = Math.round(80 / df), i1 = Math.round(3800 / df);
+    let lo = 0, hi = 0;
+    for (let i = i0; i <= i1 - run; i++) { let k = 0; while (k < run && Pw[i + k] > thr) k++; if (k === run) { lo = i * df; break; } }
+    for (let i = i1; i >= i0 + run; i--) { let k = 0; while (k < run && Pw[i - k] > thr) k++; if (k === run) { hi = i * df; break; } }
+    return lo && hi > lo ? { vlo: Math.round(lo), vhi: Math.round(hi) } : {};
+  }
   // x: Float32Array (8 kHz), opts: { fc: Tonfrequenz des Signals, inverted: LSB-Lage, rf: Hochfrequenz des Signals (Hz), decode: true }
   function analyze(x, opts = {}) {
     const t0 = Date.now(), fc = opts.fc || 1500, secs = x.length / FS, C = []; bbCache = { x, m: new Map() };
@@ -532,7 +543,7 @@ const SIGID = (() => {
       }
       const shape = speechShape(occ); res.shape = shape;
       const voiced = vo.frac > 0.15 && vo.frac < 0.95 && vo.sd > 8 && vo.n >= 8;   // Sprache: stimmhafte Abschnitte mit wandernder Tonhoehe
-      if (occ.bw > 600 && dom < 0.5 && (voiced || (sy.cv > 0.45 && sy.mod > 0.12 && occ.bw > 800))) add(shape < -6 ? "VOICE_INV" : "VOICE", null, 0.5 + (voiced ? Math.min(0.3, vo.frac * 0.6) : 0) + Math.min(0.15, sy.mod * 0.3), { shape, f0: Math.round(vo.f0) });
+      if (occ.bw > 600 && dom < 0.5 && (voiced || (sy.cv > 0.45 && sy.mod > 0.12 && occ.bw > 800))) add(shape < -6 ? "VOICE_INV" : "VOICE", null, 0.5 + (voiced ? Math.min(0.3, vo.frac * 0.6) : 0) + Math.min(0.15, sy.mod * 0.3), { shape, f0: Math.round(vo.f0), ...voiceEdges(occ) });
       if (L1.ratio > 0.4 && K.ratio < 2.5) add("AM", "AM (Träger + Seitenbänder)", 0.5 + Math.min(0.35, L1.ratio * 0.4), { center: occ.peak + L1.f });
     }
     return finish();
@@ -562,6 +573,18 @@ const SIGID = (() => {
       return res;
     }
   }
-  return { analyze, fft, textScore, psd, baseband, costas, occupancy, FS, MFSK, PLAN, planFor };
+  // Analoges FM (Ton nach dem FM-Demodulator): CTCSS-Unterton (Goertzel ueber die 50 Normtoene), Pegel, Rauschanteil.
+  // Die Art des Inhalts (Sprache, Packet, Daten) bestimmt analyze() wie bei Kurzwelle.
+  const CTCSS = [67.0, 69.3, 71.9, 74.4, 77.0, 79.7, 82.5, 85.4, 88.5, 91.5, 94.8, 97.4, 100.0, 103.5, 107.2, 110.9, 114.8, 118.8, 123.0, 127.3, 131.8, 136.5, 141.3, 146.2, 150.0,
+    151.4, 156.7, 159.8, 162.2, 165.5, 167.9, 171.3, 173.8, 177.3, 179.9, 183.5, 186.2, 189.9, 192.8, 196.6, 199.5, 203.5, 206.5, 210.7, 218.1, 225.7, 229.1, 233.6, 241.8, 250.3, 254.1];
+  function fmTones(x) {
+    const n = Math.min(x.length, FS * 6), g = f => { const w = 2 * Math.cos(2 * Math.PI * f / FS); let s1 = 0, s2 = 0; for (let i = 0; i < n; i++) { const s0 = x[i] + w * s1 - s2; s2 = s1; s1 = s0; } return (s1 * s1 + s2 * s2 - w * s1 * s2) / n / n; };
+    let e = 0; for (let i = 0; i < n; i++) e += x[i] * x[i]; const rms = Math.sqrt(e / (n || 1));
+    // Unterton: deutlich ueber den Nachbarfrequenzen (+-4 Hz, ausserhalb der Normtoene) und ueber dem Grundpegel des Bereichs 60..260 Hz
+    let best = null;
+    for (const f of CTCSS) { const p = g(f), side = (g(f - 3.1) + g(f + 3.1)) / 2; const r = p / (side || 1e-20); if (r > 12 && p > e / n * 0.0005 && (!best || p > best.p)) best = { f, p, r }; }
+    return { rms, ctcss: best ? best.f : null, ctcssDb: best ? Math.round(10 * Math.log10(best.r)) : 0 };
+  }
+  return { analyze, fmTones, CTCSS, fft, textScore, psd, baseband, costas, occupancy, FS, MFSK, PLAN, planFor };
 })();
 if (typeof module !== "undefined") module.exports = SIGID;
