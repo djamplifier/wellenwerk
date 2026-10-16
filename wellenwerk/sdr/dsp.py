@@ -143,3 +143,30 @@ class Spectrum:
         p = p.reshape(1024, -1).max(axis=1) if self.n > 1024 else p
         self.avg = p if self.avg is None or len(self.avg) != len(p) else self.avg * 0.5 + p * 0.5
         return np.clip((self.avg + 125) * 2.0, 0, 255).astype(np.uint8)      # -125..+2 dBFS -> 0..255
+
+
+class ZoomSpectrum:
+    """Ausschnitt des Spektrums (Breite span um off Hz neben der Mitte) mit feiner Aufloesung: lange FFT, nur die
+    benoetigten Bins. Fuer schmale Wasserfall-Breiten bei SDR-Hardware mit hoher Abtastrate."""
+    def __init__(self):
+        self.avg, self.win = None, None
+
+    def line(self, iq: np.ndarray, rate: float, off: float, span: float):
+        n = int(2 ** np.ceil(np.log2(max(2048, 1024 * rate / max(span, 500)))))
+        n = min(n, 1 << 18)
+        if len(iq) < n:
+            n = 1 << int(np.log2(max(2048, len(iq))))
+            if len(iq) < n:
+                return None
+        if self.win is None or len(self.win) != n:
+            self.win, self.avg = np.blackman(n).astype(np.float32), None
+        f = np.fft.fftshift(np.fft.fft(iq[-n:] * self.win))
+        p = 10 * np.log10(np.abs(f) ** 2 / float(self.win.sum()) ** 2 + 1e-15)
+        i0 = int(round((off - span / 2) / rate * n + n / 2))
+        i1 = int(round((off + span / 2) / rate * n + n / 2))
+        p = p[max(0, i0): min(n, i1)]
+        if len(p) > 1024:
+            k = len(p) // 1024
+            p = p[: k * 1024].reshape(1024, k).max(axis=1)
+        self.avg = p if self.avg is None or len(self.avg) != len(p) else self.avg * 0.5 + p * 0.5
+        return np.clip((self.avg + 125) * 2.0, 0, 255).astype(np.uint8)

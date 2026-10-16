@@ -63,6 +63,44 @@ function wfRows(key) {
   return Math.max(1, Math.min(8, Math.round(e * 0.025)));
 }
 wfRows.t = {}; wfRows.e = {};
+// Gleichmaessig laufender Wasserfall: Zeilen kommen stossweise (KiwiSDR, OpenWebRX, Netz). Angezeigt wird mit fester
+// Geschwindigkeit (px/s), leicht verzoegert und zwischen zwei Zeilen ueberblendet. levels(row, W) liefert 0..255 je Pixel.
+function wfScroller(canvas, levels, opts = {}) {
+  const S = { q: [], iv: 100, tl: 0, last: 0, D: 400, acc: 0, prev: 0, raf: 0, lut: null, pps: opts.pps || 25, idle: 0 };
+  const g = canvas.getContext("2d");
+  S.push = row => { const now = performance.now();
+    if (S.last) S.iv = S.iv * 0.9 + Math.min(1500, Math.max(10, now - S.last)) * 0.1; S.last = now;
+    S.tl = S.tl && Math.abs(now - S.tl - S.iv) < 2000 ? S.tl + S.iv + (now - S.tl - S.iv) * 0.05 : now;   // gleichmaessige Zeitachse
+    S.q.push({ t: S.tl, row }); while (S.q.length > 64) S.q.shift();
+    if (!S.raf) { S.prev = performance.now(); S.raf = requestAnimationFrame(frame); } };
+  S.clear = () => { S.q = []; S.tl = 0; };
+  const sample = (t, W) => { const q = S.q; let b = q.findIndex(r => r.t >= t);
+    if (b < 0) { S.D = Math.min(3000, S.D + 40); b = q.length - 1; }                                     // zu wenig Vorlauf: Verzoegerung erhoehen
+    else S.D = Math.max(S.iv * 1.5 + 60, S.D - 0.3);
+    const B = q[b], A = q[Math.max(0, b - 1)], la = lv(A, W), lb = lv(B, W); if (A === B || B.t <= A.t) return lb;
+    const k = Math.max(0, Math.min(1, (t - A.t) / (B.t - A.t))), out = new Uint8Array(W); for (let x = 0; x < W; x++) out[x] = la[x] + (lb[x] - la[x]) * k; return out; };
+  const lv = (r, W) => { if (!r.lv || r.W !== W || r.v !== S.ver) { r.lv = levels(r.row, W); r.W = W; r.v = S.ver; } return r.lv; };
+  S.ver = 0; S.invalidate = () => S.ver++;
+  function frame(now) {
+    S.raf = 0; if (!canvas.isConnected) return;
+    const dt = Math.min(250, now - S.prev); S.prev = now;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    if (W && H && (canvas.width !== W || canvas.height !== H)) { canvas.width = W; canvas.height = H; }
+    if (W && H && S.q.length && S.lut) {
+      S.acc += dt * S.pps / 1000; let n = Math.floor(S.acc); S.acc -= n; n = Math.min(n, H);
+      if (n > 0) { g.drawImage(canvas, 0, 0, W, H - n, 0, n, W, H - n); const img = g.createImageData(W, n), d = img.data, lut = S.lut;
+        for (let y = 0; y < n; y++) { const L = sample(now - S.D - (y * 1000 / S.pps), W), o = y * W * 4;     // oberste Zeile = neueste
+          for (let x = 0; x < W; x++) { const k = L[x] * 4, j = o + x * 4; d[j] = lut[k]; d[j + 1] = lut[k + 1]; d[j + 2] = lut[k + 2]; d[j + 3] = 255; } }
+        g.putImageData(img, 0, 0); opts.after?.(g, W, H, n); }
+      while (S.q.length > 2 && S.q[1].t < now - S.D - 1000) S.q.shift();
+    }
+    if (now - S.last < 4000) S.raf = requestAnimationFrame(frame);                                           // ohne Daten anhalten
+  }
+  return S;
+}
+// Automatischer Pegel fuer Wasserfall-Zeilen: Rauschboden (20 %) bis Spitzen (99,5 %), geglaettet; liefert [unten, oben]
+function wfAutoLevel(state, data) { const s = Array.from(data).sort((a, b) => a - b), lo = s[Math.floor(s.length * 0.2)], hi = Math.max(s[Math.floor(s.length * 0.995)], lo + 25);
+  state.L = state.L ? [state.L[0] * 0.9 + lo * 0.1, state.L[1] * 0.9 + hi * 0.1] : [lo, hi]; return state.L; }
 // Wasserfall um k Zeilen nach unten schieben und die neue Zeile (RGBA, Breite W) k-mal oben eintragen
 function wfPush(g, W, H, row, k) {
   k = Math.max(1, Math.min(k, H)); g.drawImage(g.canvas, 0, 0, W, H - k, 0, k, W, H - k);

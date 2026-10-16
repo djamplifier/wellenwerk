@@ -76,6 +76,11 @@ Weitere Einstellungen:
 - **Beim Start immer verbinden** – für das Hauptgerät.
 - **Panadapter: Scope-Daten vom Gerät** – bei Icom-Geräten mit eingebautem Spektrum (IC-7300/705/9700/7610 …). Im Gerät „CI-V USB Port“ auf **Unlinked** und 115200 Baud stellen.
 - **Für andere Rechner freigeben** – siehe unten.
+- **Frequenzversatz (Transverter, LNB, QO-100)** – siehe unten.
+
+**Frequenzversatz für Transverter und QO-100:** Im Feld **Frequenzversatz** werden ein RX- und ein TX-Versatz in MHz im Geräteprofil gespeichert. Wellenwerk zeigt dann überall die tatsächliche Frequenz an (Gerätefrequenz + Versatz) und rechnet beim Abstimmen zurück. Der **TX-Versatz** gilt für die Sendefrequenz im Split-Betrieb (VFO B); leer bedeutet „wie RX“. Der Knopf **QO-100** trägt RX 9750 MHz (LNB) und TX 1968 MHz (Aufwärtsumsetzer 432 → 2400 MHz) ein, **Transverter 2 m** je 116 MHz (28 → 144 MHz). Beispiel QO-100 mit Split: Empfang auf 10489,550 MHz (Gerät 739,550 MHz), Senden auf 2400,050 MHz (Gerät 432,050 MHz). Den LNB-Versatz bei Bedarf um die Ablage des eigenen LNB korrigieren (z. B. 9749,982). Programme, die das Gerät über die Freigabe mitbenutzen (WSJT-X …), sehen weiter die Gerätefrequenz.
+
+![Frequenzversatz im Verbinden-Dialog](bilder/25-frequenzversatz.png)
 
 **Mehrere Funkgeräte** gleichzeitig: einfach nacheinander verbinden. Jedes Gerät bekommt einen eigenen Reiter oben in der Gerätesteuerung.
 
@@ -137,7 +142,7 @@ Ist ein Empfänger das aktuelle Gerät, zeigt die Geräteanzeige nur die Bänder
 **Digitalbetrieb:** als Eingang **Empfänger (WebSDR/KiwiSDR)** wählen – PSK, RTTY, SSTV usw. dekodieren dann den Ton des Empfängers.
 
 **Eigene SDR-Hardware** (unten im Reiter, „Empfänger direkt eintragen“):
-- **RTL-SDR-Stick:** das Programm `rtl_tcp` (Paket *rtl-sdr*) starten und als Adresse `127.0.0.1:1234` eintragen – oder Parameter `start=1`, dann startet Wellenwerk es selbst. Kurzwelle ohne Konverter: `direct=2` (z. B. RTL-SDR Blog V3), mit Konverter `offset=125000000`. Weitere Parameter: `gain=30`, `ppm=…`, `rate=1536000`.
+- **RTL-SDR-Stick:** das Programm `rtl_tcp` (Paket *rtl-sdr*) starten und als Adresse `127.0.0.1:1234` eintragen – oder Parameter `start=1`, dann startet Wellenwerk es selbst. Kurzwelle ohne Konverter: `direct=2` (z. B. RTL-SDR Blog V3), mit Konverter `offset=125000000`. Mit LNB oder Transverter davor `rx_offset=…` in Hz – für QO-100 mit LNB 9750 MHz `rx_offset=9750000000`, dann zeigt Wellenwerk 10489,5 MHz an. Weitere Parameter: `gain=30`, `ppm=…`, `rate=1536000`.
 - **Hermes Lite 2** (und andere openHPSDR-Geräte): Adresse leer lassen – Wellenwerk sucht das Gerät im Netz – oder die IP eintragen. Parameter `rate=192000`, `gain=20`. In dieser Version nur Empfang.
 
 Wellenwerk berechnet Spektrum, Wasserfall und Ton (USB, LSB, CW, AM, FM) selbst; das S-Meter ist nicht kalibriert (`smeter_offset=…`).
@@ -150,11 +155,30 @@ Wellenwerk berechnet Spektrum, Wasserfall und Ton (USB, LSB, CW, AM, FM) selbst;
 
 ![3D-Wasserfall](bilder/22-wasserfall-3d.png)
 
-**Ansicht → Wasserfall (2D/3D)** zeigt Spektrum und Wasserfall jeder Quelle (Empfänger oder Scope des Funkgeräts; oben wählbar). **2D:** Mausrad zoomt, Ziehen verschiebt, Klick stimmt ab, der Durchlassbereich ist hell hinterlegt. **3D:** die letzten Zeilen als Landschaft – Ziehen dreht, Mausrad ändert den Abstand. Farben, Pegel, Tempo und 3D-Tiefe unter **F8 → Wasserfall**. Auch im Fenster **Empfänger** stimmt ein Klick in den kleinen Wasserfall den Empfänger auf die angeklickte Frequenz ab. Liefert eine Quelle nur wenige Zeilen je Sekunde (viele OpenWebRX-Server senden 5), zeichnet Wellenwerk jede Zeile mehrfach, damit der Wasserfall gleichmäßig läuft.
+**Ansicht → Wasserfall (2D/3D)** zeigt Spektrum und Wasserfall jeder Quelle (Empfänger oder Scope des Funkgeräts; oben wählbar). **2D:** Mausrad zoomt, Ziehen verschiebt, Klick stimmt ab, der Durchlassbereich ist hell hinterlegt. **3D:** die letzten Zeilen als Landschaft – Ziehen dreht, Mausrad ändert den Abstand. Auch im Fenster **Empfänger** stimmt ein Klick in den kleinen Wasserfall den Empfänger auf die angeklickte Frequenz ab.
+
+In der Leiste über dem Wasserfall:
+- **Breite** – angezeigter Ausschnitt von 3 kHz bis 1,5 MHz oder **ganzer Bereich** (⤢). Der Ausschnitt liegt um die Empfangsfrequenz und wandert mit, wenn man aus dem Bild abstimmt. Bei SDR-Hardware (RTL-SDR, Hermes Lite 2) rechnet Wellenwerk schmale Ausschnitte mit feinerer Auflösung neu (bei 12 kHz etwa 12 Hz je Punkt statt 750 Hz), beim KiwiSDR wird dessen Zoom gestellt, bei Icom-Geräten mit Scope die Spanne des Geräts.
+- **Kontrast** (◐) und **Helligkeit** (☀) wie bei SDR-Programmen: Kontrast spreizt den Pegelbereich, Helligkeit hebt oder senkt den Rauschboden. Doppelklick setzt einen Regler zurück. Die automatische Pegelanpassung läuft darunter weiter.
+
+Der Wasserfall läuft mit fester Geschwindigkeit, auch wenn eine Quelle ihre Zeilen stoßweise schickt (KiwiSDR, OpenWebRX, Internet): Wellenwerk zeigt die Zeilen um einen kleinen Vorlauf verzögert und blendet zwischen ihnen über. Geschwindigkeit, Farben, Pegel und 3D-Tiefe unter **F8 → Wasserfall**.
+
+![Wasserfall mit RTL-SDR als Panadapter](bilder/23-wasserfall-panadapter.png)
+
+### SDR als Panadapter für ein Funkgerät ohne Scope
+
+Viele Funkgeräte haben kein eigenes Spektrum. Wird zusätzlich ein SDR verbunden – z. B. ein **RTL-SDR** an derselben Antenne (über ein Antennenrelais/TX-Schutz oder an einem eigenen Empfangsdraht) –, übernimmt es die Rolle des Panadapters:
+1. Funkgerät wie gewohnt verbinden, dann das SDR über **Verbinden → Empfänger (SDR)** als **2. Empf.** dazu verbinden.
+2. Im **Wasserfall** (Quelle „aktuelles Gerät“) und im Fenster **Panadapter** erscheint jetzt das Spektrum des SDR, oben steht „Panadapter für …“.
+3. Das SDR folgt Frequenz und Betriebsart des Funkgeräts. Ein Klick in den Wasserfall stimmt das **Funkgerät** ab; bedient wird das Funkgerät ganz normal.
+
+Das SDR bleibt trotzdem ein vollwertiger Empfänger: im Fenster **Empfänger** lässt sich sein Ton einschalten, und **als Hauptgerät** macht es zum aktuellen Gerät – dann stimmt ein Klick wieder das SDR selbst ab. In der Quellenauswahl des Wasserfalls kann man auch ausdrücklich „… als Panadapter für …“ wählen. Unter **F8 → Wasserfall → SDR als Panadapter** lässt sich die Automatik abschalten oder ein bestimmtes SDR festlegen; Funkgeräte mit eigenem Scope (Icom) behalten in der Automatik ihr Scope. Hat das Funkgerät einen Frequenzversatz (z. B. QO-100), braucht das SDR denselben Empfangsversatz (`rx_offset`), damit es folgen kann.
 
 Empfänger-Ton wird mit etwa einer halben Sekunde Vorlauf abgespielt; bei stockender Internetverbindung wächst der Puffer selbst (bis 2 s). Bricht die Verbindung zu einem Empfänger ab, verbindet Wellenwerk sich von selbst neu. Nach einem Neustart oder einer Aktualisierung werden die vorher verbundenen Geräte und Empfänger wieder verbunden – mit der zuletzt eingestellten Frequenz und Betriebsart.
 
 ### Signalerkennung per Klick
+
+![Signalerkennung: RTTY erkannt](bilder/24-signalerkennung.png)
 
 Welche Betriebsart ist das? In **USB/LSB** genügt ein Klick auf das Signal im Wasserfall (Fenster **Wasserfall**, **Empfänger** oder im Wasserfall des **Digitalbetriebs**). Wellenwerk stimmt so ab, dass das Signal bei 1500 Hz im Ton liegt, hört bis zu 15 Sekunden zu und zeigt in einer kleinen Karte, was es erkannt hat – mit Sicherheit in Prozent, Mitte, Breite und Abstand zum Rauschen:
 

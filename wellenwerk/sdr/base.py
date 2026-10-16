@@ -119,6 +119,10 @@ class SdrRig:
     async def stop_morse(self):
         return None
 
+    async def set_span(self, hz: int) -> int:
+        """Breite des Wasserfalls in Hz (0 = ganzer Bereich); Rueckgabe: tatsaechliche Breite, 0 = fest (Oberflaeche zoomt selbst)."""
+        return 0
+
     # ---------- von den Empfaenger-Arten umzusetzen ----------
     async def run(self):
         raise NotImplementedError

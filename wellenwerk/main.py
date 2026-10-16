@@ -62,7 +62,7 @@ DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100", lang="",
                 wl_call="", wl_password="", wl_telnet_host="server.winlink.org", wl_telnet_port=8772, wl_ptt="rig",
                 ardop_host="127.0.0.1", ardop_port=8515, ardop_bw="2000MAX", vara_host="127.0.0.1", vara_port=8300, vara_bw="2300",
                 agw_host="127.0.0.1", agw_port=8000, agw_radio_port=0, rtc_stun="",
-                sync_on=False, sync_master="", sync_slave="", sync_offset=0, sync_mode=True,
+                sync_on=False, sync_master="", sync_slave="", sync_offset=0, sync_mode=True, pan_sdr="auto",
                 access_password="", api_token="", mcp_allow_tx=False, plugins={},
                 catemu_on=False, catemu_kind="pty" if os.name != "nt" else "serial", catemu_port=4590, catemu_device="",
                 callbook_auto=True, auto_qrz=False, auto_clublog=False, auto_eqsl=False, eqsl_counts=False,
@@ -271,6 +271,48 @@ async def on_rig(radio_id, state):
         want = (int(state["freq"]) + int(cfg.get("sync_offset") or 0), state.get("mode") if cfg.get("sync_mode") else None)
         if want != SYNC["last"] and not SYNC["busy"]:
             asyncio.create_task(_sync_slave(want))
+    pan = pan_sdr_id() if radio_id == radios.current else None
+    if pan and state.get("connected") and state.get("freq"):
+        want = (int(state["freq"]), state.get("mode"))
+        if want != PAN["last"] and not PAN["busy"]:
+            asyncio.create_task(_pan_follow(pan, want))
+
+
+def pan_sdr_id() -> str | None:
+    """SDR, das dem aktuellen Funkgeraet als Panadapter folgt (Wasserfall vom SDR, bedient wird das Funkgeraet).
+    pan_sdr: "auto" = erstes verbundenes SDR, wenn das Funkgeraet kein eigenes Scope hat; "off"; oder Geraete-ID."""
+    want, cur = cfg.get("pan_sdr") or "auto", radios.current
+    prof = radios.profile(cur) if cur else None
+    if want == "off" or not prof or prof.get("kind") == "sdr":
+        return None
+    sdrs = [pid for pid in radios.active if pid != cur and (radios.profile(pid) or {}).get("kind") == "sdr"
+            and not (cfg.get("sync_on") and cfg.get("sync_slave") == pid)]
+    if want == "auto":
+        rp = radios.active.get(cur)
+        return sdrs[0] if sdrs and not (rp and rp.scope) else None
+    return want if want in sdrs else None
+
+
+PAN = {"last": None, "busy": False}
+
+
+async def _pan_follow(pid: str, want):
+    sdr = radios.rig(pid)
+    if not sdr or not sdr.state.get("connected"):
+        return
+    PAN["busy"] = True
+    try:
+        hz, mode = want
+        if sdr.state.get("freq") != hz:
+            await sdr.set_freq(hz)
+        if mode and sdr.state.get("mode") != mode and mode in getattr(sdr, "MODES", []):
+            await sdr.set_mode(mode)
+        PAN["last"] = want
+    except Exception as e:
+        PAN["last"] = want                   # nicht bei jeder Abfrage des Funkgeraets neu versuchen
+        log.info("Panadapter-SDR folgt nicht: %s", e)
+    finally:
+        PAN["busy"] = False
 
 
 async def _sync_slave(want):
@@ -667,6 +709,8 @@ async def put_settings(new: dict):
         await apply_catemu()
     if "backup_dir" in new:
         BACKUP_WAKE.set()
+    if "pan_sdr" in new or "sync_on" in new:
+        await _pan_refresh()
     await rotor_spawn()
     rotor.reconfigure(cfg["rot_host"], int(cfg["rot_port"]), bool(cfg["rot_enabled"]))
     cluster.reconfigure(cfg["cluster_host"], int(cfg["cluster_port"]), cfg["callsign"], cfg.get("cluster_cmds", ""))
@@ -708,7 +752,8 @@ async def radios_list():
 @app.post("/api/radios")
 async def radios_save(body: dict):
     keep = ("id", "name", "model", "mfg", "model_name", "device", "speed", "civaddr", "handshake", "dtr_state", "rts_state",
-            "ptt_type", "ptt_device", "host", "conf", "autoconnect", "share", "scope", "kind", "sdr_type", "url", "params", "role")
+            "ptt_type", "ptt_device", "host", "conf", "autoconnect", "share", "scope", "kind", "sdr_type", "url", "params", "role",
+            "rx_offset", "tx_offset")
     prof = {k: body[k] for k in keep if k in body}
     if prof.get("kind") == "sdr":
         from .sdr import registry
@@ -754,7 +799,16 @@ async def radios_connect(pid: str):
     except Exception as e:
         raise HTTPException(502, str(e))
     await broadcast({"type": "radios"})
+    await _pan_refresh()
     return {"ok": True}
+
+
+async def _pan_refresh():
+    """Panadapter-SDR sofort auf das Funkgeraet setzen (nach Verbinden, Geraetewechsel, geaenderter Einstellung)."""
+    PAN["last"] = None
+    r = radios.rig()
+    if r and radios.current:
+        await on_rig(radios.current, dict(r.state))
 
 
 @app.post("/api/radios/{pid}/disconnect")
@@ -770,8 +824,7 @@ async def radios_select(pid: str):
         raise HTTPException(400, "Funkgerät ist nicht verbunden")
     radios.current = pid
     await broadcast({"type": "radios"})
-    r = radios.rig()
-    await on_rig(pid, dict(r.state))
+    await _pan_refresh()
     return {"ok": True}
 
 
@@ -2731,6 +2784,10 @@ async def radio_rig_cmd(pid: str, what: str, body: dict):
         return await _rig(r.set_level(str(body["name"]), float(body["value"])))
     if what == "func":
         return await _rig(r.set_func(str(body["name"]), bool(body["on"])))
+    if what == "span":                       # Breite des Wasserfalls (nur Empfaenger/SDR; 0 = ganzer Bereich)
+        if not hasattr(r, "set_span"):
+            raise HTTPException(400, "Breite ist bei diesem Gerät nicht einstellbar")
+        return {"span": await r.set_span(int(body.get("hz") or 0))}
     raise HTTPException(404, "unbekannter Befehl")
 
 

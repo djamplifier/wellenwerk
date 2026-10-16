@@ -8,31 +8,46 @@ const WF_PALETTES = {
   meer: [[0, 5, 10, 40], [0.4, 0, 90, 140], [0.7, 60, 200, 170], [1, 230, 255, 200]],
   nacht: [[0, 0, 0, 0], [0.5, 120, 0, 0], [1, 255, 90, 60]],
 };
-function wfOpts() { return Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, height: 1, sig: true, sigsecs: 15 }, store.get("opts", {}).wf || {}); }
+function wfOpts() { return Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, pps: 25, height: 1, sig: true, sigsecs: 15 }, store.get("opts", {}).wf || {}); }
 function wfLut(name) { const st = WF_PALETTES[name] || WF_PALETTES.klassisch, lut = new Uint8Array(256 * 4);
   for (let i = 0; i < 256; i++) { const v = i / 255; let k = 1; while (k < st.length - 1 && v > st[k][0]) k++; const a = st[k - 1], b = st[k], t = Math.max(0, Math.min(1, (v - a[0]) / ((b[0] - a[0]) || 1)));
     for (let c = 0; c < 3; c++) lut[i * 4 + c] = Math.round(a[c + 1] + (b[c + 1] - a[c + 1]) * t); lut[i * 4 + 3] = 255; } return lut; }
 
 function createWfPanel(root) {
-  const o = wfOpts(), st = store.get("wf.view", { mode: "2d", src: "", rx: 0.62, ry: 0.0, dist: 1.55 });
+  const o = wfOpts(), st = Object.assign({ mode: "2d", src: "", rx: 0.62, ry: 0.0, dist: 1.55, span: 0, con: 1, bri: 0 }, store.get("wf.view", {}));
   if (!(st.rx > 0)) Object.assign(st, { rx: 0.62, ry: 0, dist: 1.55 });
   root.innerHTML = `<div class="pane-tb wf-tb"><select class="wf-src" title="Quelle"></select><div class="seg2"><button data-m="2d">2D</button><button data-m="3d">3D</button></div>
-    <button class="wf-zr" title="ganzer Bereich">⤢</button><span class="hint wf-info"></span><i class="grow"></i><button class="wf-opt" title="Einstellungen">${icon("i-gear")}</button></div>
+    <select class="wf-span" title="angezeigte Breite"><option value="0">ganzer Bereich</option>${WF_SPANS.map(v => `<option value="${v}">${v >= 1e6 ? v / 1e6 + " MHz" : v / 1000 + " kHz"}</option>`).join("")}</select>
+    <button class="wf-zr" title="ganzer Bereich">⤢</button>
+    <label class="wf-sl" title="Kontrast">◐<input type="range" class="wf-con" min="0.3" max="3" step="0.05" value="${st.con}"></label>
+    <label class="wf-sl" title="Helligkeit">☀<input type="range" class="wf-bri" min="-1" max="1" step="0.02" value="${st.bri}"></label><span class="hint wf-info"></span><i class="grow"></i><button class="wf-opt" title="Einstellungen">${icon("i-gear")}</button></div>
     <div class="wf-area"><canvas class="wf-spec"></canvas><canvas class="wf-fall"></canvas><canvas class="wf-3d hidden"></canvas></div>`;
   const spec = $(".wf-spec", root), fall = $(".wf-fall", root), c3 = $(".wf-3d", root);
   let lut = wfLut(o.palette), last = null, view = null, rows = 0, gl = null, g3 = null, nLevel = [0, 255];
-  const src = () => $(".wf-src", root).value || WW.current;
-  const fillSrc = () => { const cur = st.src; $(".wf-src", root).innerHTML = `<option value="">aktuelles Gerät</option>` + (WW.radios || []).filter(r => r.connected).map(r => `<option value="${esc(r.id)}" ${r.id === cur ? "selected" : ""}>${esc(r.name)}</option>`).join(""); };
+  // Quelle: data = Geraet, dessen Spektrum gezeigt wird; ctl = Geraet, das ein Klick abstimmt (SDR als Panadapter: Funkgeraet)
+  const srcs = () => { const v = $(".wf-src", root).value;
+    if (!v) { const pan = wfPanSdr(); return { data: pan || WW.current, ctl: WW.current, pan: !!pan }; }
+    if (v.startsWith("pan:")) return { data: v.slice(4), ctl: WW.current, pan: true };
+    return { data: v, ctl: v, pan: false }; };
+  const src = () => srcs().ctl;
+  const fillSrc = () => { const cur = st.src, rs = (WW.radios || []).filter(r => r.connected), curR = rs.find(r => r.id === WW.current);
+    $(".wf-src", root).innerHTML = `<option value="">aktuelles Gerät</option>` + rs.map(r => `<option value="${esc(r.id)}" ${r.id === cur ? "selected" : ""}>${esc(r.name)}</option>`).join("")
+      + (curR && !isSdr(curR) ? rs.filter(r => isSdr(r)).map(r => `<option value="pan:${esc(r.id)}" ${"pan:" + r.id === cur ? "selected" : ""}>${esc(r.name)} als Panadapter für ${esc(curR.name)}</option>`).join("") : "");
+    if (cur && !$(".wf-src", root).value) st.src = ""; };
   const setMode = m => { st.mode = m; store.set("wf.view", st); $$(".seg2 button", root).forEach(b => b.classList.toggle("on", b.dataset.m === m));
     spec.classList.toggle("hidden", m === "3d"); fall.classList.toggle("hidden", m === "3d"); c3.classList.toggle("hidden", m !== "3d"); if (m === "3d") init3d(); };
-  const radioState = () => (WW.radios || []).find(r => r.id === src())?.state || WW.rig || {};
-  // Pegel: automatisch (Rauschboden .. Spitzen) oder fest
-  const level = d => { if (!o.auto) return [o.lo * 255, o.hi * 255]; const s = [...d].sort((a, b) => a - b); const lo = s[Math.floor(s.length * 0.2)], hi = s[Math.floor(s.length * 0.995)];
-    nLevel = [nLevel[0] * 0.9 + lo * 0.1, nLevel[1] * 0.9 + Math.max(hi, lo + 25) * 0.1]; return nLevel; };
+  const radioState = () => (src() === WW.current ? WW.rig : (WW.radios || []).find(r => r.id === src())?.state) || WW.rig || {};
+  // Pegel: automatisch (Rauschboden .. Spitzen) oder fest; dazu Kontrast und Helligkeit (Regler in der Leiste)
+  const level = d => { let L;
+    if (!o.auto) L = [o.lo * 255, o.hi * 255];
+    else { const s = [...d].sort((a, b) => a - b); const lo = s[Math.floor(s.length * 0.2)], hi = s[Math.floor(s.length * 0.995)];
+      nLevel = [nLevel[0] * 0.9 + lo * 0.1, nLevel[1] * 0.9 + Math.max(hi, lo + 25) * 0.1]; L = nLevel; }
+    return L; };
+  const adj = L => { const r = (L[1] - L[0]) / (st.con || 1), a = L[0] + (L[1] - L[0] - r) / 2 - (st.bri || 0) * r * 0.6; return [a, a + r]; };
   const norm = (v, L) => Math.max(0, Math.min(255, Math.round((v - L[0]) / ((L[1] - L[0]) || 1) * 255)));
   const fx = (f, W) => (f - view[0]) / (view[1] - view[0]) * W;
   // ---------- 2D ----------
-  const draw2d = (l, L) => {
+  const draw2d = (l, L0) => { const L = adj(L0);
     const W = spec.clientWidth, H = spec.clientHeight, FH = fall.clientHeight; if (!W || !H) return;
     if (spec.width !== W || spec.height !== H) { spec.width = W; spec.height = H; } if (fall.width !== W || fall.height !== FH) { fall.width = W; fall.height = FH; }
     const c = spec.getContext("2d"), n = l.data.length, s = radioState();
@@ -47,10 +62,15 @@ function createWfPanel(root) {
     if (s.freq) { c.fillStyle = "rgba(255,80,80,.9)"; c.fillRect(fx(s.freq, W), 0, 1.5, H); }
     for (const t of SIG.tags) { if (t.until < Date.now() || t.rf < view[0] || t.rf > view[1]) continue; const x = fx(t.rf, W), w = c.measureText(t.label).width + 8;   // erkannte Signale
       c.fillStyle = "rgba(20,30,40,.8)"; c.fillRect(x - w / 2, 14, w, 14); c.fillStyle = "#ffd166"; c.fillText(t.label, x - w / 2 + 4, 25); c.fillRect(x, 28, 1, 6); }
-    if (!FH) return; const g = fall.getContext("2d");
-    const row = new Uint8ClampedArray(W * 4); for (let x = 0; x < W; x++) { const k = norm(val(x), L) * 4; row[x * 4] = lut[k]; row[x * 4 + 1] = lut[k + 1]; row[x * 4 + 2] = lut[k + 2]; row[x * 4 + 3] = 255; }
-    wfPush(g, W, FH, row, wfRows("wf:" + l.radio));
+    if (!FH) return; scr.lut = lut; scr.push({ l, L: L0 });
   };
+  // Wasserfall laeuft gleichmaessig (wfScroller); Pixelwerte erst beim Zeichnen aus dem aktuellen Ausschnitt
+  const scr = wfScroller(fall, ({ l, L: L0 }, W) => { const n = l.data.length, out = new Uint8Array(W), L = adj(L0); if (!view) return out;
+    const i0 = (view[0] - l.low) / (l.high - l.low) * n, i1 = (view[1] - l.low) / (l.high - l.low) * n, per = (i1 - i0) / W;
+    for (let x = 0; x < W; x++) { const a = i0 + x * per; let v = -1e9;                       // mehrere Bins je Pixel: staerkster Wert
+      for (let i = Math.floor(a), e = Math.max(Math.floor(a) + 1, Math.floor(a + per)); i < e; i++) { const d = l.data[Math.max(0, Math.min(n - 1, i))]; if (d > v) v = d; }
+      out[x] = (l.low <= view[0] + (x + 0.5) * (view[1] - view[0]) / W && view[0] + (x + 0.5) * (view[1] - view[0]) / W <= l.high) ? norm(v, L) : 0; }
+    return out; }, { pps: +o.pps || 25 });
   // ---------- 3D (WebGL2) ----------
   const COLS = 512;
   function init3d() {
@@ -79,7 +99,7 @@ function createWfPanel(root) {
     g3 = { pr, th, tp, D, head: 0, n: idx.length, u: { head: gl.getUniformLocation(pr, "head"), hs: gl.getUniformLocation(pr, "hs"), mvp: gl.getUniformLocation(pr, "mvp") } };
     gl.enable(gl.DEPTH_TEST);
   }
-  const row3d = (l, L) => { if (!g3) return; const n = l.data.length, i0 = (view[0] - l.low) / (l.high - l.low) * n, i1 = (view[1] - l.low) / (l.high - l.low) * n, r = new Uint8Array(COLS);
+  const row3d = (l, L0) => { if (!g3) return; const L = adj(L0); const n = l.data.length, i0 = (view[0] - l.low) / (l.high - l.low) * n, i1 = (view[1] - l.low) / (l.high - l.low) * n, r = new Uint8Array(COLS);
     for (let x = 0; x < COLS; x++) r[x] = norm(l.data[Math.max(0, Math.min(n - 1, Math.floor(i0 + x / COLS * (i1 - i0))))], L);
     g3.head = (g3.head + 1) % g3.D; gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, g3.th); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, g3.head, COLS, 1, gl.RED, gl.UNSIGNED_BYTE, r); render3d(); };
   function render3d() {
@@ -96,21 +116,36 @@ function createWfPanel(root) {
     const M = new Float32Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += P[k * 4 + j] * R[i * 4 + k]; M[i * 4 + j] = s; } return M; }
   // ---------- Daten ----------
   let skip = 0;
-  const onLine = l => { if (l.radio !== src()) return; if (++skip % Math.max(1, o.speed) !== 0) return;
-    if (!view || view[0] < l.low - 1 || view[1] > l.high + 1 || st._full) { view = [l.low, l.high]; st._full = false; }
+  let reqSpan = null, vkey = "", zoomed = false;
+  const onLine = l => { const S = srcs(); if (l.radio !== S.data) return; if (++skip % Math.max(1, o.speed) !== 0) return;
+    if (reqSpan !== `${S.data}:${st.span}`) applySpan();
+    const full = l.high - l.low, want = Math.min(full, st.span > 0 ? st.span : full), s = radioState();
+    if (!view || st._full) { view = [l.low, l.high]; st._full = false; zoomed = false; }
+    if (st._spanSet) { zoomed = false; st._spanSet = false; }
+    if (!zoomed && Math.abs((view[1] - view[0]) - want) > 1) {                                       // eingestellte Breite, um die Empfangsfrequenz
+      const pb = s.freq ? wfPass(s) : [0, 0], c = s.freq ? s.freq + (pb[0] + pb[1]) / 2 : (l.low + l.high) / 2; view = [c - want / 2, c + want / 2]; }
+    if (s.freq && view[1] - view[0] < full * 0.98 && (s.freq < view[0] + (view[1] - view[0]) * 0.1 || s.freq > view[1] - (view[1] - view[0]) * 0.1)) {   // Abstimmen aus dem Bild: nachziehen
+      const pb = wfPass(s), c = s.freq + (pb[0] + pb[1]) / 2, w = view[1] - view[0]; view = [c - w / 2, c + w / 2]; }
+    if (view[0] < l.low) view = [l.low, l.low + (view[1] - view[0])]; if (view[1] > l.high) view = [Math.max(l.low, l.high - (view[1] - view[0])), l.high];
+    if (vkey !== view.join()) { vkey = view.join(); scr.invalidate(); }
     last = l; rows++; const L = level(l.data);
-    $(".wf-info", root).textContent = `${((view[1] - view[0]) / 1000).toFixed(1)} kHz · ${l.name || ""}`;
+    $(".wf-info", root).textContent = `${((view[1] - view[0]) / 1000).toFixed(1)} kHz · ${l.name || ""}${S.pan ? " · Panadapter für " + ((WW.radios || []).find(r => r.id === S.ctl)?.name || "Funkgerät") : ""}`;
     st.mode === "3d" ? row3d(l, L) : draw2d(l, L); };
+  // Breite: SDR rechnet den Ausschnitt selbst (feinere Aufloesung), Icom-Scope ueber SPECTRUM_SPAN, sonst nur Zoom
+  const applySpan = () => { const S = srcs(); reqSpan = `${S.data}:${st.span}`; const r = (WW.radios || []).find(x => x.id === S.data); if (!r) return;
+    if (isSdr(r)) api(`/api/radios/${S.data}/rig/span`, { method: "POST", body: { hz: +st.span || 0 } }).catch(() => { });
+    else if (r.scope && st.span > 0) { const v = [2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000].find(x => x * 2 >= st.span) || 500000;
+      api(`/api/radios/${S.data}/rig/level`, { method: "POST", body: { name: "SPECTRUM_SPAN", value: v } }).catch(() => { }); } };
   // ---------- Bedienung ----------
   const tune = hz => { const id = src(); (id && id !== WW.current ? api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz } }) : post("/api/rig/freq", { hz })).catch(e => toast(e.message, true)); };
   [spec, fall].forEach(cv => {
     cv.addEventListener("click", e => { if (!view || cv._dragged) return; const r = cv.getBoundingClientRect(), f = Math.round((view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0])) / 10) * 10;
-      if (!sigOnClick(src(), f, e)) tune(f); });
-    cv.addEventListener("wheel", e => { if (!view || !last) return; e.preventDefault(); const r = cv.getBoundingClientRect(), at = view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0]), k = e.deltaY > 0 ? 1.25 : 0.8;
+      const S = srcs(); if (!sigOnClick(S.ctl, f, e, S.pan ? S.data : null)) tune(f); });
+    cv.addEventListener("wheel", e => { if (!view || !last) return; e.preventDefault(); scr.invalidate(); zoomed = true; const r = cv.getBoundingClientRect(), at = view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0]), k = e.deltaY > 0 ? 1.25 : 0.8;
       let a = at - (at - view[0]) * k, b = at + (view[1] - at) * k; if (b - a > last.high - last.low) [a, b] = [last.low, last.high]; if (b - a < 500) return;
       if (a < last.low) { b += last.low - a; a = last.low; } if (b > last.high) { a -= b - last.high; b = last.high; } view = [a, b]; }, { passive: false });
     cv.addEventListener("pointerdown", e => { if (!view) return; const x0 = e.clientX, v0 = view.slice(), w = cv.getBoundingClientRect().width; cv._dragged = false;
-      const mv = ev => { const df = (ev.clientX - x0) / w * (v0[1] - v0[0]); if (Math.abs(ev.clientX - x0) > 3) cv._dragged = true; let a = v0[0] - df, b = v0[1] - df;
+      const mv = ev => { const df = (ev.clientX - x0) / w * (v0[1] - v0[0]); if (Math.abs(ev.clientX - x0) > 3) cv._dragged = true; let a = v0[0] - df, b = v0[1] - df; scr.invalidate();
         if (last) { if (a < last.low) { b += last.low - a; a = last.low; } if (b > last.high) { a -= b - last.high; b = last.high; } } view = [a, b]; };
       const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); setTimeout(() => cv._dragged = false, 0); };
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); });
@@ -120,13 +155,28 @@ function createWfPanel(root) {
     const up = () => { store.set("wf.view", st); window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); });
   c3.addEventListener("wheel", e => { e.preventDefault(); st.dist = Math.max(0.8, Math.min(6, st.dist * (e.deltaY > 0 ? 1.1 : 0.9))); store.set("wf.view", st); render3d(); }, { passive: false });
-  root.addEventListener("click", e => { const b = e.target.closest(".seg2 button"); if (b) setMode(b.dataset.m); if (e.target.closest(".wf-zr")) st._full = true; if (e.target.closest(".wf-opt")) openOptions("wf"); });
-  $(".wf-src", root).onchange = e => { st.src = e.target.value; store.set("wf.view", st); view = null; };
+  root.addEventListener("click", e => { const b = e.target.closest(".seg2 button"); if (b) setMode(b.dataset.m); if (e.target.closest(".wf-zr")) { st._full = true; st.span = 0; $(".wf-span", root).value = "0"; store.set("wf.view", st); reqSpan = null; } if (e.target.closest(".wf-opt")) openOptions("wf"); });
+  $(".wf-src", root).onchange = e => { st.src = e.target.value; store.set("wf.view", st); view = null; reqSpan = null; scr.clear();
+    if (e.target.value.startsWith("pan:")) api("/api/settings", { method: "PUT", body: { pan_sdr: e.target.value.slice(4) } }).then(c => { WW.settings = c; }).catch(err => toast(err.message, true)); };
+  $(".wf-span", root).value = String(st.span || 0);
+  $(".wf-span", root).onchange = e => { st.span = +e.target.value; st._spanSet = true; reqSpan = null; store.set("wf.view", st); if (!st.span) st._full = true; };
+  $(".wf-con", root).oninput = e => { st.con = +e.target.value; store.set("wf.view", st); scr.invalidate(); };
+  $(".wf-bri", root).oninput = e => { st.bri = +e.target.value; store.set("wf.view", st); scr.invalidate(); };
+  $$(".wf-sl input", root).forEach(i => i.ondblclick = () => { i.value = i.classList.contains("wf-con") ? 1 : 0; i.oninput({ target: i }); });
   fillSrc(); setMode(st.mode);
   const offs = [WW.on("spectrum", onLine), WW.on("radios", fillSrc), WW.on("settings", () => { Object.assign(o, wfOpts()); lut = wfLut(o.palette);
     if (g3) { gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, g3.tp); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, lut); } })];
   const ro = new ResizeObserver(() => { if (st.mode === "3d") render3d(); }); ro.observe(root);
   return () => { offs.forEach(f => f()); ro.disconnect(); };
+}
+const WF_SPANS = [3000, 6000, 12000, 24000, 48000, 96000, 192000, 384000, 768000, 1536000];
+// SDR, das als Panadapter dem aktuellen Funkgeraet folgt (gleiche Regel wie der Server: pan_sdr_id)
+function wfPanSdr() {
+  const rs = WW.radios || [], cur = rs.find(r => r.id === WW.current), want = WW.settings?.pan_sdr || "auto";
+  if (want === "off" || !cur || isSdr(cur)) return null;
+  const sdrs = rs.filter(r => r.connected && isSdr(r) && r.id !== cur.id && !(WW.settings?.sync_on && WW.settings?.sync_slave === r.id)).map(r => r.id);
+  if (want === "auto") return sdrs.length && !cur.scope ? sdrs[0] : null;
+  return sdrs.includes(want) ? want : null;
 }
 function wfPass(s) { const m = s.mode, pb = +s.passband || 0;
   if (m === "LSB" || m === "PKTLSB") return [-(pb || 2700), -100]; if (m === "CW") return [500 - (pb || 500) / 2, 500 + (pb || 500) / 2];

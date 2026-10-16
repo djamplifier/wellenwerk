@@ -82,6 +82,11 @@ More settings:
 - **Always connect on start** – for the main radio.
 - **Panadapter: scope data from the radio** – for Icom radios with built-in spectrum (IC-7300/705/9700/7610 …). In the radio set “CI-V USB Port” to **Unlinked** and 115200 baud.
 - **Share with other computers** – see below.
+- **Frequency offset (transverter, LNB, QO-100)** – see below.
+
+**Frequency offset for transverters and QO-100:** the **Frequency offset** box stores an RX and a TX offset in MHz in the radio profile. Wellenwerk then shows the real frequency everywhere (radio frequency + offset) and converts back when tuning. The **TX offset** applies to the transmit frequency in split operation (VFO B); empty means “same as RX”. The **QO-100** button enters RX 9750 MHz (LNB) and TX 1968 MHz (upconverter 432 → 2400 MHz), **Transverter 2 m** 116 MHz each (28 → 144 MHz). Example QO-100 with split: receive on 10489.550 MHz (radio 739.550 MHz), transmit on 2400.050 MHz (radio 432.050 MHz). Correct the LNB offset for your own LNB's drift if needed (e.g. 9749.982). Programs sharing the radio (WSJT-X …) still see the radio frequency.
+
+![Frequency offset in the Connect dialog](bilder/25-frequenzversatz.png)
 
 **Several radios** at once: simply connect one after the other. Each radio gets its own tab at the top of radio control.
 
@@ -143,7 +148,7 @@ When a receiver is the current radio, the display only shows the bands it can re
 **Digital modes:** choose **Receiver (WebSDR/KiwiSDR)** as input – PSK, RTTY, SSTV etc. then decode the receiver's audio.
 
 **Your own SDR hardware** (bottom of the tab, “enter receiver directly”):
-- **RTL-SDR stick:** start the program `rtl_tcp` (package *rtl-sdr*) and enter `127.0.0.1:1234` as address – or the parameter `start=1`, then Wellenwerk starts it itself. Shortwave without converter: `direct=2` (e.g. RTL-SDR Blog V3), with converter `offset=125000000`. More parameters: `gain=30`, `ppm=…`, `rate=1536000`.
+- **RTL-SDR stick:** start the program `rtl_tcp` (package *rtl-sdr*) and enter `127.0.0.1:1234` as address – or the parameter `start=1`, then Wellenwerk starts it itself. Shortwave without converter: `direct=2` (e.g. RTL-SDR Blog V3), with converter `offset=125000000`. With an LNB or transverter in front use `rx_offset=…` in Hz – for QO-100 with a 9750 MHz LNB `rx_offset=9750000000`, Wellenwerk then shows 10489.5 MHz. More parameters: `gain=30`, `ppm=…`, `rate=1536000`.
 - **Hermes Lite 2** (and other openHPSDR devices): leave the address empty – Wellenwerk searches the network – or enter the IP. Parameters `rate=192000`, `gain=20`. Receive only in this version.
 
 Wellenwerk computes spectrum, waterfall and audio (USB, LSB, CW, AM, FM) itself; the S-meter is not calibrated (`smeter_offset=…`).
@@ -156,11 +161,30 @@ Wellenwerk computes spectrum, waterfall and audio (USB, LSB, CW, AM, FM) itself;
 
 ![3D waterfall](bilder/22-wasserfall-3d.png)
 
-**View → Waterfall (2D/3D)** shows spectrum and waterfall of every source (receiver or radio scope; selectable at the top). **2D:** mouse wheel zooms, dragging pans, a click tunes, the passband is highlighted. **3D:** the latest lines as a landscape – dragging rotates, the mouse wheel changes the distance. Colours, levels, speed and 3D depth under **F8 → Waterfall**. In the **Receivers** window, too, a click into the small waterfall tunes that receiver to the clicked frequency. If a source delivers only a few lines per second (many OpenWebRX servers send 5), Wellenwerk draws each line several times so the waterfall scrolls smoothly.
+**View → Waterfall (2D/3D)** shows spectrum and waterfall of every source (receiver or radio scope; selectable at the top). **2D:** mouse wheel zooms, dragging pans, a click tunes, the passband is highlighted. **3D:** the latest lines as a landscape – dragging rotates, the mouse wheel changes the distance. In the **Receivers** window, too, a click into the small waterfall tunes that receiver to the clicked frequency.
+
+In the toolbar above the waterfall:
+- **Width** – displayed span from 3 kHz to 1.5 MHz or the **whole range** (⤢). The span is centred on the receive frequency and follows when you tune out of the picture. With SDR hardware (RTL-SDR, Hermes Lite 2) Wellenwerk recomputes narrow spans at finer resolution (about 12 Hz per point at 12 kHz instead of 750 Hz); with a KiwiSDR its zoom is set, with Icom radios with a scope the radio's span.
+- **Contrast** (◐) and **brightness** (☀) as in SDR programs: contrast spreads the level range, brightness raises or lowers the noise floor. Double-click resets a slider. Automatic level adjustment keeps working underneath.
+
+The waterfall scrolls at a constant speed even when a source sends its lines in bursts (KiwiSDR, OpenWebRX, internet): Wellenwerk shows the lines with a small delay and blends between them. Speed, colours, levels and 3D depth under **F8 → Waterfall**.
+
+![Waterfall with an RTL-SDR as panadapter](bilder/23-wasserfall-panadapter.png)
+
+### SDR as panadapter for a radio without a scope
+
+Many radios have no spectrum display of their own. If an SDR is connected as well – e.g. an **RTL-SDR** on the same antenna (via an antenna relay/TX protection or on a separate receive wire) – it takes over as the panadapter:
+1. Connect the radio as usual, then add the SDR via **Connect → Receivers (SDR)** as **2nd rx**.
+2. The **Waterfall** (source “current radio”) and the **Panadapter** window now show the SDR's spectrum; the toolbar says “panadapter for …”.
+3. The SDR follows the radio's frequency and mode. A click in the waterfall tunes the **radio**; the radio is operated completely as usual.
+
+The SDR is still a full receiver: switch its audio on in the **Receivers** window, and **as main radio** makes it the current device – then a click tunes the SDR itself again. The waterfall's source list also offers “… as panadapter for …” explicitly. Under **F8 → Waterfall → SDR as panadapter** the automatic mode can be switched off or a particular SDR chosen; in automatic mode radios with their own scope (Icom) keep their scope. If the radio has a frequency offset (e.g. QO-100), the SDR needs the same receive offset (`rx_offset`) to be able to follow.
 
 Receiver audio plays with about half a second of buffer; on a stuttering internet connection the buffer grows by itself (up to 2 s). If the connection to a receiver drops, Wellenwerk reconnects by itself. After a restart or an update, the radios and receivers connected before are connected again – with the last frequency and mode.
 
 ### Signal identification by click
+
+![Signal identification: RTTY detected](bilder/24-signalerkennung.png)
 
 Which mode is that? In **USB/LSB** a click on the signal in the waterfall (window **Waterfall**, **Receivers** or the waterfall in **Digital modes**) is enough. Wellenwerk tunes so that the signal lies at 1500 Hz audio, listens for up to 15 seconds and shows in a small card what it has identified – with confidence in percent, centre, width and distance from the noise:
 

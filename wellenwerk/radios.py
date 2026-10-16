@@ -149,6 +149,14 @@ async def listen_spectrum(port: int, cb):
     return transport
 
 
+def _hz(v) -> int:
+    """Versatz aus dem Profil (Hz, ganze Zahl oder Text)."""
+    try:
+        return int(round(float(str(v).replace(",", ".")))) if v not in (None, "") else 0
+    except ValueError:
+        return 0
+
+
 class RadioProc:
     """Ein verbundenes Funkgeraet: eigener rigctld-Prozess + Rig-Client."""
 
@@ -211,11 +219,20 @@ class RadioProc:
         await asyncio.sleep(1.2)
         if self.proc.poll() is not None:
             raise RuntimeError("rigctld beendet sich sofort: " + " | ".join(list(self.log)[-4:]))
-        self.rig = Rig("127.0.0.1", self.port, self._changed)
+        self.rig = Rig("127.0.0.1", self.port, self._changed, rx_offset=_hz(self.p.get("rx_offset")),
+                       tx_offset=None if self.p.get("tx_offset") in (None, "") else _hz(self.p.get("tx_offset")))
+        self.rig.state["offsets"] = dict(rx=self.rig.rx_off, tx=self.rig.tx_off)
         self.task = asyncio.create_task(self.rig.poll_forever())
         if self.scope and self.on_spectrum:
+            off = self.rig.rx_off
+
+            def scope_line(line):
+                if off:
+                    line = dict(line, low=(line.get("low") or 0) + off, high=(line.get("high") or 0) + off,
+                                center=(line.get("center") or 0) + off)
+                return self.on_spectrum(self.p["id"], line)
             try:
-                self.mc = await listen_spectrum(self.port + 100, lambda line: self.on_spectrum(self.p["id"], line))
+                self.mc = await listen_spectrum(self.port + 100, scope_line)
             except OSError as e:
                 self.log.append(f"Panadapter-Empfang nicht moeglich: {e}")
 

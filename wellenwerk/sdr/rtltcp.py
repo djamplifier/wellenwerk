@@ -6,6 +6,7 @@ Adresse: host:port (Standard 127.0.0.1:1234). Parameter (mit ; getrennt):
   ppm=0               Frequenzkorrektur
   direct=0|1|2        Direktabtastung (Kurzwelle ohne Konverter; 2 = Q-Zweig, z. B. RTL-SDR Blog V3)
   offset=0            Konverter-Versatz in Hz (z. B. 125000000 bei Ham It Up)
+  rx_offset=0         Frequenzversatz LNB/Transverter: Anzeige = Hardware + Versatz (QO-100 mit LNB 9750 MHz: 9750000000)
   start=1             rtl_tcp selbst starten (nur auf diesem Rechner, Geraet: device=0)
 """
 import asyncio
@@ -27,11 +28,14 @@ class RtlTcpRig(IqRig):
         super().__init__(*a, **k)
         self.r = self.w = None
         self.proc = None
-        self.offset = int(float(self.params.get("offset", 0)))
+        # Konverter-Versatz (Parameter offset: Hardware = Anzeige + offset) und Frequenzversatz des Profils (LNB, Transverter:
+        # Anzeige = Hardware + rx_offset, z. B. QO-100 mit LNB 9750 MHz: rx_offset = 9750000000)
+        self.offset = int(float(self.params.get("offset", 0))) - int(float(self.p.get("rx_offset") or self.params.get("rx_offset") or 0))
         if self.params.get("direct"):                          # Direktabtastung: Kurzwelle
-            self.state["sdr"]["ranges"] = [[500_000, 28_800_000]]
+            self.state["sdr"]["ranges"] = [[500_000 - self.offset, 28_800_000 - self.offset]]
         else:                                                  # Tuner 24 MHz .. 1,766 GHz (Konverter verschiebt)
-            self.state["sdr"]["ranges"] = [[24_000_000 - self.offset, 1_766_000_000 - self.offset]] if self.offset >= 0 else [[0, 1_766_000_000]]
+            self.state["sdr"]["ranges"] = [[max(0, 24_000_000 - self.offset), 1_766_000_000 - self.offset]]
+        self.state["offsets"] = dict(rx=int(float(self.p.get("rx_offset") or self.params.get("rx_offset") or 0)), tx=0)
 
     def _addr(self):
         a = (self.p.get("url") or "127.0.0.1:1234").replace("rtl_tcp://", "").replace("tcp://", "").strip("/")

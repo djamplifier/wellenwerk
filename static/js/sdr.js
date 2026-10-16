@@ -177,9 +177,13 @@ function createReceivers(root) {
   root.addEventListener("mousemove", e => { const c = e.target.closest(".rx-wf"); if (!c) return; const l = wfs.get(c.closest("[data-id]")?.dataset.id); if (!l) return;
     const r = c.getBoundingClientRect(); c.title = `${((l.low + (e.clientX - r.left) / r.width * (l.high - l.low)) / 1000).toFixed(1)} kHz – klicken zum Abstimmen`; });
   const line = l => { wfs.set(l.radio, l); const c = root.querySelector(`[data-id="${CSS.escape(l.radio)}"] .rx-wf`); if (!c) return; const W = c.clientWidth, H = c.clientHeight; if (!W || !H) return;
-    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; } const g = c.getContext("2d"); const row = new Uint8ClampedArray(W * 4), n = l.data.length, span = (l.max - l.min) || 1;
-    for (let x = 0; x < W; x++) { const v = Math.max(0, Math.min(1, (l.data[Math.floor(x / W * n)] - l.min) / span)); const [r, gg, b] = wfColor(v); row.set([r, gg, b, 255], 4 * x); }
-    wfPush(g, W, H, row, wfRows("rx:" + l.radio)); const s = (WW.radios || []).find(r => r.id === l.radio)?.state; if (s?.freq) { g.fillStyle = "rgba(255,80,80,.9)"; g.fillRect((s.freq - l.low) / (l.high - l.low) * W, 0, 1, 1); } };
+    let e = scrs.get(l.radio); if (!e || e.c !== c) { e = { c, scr: wfScroller(c, rxLevels, { after: (g, W2, H2, k) => { const s = (WW.radios || []).find(r => r.id === e.id)?.state, L = e.l;
+      if (s?.freq && L) { g.fillStyle = "rgba(255,80,80,.9)"; g.fillRect((s.freq - L.low) / (L.high - L.low) * W2, 0, 1, k); } } }), id: l.radio }; e.scr.lut = wfLut("klassisch"); scrs.set(l.radio, e); }
+    e.l = l; e.scr.push({ l, L: wfAutoLevel(e, l.data) }); };
+  const scrs = new Map();
+  const rxLevels = ({ l, L }, W) => { const out = new Uint8Array(W), n = l.data.length, span = (L[1] - L[0]) || 1;
+    for (let x = 0; x < W; x++) { let v = -1e9; for (let i = Math.floor(x / W * n), e = Math.max(i + 1, Math.floor((x + 1) / W * n)); i < e; i++) v = Math.max(v, l.data[i]);
+      out[x] = Math.max(0, Math.min(255, (v - L[0]) / span * 255)); } return out; };
   let tt = 0; const offs = [WW.on("radios", draw), WW.on("rx", draw), WW.on("spectrum", line), WW.on("rig-any", m => { const it = root.querySelector(`[data-id="${CSS.escape(m.radio)}"]`); if (!it) return;
     const f = it.querySelector(".rx-f"); if (document.activeElement !== f) f.value = ((m.rig.freq || 0) / 1000).toFixed(2); it.querySelector(".rx-s").textContent = fmtS(m.rig.meters?.STRENGTH);
     const ms = it.querySelector(".rx-m"); if (document.activeElement !== ms && m.rig.mode) ms.value = m.rig.mode; })];

@@ -254,6 +254,10 @@ async function openConnect(editId, tab) {
         <label>PTT über<select id="cn-ptt"><option value="RIG">CAT-Befehl (Funkgerät)</option><option value="DTR">DTR-Leitung</option><option value="RTS">RTS-Leitung</option><option value="CM108">CM108 (USB-Soundkarte)</option><option value="NONE">keine (VOX)</option></select></label>
         <input id="cn-pttdev" class="hidden" placeholder="Port für PTT (leer = gleicher Port)"></div>
       <div class="cn-net hidden"><label>Adresse (Host:Port)<input id="cn-host" placeholder="192.168.1.20:4532"></label></div>
+      <fieldset><legend>Frequenzversatz (Transverter, LNB, QO-100)</legend>
+        <div class="ctl-row"><label>RX-Versatz MHz<input id="cn-rxoff" placeholder="0" style="width:120px"></label><label>TX-Versatz MHz<input id="cn-txoff" placeholder="wie RX" style="width:120px"></label>
+        <button type="button" data-off="qo100" title="LNB 9750 MHz, Aufwärtsumsetzer 432 → 2400 MHz">QO-100</button><button type="button" data-off="tv2m" title="28 MHz → 144 MHz">Transverter 2 m</button><button type="button" data-off="none">keiner</button></div>
+        <p class="hint">Angezeigt wird Gerätefrequenz + Versatz. Der TX-Versatz gilt für die Sendefrequenz im Split-Betrieb (VFO B), leer = wie RX. Beispiel QO-100: RX 9750 (LNB), TX 1968 (432 → 2400 MHz).</p></fieldset>
       <label>Weitere Hamlib-Einstellungen<input id="cn-conf" placeholder="z. B. post_write_delay=10, timeout=1000"></label>
       <label class="chkrow"><input type="checkbox" id="cn-auto"> Beim Start immer mit diesem Gerät verbinden</label>
       <label class="chkrow"><input type="checkbox" id="cn-scope"> Panadapter: Scope-Daten vom Gerät empfangen (Icom mit Spektrum, z. B. IC-7300/705/9700)</label>
@@ -281,11 +285,17 @@ async function openConnect(editId, tab) {
     return { id: $("#cn-id", d).value || undefined, name: $("#cn-name", d).value.trim() || `${m.mfg} ${m.model}`, model: id, mfg: m.mfg, model_name: m.model, device: dev,
       speed: $("#cn-speed", d).value, civaddr: $("#cn-civ", d).value.trim(), handshake: $("#cn-cts", d).checked ? "hardware" : "default",
       dtr_state: $("#cn-dtr", d).checked ? "on" : "default", rts_state: $("#cn-rts", d).checked && !$("#cn-cts", d).checked ? "on" : "default",
-      ptt_type: $("#cn-ptt", d).value, ptt_device: $("#cn-pttdev", d).value.trim(), host: $("#cn-host", d).value.trim(), conf: $("#cn-conf", d).value.trim(), autoconnect: $("#cn-auto", d).checked, share: $("#cn-share", d).checked, scope: $("#cn-scope", d).checked }; };
+      ptt_type: $("#cn-ptt", d).value, ptt_device: $("#cn-pttdev", d).value.trim(), host: $("#cn-host", d).value.trim(), conf: $("#cn-conf", d).value.trim(), autoconnect: $("#cn-auto", d).checked, share: $("#cn-share", d).checked, scope: $("#cn-scope", d).checked,
+      rx_offset: offHz($("#cn-rxoff", d).value) || 0, tx_offset: $("#cn-txoff", d).value.trim() === "" ? "" : offHz($("#cn-txoff", d).value) }; };
+  const offHz = v => Math.round((parseFloat(String(v).replace(",", ".")) || 0) * 1e6);
+  const offMHz = hz => hz === "" || hz == null ? "" : String(+(hz / 1e6).toFixed(6)).replace(".", ",");
+  $$("[data-off]", d).forEach(b => b.onclick = () => { const v = { qo100: [9750e6, 1968e6], tv2m: [116e6, 116e6], none: [0, ""] }[b.dataset.off];
+    $("#cn-rxoff", d).value = v[0] ? offMHz(v[0]) : ""; $("#cn-txoff", d).value = offMHz(v[1]); });
   const fill = p => { $("#cn-id", d).value = p.id; $("#cn-mfg", d).value = p.mfg || (models.find(m => m.id === +p.model) || {}).mfg; fillModels(); $("#cn-model", d).value = p.model; netVis();
     $("#cn-name", d).value = p.name || ""; if (p.device) { if (![...$("#cn-dev", d).options].some(o => o.value === p.device)) { $("#cn-dev", d).value = "__other"; $("#cn-dev2", d).value = p.device; $("#cn-dev2", d).classList.remove("hidden"); } else $("#cn-dev", d).value = p.device; }
     $("#cn-speed", d).value = p.speed || "auto"; $("#cn-civ", d).value = p.civaddr || ""; $("#cn-cts", d).checked = p.handshake === "hardware"; $("#cn-dtr", d).checked = p.dtr_state === "on"; $("#cn-rts", d).checked = p.rts_state === "on";
-    $("#cn-ptt", d).value = p.ptt_type || "RIG"; $("#cn-pttdev", d).value = p.ptt_device || ""; $("#cn-host", d).value = p.host || ""; $("#cn-conf", d).value = p.conf || ""; $("#cn-auto", d).checked = !!p.autoconnect; $("#cn-share", d).checked = !!p.share; $("#cn-scope", d).checked = p.scope ?? /icom/i.test(p.mfg || ""); };
+    $("#cn-ptt", d).value = p.ptt_type || "RIG"; $("#cn-pttdev", d).value = p.ptt_device || ""; $("#cn-host", d).value = p.host || ""; $("#cn-conf", d).value = p.conf || ""; $("#cn-auto", d).checked = !!p.autoconnect; $("#cn-share", d).checked = !!p.share; $("#cn-scope", d).checked = p.scope ?? /icom/i.test(p.mfg || "");
+    $("#cn-rxoff", d).value = p.rx_offset ? offMHz(p.rx_offset) : ""; $("#cn-txoff", d).value = offMHz(p.tx_offset ?? ""); };
   const TPL = {
     wfview: { mfg: "Hamlib", model: 2, name: "wfview Remote", host: "127.0.0.1:4533", hint: "In wfview: <i>Einstellungen → External Control → Enable RigCtld</i> (Port 4533). wfview verbindet sich selbst mit der entfernten Icom-Station (LAN/Internet) und stellt Gerät und Ton bereit; Wellenwerk steuert über diesen Port. Läuft wfview auf einem anderen Rechner, dessen Adresse eintragen. Ton: wfview-Audio als Soundkarte im Digitalbetrieb bzw. Fernbetrieb-Audio wählen." },
     flrig: { mfg: "FLRig", model: 4, name: "FLRig", host: "127.0.0.1:12345", hint: "FLRig muss laufen (XML-RPC, Standardport 12345)." },
@@ -473,7 +483,7 @@ function createPanadapter(root) {
     <label class="chk">Kontrast <input type="range" class="pa-gain" min="0.5" max="3" step="0.1" value="1.4"></label><span class="hint pa-st"></span></div>
     <div class="pa-wrap"><canvas class="pa-spec"></canvas><canvas class="pa-wf"></canvas></div>`;
   const spec = $(".pa-spec", root), wf = $(".pa-wf", root), st = $(".pa-st", root);
-  let last = null, wctx = null;
+  let last = null;
   const prof = () => WW.radios.find(r => r.id === WW.current) || {};
   // IQ ueber die Soundkarte: Stereo-Eingang, links I, rechts Q; Mitte = Geraetefrequenz + ZF-Ablage
   const IQ = { ctx: null, stream: null, fft: new FFT(2048), avg: null };
@@ -492,35 +502,37 @@ function createPanadapter(root) {
   $(".pa-src", root).value = store.get("pa.src", "rig"); $(".pa-src", root).onchange = srcVis; $(".pa-iqgo", root).onclick = iqStart;
   $(".pa-if", root).onchange = e => store.set("pa.if", +e.target.value); $(".pa-swap", root).onchange = e => store.set("pa.swap", e.target.checked);
   audioDevices("audioinput").then(ds => { $(".pa-dev", root).innerHTML += ds.map(d => `<option value="${esc(d.deviceId)}">${esc(d.label || d.deviceId.slice(0, 8))}</option>`).join(""); });
-  const status = () => { if ($(".pa-src", root).value === "iq") { st.textContent = last && last.name === "IQ" ? `IQ: ${fmtMHz(last.low)} – ${fmtMHz(last.high)} MHz` : "IQ-Soundkarte: Eingang wählen, Start"; return; } const p = prof(); st.textContent = !p.connected ? "Funkgerät nicht verbunden" : !p.scope ? "Scope für dieses Gerät aus (Verbinden → Bearbeiten → „Panadapter“)" : last ? `${fmtMHz(last.low)} – ${fmtMHz(last.high)} MHz` : "warte auf Scope-Daten … (Gerät: Scope einschalten, CI-V USB-Port „Unlinked“, 115200 Bd)"; };
+  const status = () => { if ($(".pa-src", root).value === "iq") { st.textContent = last && last.name === "IQ" ? `IQ: ${fmtMHz(last.low)} – ${fmtMHz(last.high)} MHz` : "IQ-Soundkarte: Eingang wählen, Start"; return; } const p = prof(), pan = wfPanSdr(); st.textContent = pan ? `Panadapter: ${(WW.radios.find(r => r.id === pan) || {}).name || "SDR"} folgt dem Funkgerät` + (last ? ` · ${fmtMHz(last.low)} – ${fmtMHz(last.high)} MHz` : "") : !p.connected ? "Funkgerät nicht verbunden" : !p.scope ? "Scope für dieses Gerät aus (Verbinden → Bearbeiten → „Panadapter“)" : last ? `${fmtMHz(last.low)} – ${fmtMHz(last.high)} MHz` : "warte auf Scope-Daten … (Gerät: Scope einschalten, CI-V USB-Port „Unlinked“, 115200 Bd)"; };
   const fx = (f, W) => last ? (f - last.low) / (last.high - last.low) * W : 0;
+  const lv = {};
+  const scr = wfScroller(wf, ({ line, g, L }, W) => { const out = new Uint8Array(W), n = line.data.length, span = Math.max(1, L[1] - L[0]) / g;
+    for (let x = 0; x < W; x++) { let v = -1e9; for (let i = Math.floor(x / W * n), e = Math.max(i + 1, Math.floor((x + 1) / W * n)); i < e; i++) v = Math.max(v, line.data[i]);
+      out[x] = Math.max(0, Math.min(255, (v - L[0]) / span * 255)); } return out; });
   const draw = line => {
     last = line; const W = spec.clientWidth, H = spec.clientHeight; if (!W || !H) return;
     if (spec.width !== W) spec.width = W; if (spec.height !== H) spec.height = H;
     const c = spec.getContext("2d"), cs = getComputedStyle(document.documentElement), g = +$(".pa-gain", root).value;
     c.fillStyle = cs.getPropertyValue("--wf-bg") || "#0b1622"; c.fillRect(0, 0, W, H);
-    const n = line.data.length, span = Math.max(1, (line.max || 255) - (line.min || 0));
+    const L = line.name === "IQ" ? [line.min, line.max] : wfAutoLevel(lv, line.data), n = line.data.length, span = Math.max(1, L[1] - L[0]);
     c.strokeStyle = "#5cd0ff"; c.beginPath();
-    line.data.forEach((v, i) => { const x = i / (n - 1) * W, y = H - Math.min(1, (v - line.min) / span * g) * (H - 4) - 2; i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke();
+    line.data.forEach((v, i) => { const x = i / (n - 1) * W, y = H - Math.max(0, Math.min(1, (v - L[0]) / span * g)) * (H - 4) - 2; i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke();
     // Raster und aktuelle Frequenz
     c.fillStyle = "rgba(255,255,255,.55)"; c.font = "10px sans-serif"; const stp = niceStep((line.high - line.low) / 6);
     for (let f = Math.ceil(line.low / stp) * stp; f < line.high; f += stp) { const x = fx(f, W); c.fillRect(x, 0, 1, 6); c.fillText((f / 1e6).toFixed(stp < 1000 ? 4 : 3), x + 2, 12); }
     const xf = fx(WW.rig.freq, W); c.fillStyle = "rgba(255,80,80,.9)"; c.fillRect(xf, 0, 1.5, H);
     // Wasserfall
-    const WH = wf.clientHeight; if (wf.width !== W || wf.height !== WH) { wf.width = W; wf.height = WH; wctx = wf.getContext("2d"); }
-    if (!wctx) wctx = wf.getContext("2d"); if (!WH) return;
-    const row = new Uint8ClampedArray(W * 4);
-    for (let x = 0; x < W; x++) { const v = Math.min(1, (line.data[Math.floor(x / W * n)] - line.min) / span * g); const [r, gg, b] = wfColor(v); row.set([r, gg, b, 255], 4 * x); }
-    wfPush(wctx, W, WH, row, line.name === "IQ" ? 1 : wfRows("pa:" + (line.radio || "")));
+    if (wf.clientHeight) { scr.lut = scr.lut || wfLut("klassisch"); scr.push({ line, g, L }); }
     status();
   };
   const tune = e => { if (!last) return; const r = e.currentTarget.getBoundingClientRect(); setFreq(Math.round((last.low + (e.clientX - r.left) / r.width * (last.high - last.low)) / 10) * 10); };
   spec.addEventListener("click", tune); wf.addEventListener("click", tune);
   $(".pa-on", root).onchange = e => act("/api/rig/func", { name: "SPECTRUM", on: e.target.checked });
-  $(".pa-span", root).onchange = e => act("/api/rig/level", { name: "SPECTRUM_SPAN", value: +e.target.value });
+  $(".pa-span", root).onchange = e => { const pan = wfPanSdr();
+    if (pan) api(`/api/radios/${pan}/rig/span`, { method: "POST", body: { hz: +e.target.value * 2 } }).catch(err => toast(err.message, true));
+    else act("/api/rig/level", { name: "SPECTRUM_SPAN", value: +e.target.value }); };
   $(".pa-mode", root).onchange = e => act("/api/rig/level", { name: "SPECTRUM_MODE", value: +e.target.value });
   $(".pa-on", root).checked = !!(WW.rig.funcs || {}).SPECTRUM;
-  const offs = [WW.on("spectrum", l => { if (l.radio === WW.current && $(".pa-src", root).value === "rig") draw(l); }), WW.on("radios", status), WW.on("rig", () => { if (last && last.name !== "IQ") draw(last); })];
+  const offs = [WW.on("spectrum", l => { if (l.radio === (wfPanSdr() || WW.current) && $(".pa-src", root).value === "rig") draw(l); }), WW.on("radios", status), WW.on("rig", () => { if (last && last.name !== "IQ") draw(last); })];
   srcVis(); status(); return () => { iqStop(); offs.forEach(f => f()); };
 }
 function niceStep(x) { const p = 10 ** Math.floor(Math.log10(x)), m = x / p; return (m < 2 ? 1 : m < 5 ? 2 : 5) * p; }

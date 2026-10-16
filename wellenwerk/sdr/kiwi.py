@@ -172,6 +172,11 @@ class KiwiRig(SdrRig):
             self.wf_cf = cf
             await self._send(self.wf, f"SET zoom={self.zoom} cf={cf / 1000:.3f}")
 
+    async def set_span(self, hz: int) -> int:
+        self.params["span"] = (hz or self.bandwidth) / 1000
+        await self._wf_center(force=True)
+        return int(self._span_hz())
+
     async def tune(self):
         if self.snd is None:
             return

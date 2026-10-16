@@ -409,3 +409,6 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .sig-res.sure + .sig-cbar i { background: var(--ok); }
 .sig-text { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--panel2); border: 1px solid var(--line2, var(--line)); padding: 4px 6px; border-radius: 3px; word-break: break-word; }
 .sig-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; } .sig-act .hint { flex-basis: 100%; }
+.wf-tb .wf-span { max-width: 110px; }
+.wf-tb .wf-sl { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; opacity: .85; }
+.wf-tb .wf-sl input { width: 70px; }

@@ -54,9 +54,12 @@ class RigError(RuntimeError):
 
 
 class Rig:
-    def __init__(self, host: str, port: int, on_change):
+    def __init__(self, host: str, port: int, on_change, rx_offset: int = 0, tx_offset: int | None = None):
         self.host, self.port = host, port
         self.on_change = on_change
+        # Frequenzversatz (Transverter, LNB, QO-100): angezeigt = Geraet + Versatz; TX-Versatz gilt fuer VFO B / Split
+        self.rx_off = int(rx_offset or 0)
+        self.tx_off = self.rx_off if tx_offset in (None, "") else int(tx_offset)
         self.reader = self.writer = None
         self.lock = asyncio.Lock()
         self.caps: dict = {}
@@ -217,7 +220,7 @@ class Rig:
         for line in vals:
             f = dict(p.split("=", 1) for p in line.split() if "=" in p)
             if f.get("VFO") == "VFOB":
-                st["vfob_freq"] = int(float(f.get("Freq", 0)))
+                st["vfob_freq"] = int(float(f.get("Freq", 0))) + self.tx_off
                 st["vfob_mode"] = f.get("Mode", "")
 
     # ---------- Speicherkanaele ----------
@@ -280,7 +283,7 @@ class Rig:
                 for line in vals:
                     f = dict(p.split("=", 1) for p in line.split() if "=" in p)
                     if f.get("VFO") == "VFOB":
-                        st["vfob_freq"] = int(float(f.get("Freq", 0)))
+                        st["vfob_freq"] = int(float(f.get("Freq", 0))) + self.tx_off
                         st["vfob_mode"] = f.get("Mode", "")
                     if "Split" in f and not self._fresh(("split",)):
                         st["split"] = f["Split"] == "1"
@@ -313,7 +316,7 @@ class Rig:
                     self._slow_queue = []
                 st = {k: (dict(v) if isinstance(v, dict) else v) for k, v in self.state.items()}
                 kv, _ = await self._cmd("f")
-                st["freq"] = int(float(kv.get("frequency", 0)))
+                st["freq"] = int(float(kv.get("frequency", 0))) + self.rx_off
                 kv, _ = await self._cmd("m")
                 st["mode"], st["passband"] = kv.get("mode", ""), int(kv.get("passband", 0) or 0)
                 try:
@@ -352,7 +355,7 @@ class Rig:
         self._quiet_until = time.time() + sec
 
     async def set_freq(self, hz: int):
-        await self._cmd(f"F {int(hz)}")
+        await self._cmd(f"F {int(hz) - self.rx_off}")
         self.state["freq"] = int(hz)
 
     async def set_mode(self, mode: str, passband: int = 0):
@@ -394,7 +397,7 @@ class Rig:
 
     async def set_split_freq(self, hz: int):
         """Sendefrequenz im Split-Betrieb (z. B. Satelliten-Uplink mit Doppler-Korrektur)."""
-        await self._cmd(f"I {int(hz)}")
+        await self._cmd(f"I {int(hz) - self.tx_off}")
 
     async def set_repeater(self, shift: str, offset: int):
         await self._cmd(f"R {shift}")

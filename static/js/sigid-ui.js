@@ -29,14 +29,15 @@ async function sigTap(o, fn) {
 }
 
 // Klick im Wasserfall eines Geraets/Empfaengers (f in Hz). Rueckgabe true: Klick erledigt (abgestimmt + Erkennung laeuft)
-function sigOnClick(radioId, f, e) {
+// tapId: Geraet, dessen Ton analysiert wird (SDR als Panadapter folgt dem Funkgeraet und liefert den Ton)
+function sigOnClick(radioId, f, e, tapId) {
   if (e && e.altKey) return false;                                   // Alt+Klick: nur abstimmen
   if (wfOpts().sig === false) return false;
   const st = sigState(radioId), inv = SIG_SB[st.mode];
   if (inv === undefined) return false;                               // AM/FM/CW: wie bisher direkt abstimmen
   const dial = Math.round(inv ? f + 1500 : f - 1500);
   sigRig(radioId, "freq", { hz: dial }).catch(err => toast(err.message, true));
-  sigIdentify({ radio: radioId || WW.current, fc: 1500, rf: f, dial, inverted: inv, x: e?.clientX, y: e?.clientY, settle: 1.2 });
+  sigIdentify({ radio: tapId || radioId || WW.current, ctl: radioId || WW.current, fc: 1500, rf: f, dial, inverted: inv, x: e?.clientX, y: e?.clientY, settle: tapId ? 1.8 : 1.2 });
   return true;
 }
 // Klick im Wasserfall des Digitalbetriebs (Tonfrequenz af): ohne Umstimmen
@@ -128,14 +129,14 @@ function sigActions(R, res, el) {
   if (["FT8", "FT4", "WSPR", "JT9", "JT65"].includes(b.id)) {
     const p = (SIGID.planFor(o.rf) || []).find(x => x.id === b.id), std = p ? p.lo - (b.id === "WSPR" ? 1350 : 100) : 0;
     el.insertAdjacentHTML("beforeend", `<div class="hint">Dekodieren mit WSJT-X – Wellenwerk übernimmt dessen Meldungen (Optionen → WSJT-X).</div>`);
-    if (std && Math.abs(std - o.dial) > 10) btn(`Auf ${fmtMHz(std)} MHz (Standard) abstimmen`, async () => { await sigRig(o.radio, "mode", { mode: "USB", passband: 3000 }); await sigRig(o.radio, "freq", { hz: std }); sigCancel(); });
+    if (std && Math.abs(std - o.dial) > 10) btn(`Auf ${fmtMHz(std)} MHz (Standard) abstimmen`, async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "USB", passband: 3000 }); await sigRig(o.ctl || o.radio, "freq", { hz: std }); sigCancel(); });
   }
   if (b.id === "VOICE_INV" && o.dial) {
     const sb = o.inverted ? "USB" : "LSB", carrier = Math.round(o.inverted ? o.rf - 1500 : o.rf + 1500);
-    btn(`Als ${sb} abstimmen`, async () => { await sigRig(o.radio, "mode", { mode: sb, passband: 2700 }); await sigRig(o.radio, "freq", { hz: carrier }); sigCancel(); }, true);
+    btn(`Als ${sb} abstimmen`, async () => { await sigRig(o.ctl || o.radio, "mode", { mode: sb, passband: 2700 }); await sigRig(o.ctl || o.radio, "freq", { hz: carrier }); sigCancel(); }, true);
   }
-  if (b.id === "AM" && o.dial) btn("AM einstellen", async () => { await sigRig(o.radio, "mode", { mode: "AM", passband: 0 }); await sigRig(o.radio, "freq", { hz: Math.round(o.inverted ? o.dial - af : o.dial + af) }); sigCancel(); }, true);
-  if (b.id === "CW" && o.dial) btn("CW einstellen", async () => { await sigRig(o.radio, "mode", { mode: "CW", passband: 500 }); await sigRig(o.radio, "freq", { hz: Math.round(o.inverted ? o.dial - af : o.dial + af) }); sigCancel(); });
+  if (b.id === "AM" && o.dial) btn("AM einstellen", async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "AM", passband: 0 }); await sigRig(o.ctl || o.radio, "freq", { hz: Math.round(o.inverted ? o.dial - af : o.dial + af) }); sigCancel(); }, true);
+  if (b.id === "CW" && o.dial) btn("CW einstellen", async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "CW", passband: 500 }); await sigRig(o.ctl || o.radio, "freq", { hz: Math.round(o.inverted ? o.dial - af : o.dial + af) }); sigCancel(); });
   btn("Nochmal", () => sigIdentify({ ...o, settle: 0 }));
 }
 // kurzes Etikett im Wasserfall an der Signalfrequenz (30 s sichtbar)
