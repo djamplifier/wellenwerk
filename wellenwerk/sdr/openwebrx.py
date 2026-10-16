@@ -8,6 +8,7 @@ import json
 import logging
 import math
 import re
+import time
 from urllib.parse import urlparse
 
 import websockets
@@ -224,7 +225,7 @@ class OpenWebRXRig(SdrRig):
             if want:
                 p = next((x for x in self.profiles if x["id"] == want or want.lower() in x.get("name", "").lower()), None)
                 if p:
-                    asyncio.ensure_future(self._select_profile(p["id"]))
+                    asyncio.ensure_future(self._select_profile(p["id"], name=p.get("name", "")))
         elif t == "modes" and isinstance(v, list):
             self.owrx_modes = {m.get("modulation"): m for m in v if isinstance(m, dict)}
             self.state["sdr"]["decoders"] = [dict(id=k, label=n) for k, n in OWRX_DECODERS.items() if k in self.owrx_modes]
@@ -340,17 +341,32 @@ class OpenWebRXRig(SdrRig):
     def _covers(self, f) -> bool:
         return bool(self.rate) and abs(f - self.center) < self.rate / 2 * 0.98
 
-    async def _select_profile(self, pid):
+    async def _select_profile(self, pid, f=None, name=""):
         """Profil wechseln, hoechstens alle 10,5 s: OpenWebRX+ wertet Wechsel in kuerzerem Abstand (auch kurz nach dem
-        Verbinden) als Roboter und sperrt die Internet-Adresse fuer 12 Stunden (bot_ban_enabled)."""
+        Verbinden) als Roboter und sperrt die Internet-Adresse fuer 12 Stunden (bot_ban_enabled).
+        f: Frequenz, fuer die gewechselt wird – ist inzwischen eine andere gewuenscht (neuer Klick), entfaellt der Wechsel.
+        Rueckgabe False, wenn verworfen."""
         loop = asyncio.get_running_loop()
         async with self._prof_lock:                     # nacheinander, auch wenn mehrere Abstimmungen gleichzeitig kommen
+            if f is not None and self.state.get("freq") != f:
+                return False
             wait = self._prof_t + 10.5 - loop.time()
             if wait > 0:
                 self.say(f"Profilwechsel in {wait:.0f} s (Schutz vor der Bot-Sperre des Servers)")
-                await asyncio.sleep(wait)
+                self.state["sdr"]["switching"] = dict(to=name, at=round(time.time() + wait, 1))
+                await self.changed(True)
+                try:
+                    while loop.time() < self._prof_t + 10.5:
+                        await asyncio.sleep(0.25)
+                        if f is not None and self.state.get("freq") != f:   # inzwischen anders abgestimmt: der letzte Wunsch gilt
+                            self.say("Profilwechsel verworfen – inzwischen andere Frequenz gewählt")
+                            return False
+                finally:
+                    self.state["sdr"].pop("switching", None)
+                    await self.changed(True)
             self._prof_t = loop.time()
             await self._send({"type": "selectprofile", "params": {"profile": pid}})
+            return True
 
     async def _switch_profile(self, f):
         def hit(p):     # 0 = schon besucht und passt, 1 = Bereich im Namen passt, 2 = nur Band/MHz-Zahl im Namen
@@ -375,7 +391,8 @@ class OpenWebRXRig(SdrRig):
             if loop.time() > stop:
                 break
             # der Server geht oft erst auf das Profil, das auf dem Geraet gerade laeuft, und einige Sekunden spaeter auf das gewuenschte
-            await self._select_profile(p["id"])
+            if not await self._select_profile(p["id"], f, p.get("name", "")):
+                return                                   # verworfen: eine neuere Abstimmung kuemmert sich
             end, settled = min(stop, loop.time() + 15), None
             while loop.time() < end:
                 if self.profile == p["id"] and self._covers(f):
@@ -399,6 +416,8 @@ class OpenWebRXRig(SdrRig):
         f = self.state["freq"]
         if not self._covers(f):
             await self._switch_profile(f)
+            if self.state.get("freq") != f or not self._covers(f):
+                return                                   # verworfen bzw. noch nicht da: die neuere Abstimmung uebernimmt
         lo, hi = self.passband()
         sql = self.state["levels"].get("SQL", 0)
         par = {"low_cut": lo, "high_cut": hi, "offset_freq": int(f - self.center), "mod": OWRX_MODES.get(self.state["mode"], "usb"),

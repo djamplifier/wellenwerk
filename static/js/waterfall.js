@@ -63,6 +63,9 @@ function createWfPanel(root) {
     for (const t of SIG.tags) { if (t.until < Date.now() || t.rf < view[0] || t.rf > view[1]) continue; const x = fx(t.rf, W), w = c.measureText(t.label).width + 8;   // erkannte Signale
       c.fillStyle = "rgba(20,30,40,.8)"; c.fillRect(x - w / 2, 14, w, 14); c.fillStyle = "#ffd166"; c.fillText(t.label, x - w / 2 + 4, 25); c.fillRect(x, 28, 1, 6); }
     if (typeof fmkDraw === "function") fmkDraw(c, W, view, srcs().data);           // typische Frequenzen, Rundfunk, Relais
+    const swi = (WW.radios || []).find(x => x.id === srcs().data)?.state?.sdr?.switching;   // Profilwechsel laeuft: Hinweis ueber dem Spektrum
+    if (swi) { const t = `Profilwechsel auf „${swi.to || "neues Profil"}“ in ${Math.max(0, Math.ceil(swi.at - Date.now() / 1000))} s …`; c.font = "bold 12px sans-serif"; const tw = c.measureText(t).width;
+      c.fillStyle = "rgba(8,18,28,.85)"; c.fillRect(W / 2 - tw / 2 - 8, H / 2 - 12, tw + 16, 22); c.fillStyle = "#ffd166"; c.fillText(t, W / 2 - tw / 2, H / 2 + 4); c.font = "10px sans-serif"; }
     if (!FH) return; scr.lut = lut; scr.push({ l, L: L0 });
   };
   // Wasserfall laeuft gleichmaessig (wfScroller); Pixelwerte erst beim Zeichnen aus dem aktuellen Ausschnitt
@@ -141,7 +144,11 @@ function createWfPanel(root) {
   const tune = hz => { const id = src(); (id && id !== WW.current ? api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz } }) : post("/api/rig/freq", { hz })).catch(e => toast(e.message, true)); };
   [spec, fall].forEach(cv => {
     cv.addEventListener("click", e => { if (!view || cv._dragged) return; const r = cv.getBoundingClientRect(), f = Math.round((view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0])) / 10) * 10;
-      const S = srcs(), mk = cv === spec && typeof fmkHit === "function" ? fmkHit(e.clientX - r.left, e.clientY - r.top) : null;
+      const S = srcs(), dr = (WW.radios || []).find(x => x.id === S.data), sw = dr?.state?.sdr?.switching, rf = dr?.state?.freq;
+      // Profilwechsel des Empfaengers laeuft (bis 10 s, Schutz vor Sperre) bzw. das Spektrum zeigt noch den alten Bereich: Klick waere eine Frequenz
+      // im alten Bereich und wuerde zurueckschalten
+      if (sw || (isSdr(dr) && rf && last && (rf < last.low || rf > last.high))) { toast(sw ? `Empfänger wechselt gerade auf „${sw.to || "neues Profil"}“ – bitte kurz warten` : "Das Spektrum zeigt noch den alten Bereich – bitte kurz warten"); return; }
+      const mk = cv === spec && typeof fmkHit === "function" ? fmkHit(e.clientX - r.left, e.clientY - r.top) : null;
       if (mk) return fmkTune(mk, S.ctl, S.data, e);                                   // Markierung angeklickt
       if (!sigOnClick(S.ctl, f, e, S.pan ? S.data : null, recent.filter(l => l.radio === S.data))) tune(snapRaster(f, radioState().mode)); });   // im Abstimmraster
     if (cv === spec) cv.addEventListener("mousemove", e => { if (typeof fmkTip !== "function") return; const r = cv.getBoundingClientRect(), t = fmkTip(e.clientX - r.left, e.clientY - r.top); if (cv.title !== t) cv.title = t; cv.style.cursor = t ? "pointer" : ""; });

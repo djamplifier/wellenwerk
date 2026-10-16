@@ -1867,5 +1867,8 @@
 "Für Digitalfunk (DMR, NXDN) – kostenlos bei radioid.net": "For digital voice (DMR, NXDN) – free at radioid.net",
 "Diese ID steht nicht in der RadioID-Liste": "This ID is not in the RadioID list",
 "{} – passt nicht zum Rufzeichen {}": "{} – does not match callsign {}",
-"DMR-ID ungültig (7 Ziffern, z. B. 2621234)": "Invalid DMR ID (7 digits, e.g. 2621234)"
+"DMR-ID ungültig (7 Ziffern, z. B. 2621234)": "Invalid DMR ID (7 digits, e.g. 2621234)",
+"Empfänger wechselt gerade auf „{}“ – bitte kurz warten": "Receiver is switching to “{}” – please wait a moment",
+"Das Spektrum zeigt noch den alten Bereich – bitte kurz warten": "The spectrum still shows the old range – please wait a moment",
+"Profilwechsel verworfen – inzwischen andere Frequenz gewählt": "Profile change dropped – another frequency was chosen meanwhile"
 }
