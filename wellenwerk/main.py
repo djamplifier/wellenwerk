@@ -44,7 +44,7 @@ from .errorlog import ErrorLog
 from .updater import Updater, restart_process
 from .presence import Presence
 
-VERSION = "1.3.2"
+VERSION = "1.3.3"
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("WW_DATA", BASE / "data"))
 DATA.mkdir(parents=True, exist_ok=True)
