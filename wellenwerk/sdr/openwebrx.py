@@ -235,6 +235,12 @@ class OpenWebRXRig(SdrRig):
             raise SdrBusy(f"OpenWebRX: {'zu viele Nutzer' if not why or 'many' in why.lower() else why}")
         elif t == "receiver_details" and isinstance(v, dict):
             self.state["sdr"]["info"] = re.sub(r"<[^>]+>", "", str(v.get("receiver_name", "")))[:100]
+            g = v.get("receiver_gps")                          # Standort des Empfaengers (Relais in seiner Naehe)
+            if isinstance(g, dict) and g.get("lat") is not None:
+                try:
+                    self.state["sdr"]["gps"] = [round(float(g["lat"]), 4), round(float(g["lon"]), 4)]
+                except (TypeError, ValueError):
+                    pass
 
     async def _binary(self, b: bytes):
         if not b:

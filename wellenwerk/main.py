@@ -2765,6 +2765,43 @@ async def ws_audio(websocket: WebSocket, radio: str = ""):
         AUDIO_SUBS.get(rid, {}).pop(websocket, None)
 
 
+@app.get("/api/freqs/typical", tags=["Frequenzen"])
+async def freqs_typical():
+    """Typische Frequenzen der Betriebsarten (Aktivitaetszentren, Baken, Wetter- und Zeitsender ...) fuer die Wasserfall-Markierungen."""
+    from . import freqdb
+    return await asyncio.to_thread(freqdb.typical, DATA, BASE / "static")
+
+
+@app.get("/api/freqs/broadcast", tags=["Frequenzen"])
+async def freqs_broadcast(lo: float, hi: float):
+    """Rundfunksender, die jetzt zwischen lo und hi (Hz) senden (EiBi-Sendeplan)."""
+    from . import freqdb
+    if hi - lo > 30e6:
+        raise HTTPException(400, "Bereich zu groß")
+    return {"stations": await asyncio.to_thread(freqdb.broadcast, DATA, lo, hi)}
+
+
+@app.get("/api/freqs/repeaters", tags=["Frequenzen"])
+async def freqs_repeaters(lo: float = 0, hi: float = 0, radio: str = "", radius: float = 80, lat: float | None = None, lon: float | None = None):
+    """Relais im Umkreis: um den Standort des Empfaengers (OpenWebRX meldet ihn), sonst um die eigene Station (Locator)."""
+    from . import freqdb
+    src = "angegeben"
+    if lat is None or lon is None:
+        r = radios.rig(radio) if radio else None
+        g = (getattr(r, "state", {}) or {}).get("sdr", {}).get("gps") if r else None
+        if g:
+            (lat, lon), src = g, "empfaenger"
+        else:
+            h = home()
+            if not h:
+                return {"repeaters": [], "ref": None, "hint": "Locator der Station fehlt (Optionen → Station)"}
+            (lat, lon), src = h, "station"
+    if not await asyncio.to_thread(freqdb.repeaters_ready, DATA):
+        return {"repeaters": [], "ref": dict(lat=lat, lon=lon, src=src), "loading": True}
+    rep = await asyncio.to_thread(freqdb.repeaters, DATA, lat, lon, min(radius, 300), lo, hi)
+    return {"repeaters": rep[:300], "ref": dict(lat=lat, lon=lon, src=src)}
+
+
 @app.get("/api/sdr/receivers", tags=["Empfänger (SDR)"])
 async def sdr_receivers(type: str = "", q: str = "", khz: float = 0, limit: int = 400, free: bool = False):
     """Oeffentliche Empfaenger (receiverbook.de, KiwiSDR-Liste), nach Entfernung zur eigenen Station sortiert."""

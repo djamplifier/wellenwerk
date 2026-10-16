@@ -81,6 +81,8 @@ function sigOnClick(radioId, f, e, tapId, rfLines) {
   if (wfOpts().sig === false) return false;
   const dr = sigRadio(tapId || radioId), decs = dr?.state?.sdr?.decoders || [];
   const st0 = sigState(radioId), ssbSeg = SIG_SB[st0.mode] !== undefined && SIG_NB.some(([a, z]) => f >= a && f <= z);   // Schmalband-Segmente (SSB/CW/Baken): kein Digitalfunk
+  if (f > 30e6 && !ssbSeg && typeof fmkRepAt === "function" && wfOpts().mrep !== false) {   // bekanntes Relais: Daten aus der Datenbank, nichts erraten
+    const rep = fmkRepAt(f); if (rep) { fmkRepeater(rep, radioId || dr?.id, dr?.id, e); return true; } }
   if (f > 30e6 && !ssbSeg && (decs.length || isSdr(dr))) {
     const lines = rfLines && rfLines.length ? rfLines : sigLines(dr.id, 4000), am = sigRfAm(lines, f), air = f >= 108e6 && f <= 137e6;
     sigProbe({ radio: dr.id, ctl: radioId || dr.id, rf: f, x: e?.clientX, y: e?.clientY, am: am || air ? { carrier: am?.carrier, air } : null }, sigProbeList(f, decs), decs); return true; }
@@ -116,13 +118,15 @@ async function sigProbe(o, list, decs, opt = {}) {
   // Digitalfunk: auf die gemessene Signalmitte abstimmen (Klick ist selten genau, DMR/D-STAR brauchen die Mitte auf wenige 100 Hz);
   // liegt sie nahe am Kanalraster (6,25 kHz), aufs Raster. Ohne Signal im Moment: Raster, die Mitte wird nachgefuehrt, sobald gesendet wird
   // aufs Raster nur innerhalb der Messgenauigkeit (Aufloesung des Spektrums), echte Ablagen bleiben erhalten
-  const snap = (c, res = 600) => { const r = Math.round(c / 6250) * 6250; return Math.abs(c - r) <= Math.min(1500, Math.max(200, res * 0.65)) ? r : Math.round(c / 50) * 50; };
+  const snap = (c, res = 600) => { const t = tuneRaster(c, o.am ? "AM" : "FM"), r = Math.round(Math.round((c - t.base) / t.step) * t.step + t.base);   // Abstimmraster des Bandes (z. B. 6,25/12,5 kHz)
+    return Math.abs(c - r) <= Math.min(1500, Math.max(200, res * 0.65)) ? r : Math.round(c / 50) * 50; };
   const meas = (at, ms, hw = 7500) => sigRfCenter(sigLines(o.radio, ms), at, hw);
   const m0 = fx ? null : meas(o.rf, 3000);
   let f = fx === "ism" ? (Math.abs(o.rf - 433.92e6) < 60e3 ? 433920000 : Math.abs(o.rf - 868.3e6) < 300e3 ? 868300000 : o.rf) : fx ? Math.round(o.rf / 6250) * 6250 : (m0 ? snap(m0.center, m0.res) : Math.round(o.rf / 6250) * 6250);
   // AM (Flugfunk, Traeger mit zwei Seitenbaendern): auf den Traeger bzw. das 8,33-kHz-Raster
-  if (o.am) f = o.am.carrier ? Math.round(o.am.carrier / 100) * 100 : o.am.air ? Math.round(Math.round(o.rf / (25000 / 3)) * 25000 / 3) : f;
-  R.track = !fx && !o.am; R.f0 = f; R.f0m = m0 ? f : 0;
+  if (o.am) f = o.am.carrier ? snap(o.am.carrier) : o.am.air ? snapRaster(o.rf, "AM") : f;
+  if (o.rep) f = o.rep.f;                                                         // Relais aus der Datenbank: genau dessen Frequenz
+  R.track = !fx && !o.am && !o.rep; R.f0 = f; R.f0m = m0 ? f : 0;
   // waehrend der Pruefung und des Empfangs: Mitte erneut messen und nachstimmen (max. 12,5 kHz vom Klick weg)
   R.retune = async () => { if (!R.track || R.stop || Date.now() - (R.tuned || 0) < 1500) return false; const m = meas(f, 1500, 4500); if (!m || m.bw < 2000) return false;
     const nf = snap(m.center, m.res); if (Math.abs(nf - f) < Math.max(300, m.res * 0.6) || Math.abs(nf - o.rf) > 12500 || (R.f0m && Math.abs(nf - R.f0m) > 3000)) return false;   // nicht weiter als 3 kHz von der ersten Messung (Nachbarkanal)
@@ -201,7 +205,8 @@ async function sigProbe(o, list, decs, opt = {}) {
     (SIG.found ||= new Map()).set(key, found);
   }
   $(".sig-bar", c).classList.add("done"); sigProgress(R, 1);
-  body.innerHTML = `<div class="sig-res sure"><span class="sig-name">${esc(name(found))}</span><span class="sig-conf">${fx ? "nach Frequenz" : R.dv ? `Synchronmuster erkannt · ${secs()} s` : "Synchronmuster erkannt"}</span></div>
+  body.innerHTML = `<div class="sig-res sure"><span class="sig-name">${esc(name(found))}</span><span class="sig-conf">${o.rep ? "Relais-Datenbank" : fx ? "nach Frequenz" : R.dv ? `Synchronmuster erkannt · ${secs()} s` : "Synchronmuster erkannt"}</span></div>
+    ${o.rep ? `<div class="hint"><b>${esc(o.rep.c)}</b> · ${fmkRepFacts(o.rep).map(x => `<span>${esc(x)}</span>`).join(" · ")}</div>` : ""}
     <div class="hint"><span>Dekoder des Empfängers läuft</span> · <span class="sig-tf">${fmtMHz(f)}</span> MHz · <span>Meldungen auch im Fenster „Datenempfang“</span></div>
     ${!fx && Math.abs(f - o.rf) >= 500 ? `<div class="hint sig-auto">✓ <span>auf Signalmitte abgestimmt (${f > o.rf ? "+" : "−"}${(Math.abs(f - o.rf) / 1000).toFixed(1)} kHz)</span></div>` : ""}
     <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(name(found))}</b><i class="grow"></i><button type="button" class="sig-live-x">Dekoder aus</button></div><pre translate="no"></pre></div>
@@ -276,7 +281,8 @@ async function sigAuto(R, res) {
   const c = R.card, ctl = o.ctl || o.radio, note = t => $(".sig-body", c)?.insertAdjacentHTML("beforeend", `<div class="hint sig-auto">✓ <span>${esc(t)}</span></div>`);
   try {
     const af = Math.round(b.center || res.center || o.fc);
-    if (b.id === "AM" && o.dial && !o.dmTap) { await sigRig(ctl, "mode", { mode: "AM", passband: 0 }); await sigRig(ctl, "freq", { hz: Math.round(o.inverted ? o.dial - af : o.dial + af) }); note("auf AM umgeschaltet"); return; }
+    if (b.id === "AM" && o.dial && !o.dmTap) { const c = Math.round(o.inverted ? o.dial - af : o.dial + af), s = snapRaster(c, "AM"), hz = Math.abs(s - c) <= 600 ? s : c;   // Rundfunk: auf das Senderraster
+      await sigRig(ctl, "mode", { mode: "AM", passband: 0 }); await sigRig(ctl, "freq", { hz }); note(`auf AM umgeschaltet · ${fmtMHz(hz)} MHz`); return; }
     if (b.id === "VOICE_INV" && o.dial && !o.dmTap) { const sb = o.inverted ? "USB" : "LSB", hz = sigSsbCarrier(o, b); await sigRig(ctl, "mode", { mode: sb, passband: 2700 }); await sigRig(ctl, "freq", { hz }); note(`auf ${sb} umgeschaltet · Träger ${fmtMHz(hz)} MHz`); return; }
     if (b.id === "VOICE" && o.dial && !o.dmTap) { const hz = sigSsbCarrier(o, b); if (hz && Math.abs(hz - o.dial) >= 120) { await sigRig(ctl, "freq", { hz }); note(`auf den Träger nachgestimmt (${(hz > o.dial) ? "+" : "−"}${Math.abs(hz - o.dial)} Hz)`); } return; }
   } catch (e) { note("Umschalten nicht möglich: " + e.message); return; }

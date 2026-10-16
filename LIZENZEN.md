@@ -51,6 +51,12 @@ Satellitenbahnen [CelesTrak](https://celestrak.org/), Sender [SatNOGS](https://d
 Contest-Kalender [WA7BNM](https://www.contestcalendar.com/), DXpeditionen [NG3K ADXO](https://www.ng3k.com/Misc/adxo.html),
 sowie die vom Nutzer eingerichteten Dienste (HamQTH, QRZ.com, eQSL, LoTW, Club Log, DX-Cluster).
 
+## Frequenz- und Relaisdaten (zur Laufzeit abgerufen, nicht im Programm enthalten)
+
+- Rundfunk-Sendeplan: EiBi (eibispace.de, Eike Bierwirth) – frei verwendbare Sendeliste, mit Quellenangabe.
+- Relais: DARC-Relaisliste von DL3EL (relais.dl3el.de, Umkreissuche als CSV), BrandMeister-Geräteliste (api.brandmeister.network, DMR-Relais), hearham.com (offene Relais-Datenbank).
+- Typische Frequenzen (static/freqs.json): zusammengestellt aus dem IARU-Region-1-Bandplan (Aktivitätszentren), den Standardfrequenzen von WSJT-X sowie öffentlich bekannten Wetter-, Zeit-, CB-, PMR446- und Freenet-Frequenzen.
+
 ## Signal-Datenbank (static/sigdb.json)
 
 Auszug aus dem Signal Identification Wiki (https://www.sigidwiki.com): Signalnamen, Frequenzangaben, Betriebsart, Modulation, Bandbreite und ACF von rund 550 Signalseiten (Stand 2026-10-16). Übernommen wurden nur diese Sachangaben, keine Beschreibungstexte, Bilder oder Tonbeispiele; jeder Eintrag verlinkt auf die Originalseite.

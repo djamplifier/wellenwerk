@@ -176,6 +176,38 @@ Das SDR bleibt trotzdem ein vollwertiger Empfänger: im Fenster **Empfänger** l
 
 Empfänger-Ton wird mit etwa einer halben Sekunde Vorlauf abgespielt; bei stockender Internetverbindung wächst der Puffer selbst (bis 2 s). Bricht die Verbindung zu einem Empfänger ab, verbindet Wellenwerk sich von selbst neu. Nach einem Neustart oder einer Aktualisierung werden die vorher verbundenen Geräte und Empfänger wieder verbunden – mit der zuletzt eingestellten Frequenz und Betriebsart.
 
+### Abstimmraster
+
+Frequenzen zwischen den Kanälen bringen nichts – Wellenwerk stimmt deshalb im **Raster des Bandes** ab. Die Auswahl **Raster** am Gerät zeigt den aktuellen Schritt; „automatisch“ wählt ihn nach Band und Betriebsart:
+
+| Bereich / Betriebsart | Raster |
+|---|---|
+| Lang- und Mittelwelle (AM) | 9 kHz (Region 1), 10 kHz (Region 2) |
+| Kurzwellen-Rundfunkbänder (AM) | 5 kHz |
+| CB-Funk | 10 kHz (Kanäle 26,965 … 27,405 MHz) |
+| 10 m und 6 m FM | 10 kHz |
+| UKW-Rundfunk | 50 kHz |
+| Flugfunk (AM) | 8,33 kHz |
+| 2 m FM, Freenet, Seefunk, 23 cm | 12,5 kHz |
+| 70 cm FM (auch DMR/D-STAR), PMR446 | 6,25 kHz |
+| SSB | 100 Hz |
+| CW, Digitalbetrieb | 10 Hz |
+
+Von Hand lässt sich jeder Schritt von 10 Hz bis 100 kHz festlegen. Ein **Klick in den Wasserfall** rastet im Raster ein (die Signalerkennung legt ihre gemessene Frequenz ebenfalls aufs Raster, AM-Rundfunk z. B. auf 5 kHz), **Bild ↑/Bild ↓** gehen einen Schritt weiter, und das Mausrad auf der Abstimmskala springt bei Kanalrastern von Kanal zu Kanal.
+
+### Markierungen im Wasserfall: typische Frequenzen, Rundfunk, Relais
+
+![Rundfunksender im 49-m-Band, gerade auf Sendung (EiBi)](bilder/26-markierungen.png)
+
+Unter der Frequenzskala zeigt der Wasserfall, was wo zu erwarten ist – ein Klick auf eine Markierung stellt Frequenz **und** Betriebsart ein, das Überfahren mit der Maus zeigt Einzelheiten:
+- **Typische Frequenzen** (türkis): FT8, FT4, WSPR, JS8, PSK31, RTTY, SSTV, FreeDV, QRP- und Notfunk-Aktivitätszentren, Anruffrequenzen, APRS, ISS, NCDXF-Baken, QO-100-Baken; dazu Wetter- und Zeitsender (DWD-RTTY und -Fax, NAVTEX, VOLMET, DCF77, WWV), CB-, PMR446- und Freenet-Kanäle, Seefunk 16/70, AIS, Flugnotfunk. Die Liste gehört zum Programm und wird täglich aus dem Projekt auf GitHub aktualisiert – Ergänzungen kommen also ohne neue Version an.
+- **Rundfunk** (gelb): Sender, die **jetzt** auf dieser Frequenz senden, aus dem Sendeplan EiBi (eibispace.de) mit Sprache und Zielgebiet.
+- **Relais** (grün = FM, blau = digital): Relais im Umkreis (Standard 100 km) mit Rufzeichen, Betriebsart, CTCSS bzw. DMR-Colorcode. Mittelpunkt ist der **Standort des Empfängers** (OpenWebRX meldet ihn) – bei eigenen Geräten (RTL-SDR, Funkgerät) die eigene Station (Locator). Quellen: DARC-Relaisliste von DL3EL (relais.dl3el.de), BrandMeister (DMR, mit letztem Kontakt) und hearham.com.
+
+![Relais auf 70 cm um den Empfänger](bilder/27-relais.png)
+
+**Relais: nichts raten.** Ein Klick auf ein Relais – oder irgendwo in dessen Kanal – nimmt die Daten aus der Datenbank: Bei **DMR, D-STAR, YSF** schaltet Wellenwerk am OpenWebRX direkt den passenden Dekoder ein, bei **FM-Relais** stellt es an einem echten Funkgerät auch **Ablage und CTCSS-Ton** ein. Die Karte zeigt Rufzeichen, Ablage, Ton bzw. Colorcode, Ort, Entfernung und Quelle. Nur Frequenzen, die in keiner Liste stehen, werden mit der Signalerkennung ermittelt. Ein- und ausschalten lassen sich die drei Arten unter **F8 → Wasserfall**. Die Listen werden im Datenordner zwischengespeichert und höchstens einmal pro Woche neu abgerufen.
+
 ### Signalerkennung per Klick
 
 ![Signalerkennung: RTTY erkannt](bilder/24-signalerkennung.png)

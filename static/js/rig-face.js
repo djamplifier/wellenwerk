@@ -59,7 +59,7 @@ function buttonCatalog() {
   return cat;
 }
 const DROP_CATALOG = () => {
-  const c = WW.caps || {}, d = { mode: "Mode", filter: "Filter", quickmem: "Quick Mem", offset: "Ablage", tone: "CTCSS" };
+  const c = WW.caps || {}, d = { mode: "Mode", filter: "Filter", raster: "Raster", quickmem: "Quick Mem", offset: "Ablage", tone: "CTCSS" };
   (c.ui_choices || []).forEach(ch => d["lvl:" + ch.name] = ch.label);
   return d;
 };
@@ -67,7 +67,7 @@ function defaultRigLayout() {
   const cat = buttonCatalog(), has = k => !!cat[k];
   const left = ["vfo:VFOA", "op:CPY", "vfo:VFOB", "op:XCHG", "tx:A", "op:UP", "tx:B", "op:DOWN", "vfo:Main", "vfo:Sub", "vfo:MEM", "split"].filter(has);
   const right = [...Object.keys(cat).filter(k => k.startsWith("func:") && !["func:RIT", "func:XIT"].includes(k)), "op:BAND_UP", "op:BAND_DOWN", "op:TUNE", "scan", "ptt"].filter(has);
-  const drops = ["mode", "filter", ...Object.keys(DROP_CATALOG()).filter(k => k.startsWith("lvl:")), "quickmem", "offset"];
+  const drops = ["mode", "filter", "raster", ...Object.keys(DROP_CATALOG()).filter(k => k.startsWith("lvl:")), "quickmem", "offset"];
   return { left, right, drops, custom: [], sliders: { active: 0, layouts: [(WW.caps.ui_levels || []).map(l => l.name), [], [], [], [], []] } };
 }
 
@@ -78,6 +78,8 @@ async function loadRigLayout() {
   let l = null; try { l = await api("/api/store/" + key); } catch { }
   const def = defaultRigLayout();
   RC.layoutKey = key; RC.layout = l ? { ...def, ...l, sliders: { ...def.sliders, ...(l.sliders || {}) } } : def;
+  if (l && Array.isArray(RC.layout.drops) && !RC.layout.drops.includes("raster") && !l.rasterSeen) {   // neue Auswahl auch in gespeicherten Anordnungen zeigen (einmalig)
+    const i = RC.layout.drops.indexOf("filter"); RC.layout.drops.splice(i < 0 ? 0 : i + 1, 0, "raster"); RC.layout.rasterSeen = true; }
   WW.emit("rc-layout");
 }
 async function saveRigLayout() { await api("/api/store/" + RC.layoutKey, { method: "PUT", body: RC.layout }); WW.emit("rc-layout"); }
@@ -131,6 +133,7 @@ function createFace(root) {
     else if (e.key === "ArrowRight") { RC.activeDigit = Math.max(0, RC.activeDigit - 1); renderFreqDigits(rc); e.preventDefault(); }
     else if (e.key === "ArrowUp" || e.key === "+") { stepDigit(1); e.preventDefault(); }
     else if (e.key === "ArrowDown" || e.key === "-") { stepDigit(-1); e.preventDefault(); }
+    else if (e.key === "PageUp" || e.key === "PageDown") { const t = tuneRaster(); setFreq(snapRaster((WW.rig.freq || 0) + (e.key === "PageUp" ? t.step : -t.step))); e.preventDefault(); }   // ein Rasterschritt
     else if (/^[0-9]$/.test(e.key)) { typeDigit(+e.key); e.preventDefault(); }
     else if (e.key === "Enter") { freqDialog(); e.preventDefault(); }
     store.set("rc.digit", RC.activeDigit);
@@ -145,7 +148,7 @@ function createFace(root) {
     if (t.dataset.id === "+") openConnect(); else act(`/api/radios/${t.dataset.id}/select`); });
   const rebuild = () => { applyScheme(rc); buildButtons(rc); buildTuning(rc); renderFace(rc); };
   let rkey = JSON.stringify(rxRanges());
-  const offs = [WW.on("rig", () => { const k = JSON.stringify(rxRanges()); if (k !== rkey) { rkey = k; RC.bsp = false; buildTuning(rc); renderTabs(rc); } renderFace(rc); }), WW.on("rig-local", () => renderFace(rc)), WW.on("rc-layout", rebuild), WW.on("caps", () => loadRigLayout()),
+  const offs = [WW.on("rig", () => { const k = JSON.stringify(rxRanges()); if (k !== rkey) { rkey = k; RC.bsp = false; buildTuning(rc); renderTabs(rc); } renderFace(rc); }), WW.on("rig-local", () => renderFace(rc)), WW.on("raster", () => renderFace(rc)), WW.on("rc-layout", rebuild), WW.on("caps", () => loadRigLayout()),
     WW.on("radios", () => renderTabs(rc)), WW.on("spots", () => renderBars(rc)), WW.on("spot", () => renderBars(rc)), WW.on("quicksave", () => renderBars(rc))];
   const clk = setInterval(() => { const n = new Date(); $(".rc-date", rc).textContent = n.toLocaleDateString(I18N.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     $(".rc-time", rc).textContent = n.toLocaleTimeString(I18N.locale) + "  ·  " + n.toISOString().slice(11, 19) + " UTC"; }, 1000);
@@ -274,6 +277,7 @@ function dropValue(k) {
   const r = WW.rig, lv = r.levels || {};
   if (k === "mode") return `Mode: ${r.mode || "–"}`;
   if (k === "filter") return `Filter: ${r.passband ? (r.passband / 1000).toLocaleString(I18N.locale) + " kHz" : "–"}`;
+  if (k === "raster") { const t = tuneRaster(); return `Raster: ${fmtStep(t.step)}${t.auto ? " (auto)" : ""}`; }
   if (k === "quickmem") return `Quick Mem: ${(store.get("qs." + WW.current, [])).length}`;
   if (k === "offset") return `Ablage: ${r.rptr_shift && r.rptr_shift !== "None" ? r.rptr_shift + " " + (r.rptr_offs / 1e3) + " kHz" : "Simplex"}`;
   if (k === "tone") return `CTCSS: ${r.ctcss ? r.ctcss.toFixed(1) : "aus"}`;
@@ -287,6 +291,9 @@ function dropMenu(k, anchor) {
   let items = [];
   if (k === "mode") items = modeList().map(m => ({ label: m, on: m === r.mode, act: () => setMode(m) }));
   else if (k === "filter") items = (FILTERS[r.mode] || FILTERS.USB).map(w => ({ label: `${(w / 1000).toLocaleString(I18N.locale)} kHz`, on: w === r.passband, act: () => setMode(r.mode, w) })).concat([{ label: "Standard des Geräts", act: () => setMode(r.mode, 0) }]);
+  else if (k === "raster") { const a = rasterAuto(r.freq, r.mode), cur = store.get("tune.step", "auto");
+    items = [{ label: `Automatisch: ${fmtStep(a[0])}${a[2] ? " – " + a[2] : ""}`, on: cur === "auto", act: () => { store.set("tune.step", "auto"); WW.emit("raster"); } }]
+      .concat(RASTER_STEPS.map(s => ({ label: fmtStep(s), on: cur !== "auto" && Math.abs(+cur - s) < 0.5, act: () => { store.set("tune.step", s); WW.emit("raster"); } }))); }
   else if (k === "quickmem") { const qs = store.get("qs." + WW.current, []);
     items = qs.map((q, i) => ({ label: `${i + 1}: ${fmtMHz(q.f)} ${q.m || ""}`, act: () => { setFreq(q.f); if (q.m) setMode(q.m); } })).concat([{ label: "Aktuelle Frequenz speichern", act: quickSave }, { label: "Alle löschen", act: () => { store.set("qs." + WW.current, []); WW.emit("quicksave"); } }]); }
   else if (k === "offset") items = [["Simplex", "+", 0], ["−600 kHz (2 m)", "-", 600000], ["+600 kHz (2 m)", "+", 600000], ["−7,6 MHz (70 cm)", "-", 7600000], ["+7,6 MHz (70 cm)", "+", 7600000]].map(([l, s, o]) => ({ label: l, act: () => setOffset(s, o) }));
@@ -354,7 +361,9 @@ function attachRuler(rul) {
   rul.addEventListener("mousedown", e => { if (e.button !== 0 || e.target.closest(".qs,.sp")) return; drag = true; setFreq(Math.round(toF(e) / step()) * step()); e.preventDefault(); });
   window.addEventListener("mousemove", e => { if (drag) { clearTimeout(rul._t); rul._t = setTimeout(() => setFreq(Math.round(toF(e) / step()) * step()), 40); } });
   window.addEventListener("mouseup", () => drag = false);
-  rul.addEventListener("wheel", e => { e.preventDefault(); const o = store.get("opts", {}); let s = +(o.wheel || 100); if (e.shiftKey) s *= 2; if (e.ctrlKey) s *= 5; setFreq((WW.rig.freq || 0) + (e.deltaY < 0 ? s : -s)); }, { passive: false });
+  // Mausrad: im Kanal-/Rundfunkraster (ab 1 kHz) von Kanal zu Kanal, sonst wie eingestellt
+  rul.addEventListener("wheel", e => { e.preventDefault(); const o = store.get("opts", {}), t = tuneRaster(); let s = t.step >= 1000 ? t.step : +(o.wheel || 100); if (e.shiftKey) s *= 2; if (e.ctrlKey) s *= 5;
+    const f = (WW.rig.freq || 0) + (e.deltaY < 0 ? s : -s); setFreq(t.step >= 1000 ? snapRaster(f) : f); }, { passive: false });
   rul.addEventListener("click", e => { const sp = e.target.closest(".sp"), qs = e.target.closest(".qs");
     if (sp) tuneSpot(+sp.dataset.f, sp.dataset.call, sp.dataset.cmt); else if (qs) { setFreq(+qs.dataset.f); if (qs.dataset.m) setMode(qs.dataset.m); } });
 }

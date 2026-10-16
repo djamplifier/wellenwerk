@@ -173,7 +173,7 @@ function createReceivers(root) {
   root.addEventListener("click", e => { const c = e.target.closest(".rx-wf"); if (!c) return; const id = c.closest("[data-id]")?.dataset.id, l = wfs.get(id); if (!l) return;
     const r = c.getBoundingClientRect(), hz = Math.round((l.low + (e.clientX - r.left) / r.width * (l.high - l.low)) / 10) * 10;
     if (sigOnClick(id, hz, e)) return;
-    api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz } }).catch(err => toast(err.message, true)); });
+    api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz: snapRaster(hz, (WW.radios || []).find(r => r.id === id)?.state?.mode) } }).catch(err => toast(err.message, true)); });
   root.addEventListener("mousemove", e => { const c = e.target.closest(".rx-wf"); if (!c) return; const l = wfs.get(c.closest("[data-id]")?.dataset.id); if (!l) return;
     const r = c.getBoundingClientRect(); c.title = `${((l.low + (e.clientX - r.left) / r.width * (l.high - l.low)) / 1000).toFixed(1)} kHz – klicken zum Abstimmen`; });
   const line = l => { wfs.set(l.radio, l); const c = root.querySelector(`[data-id="${CSS.escape(l.radio)}"] .rx-wf`); if (!c) return; const W = c.clientWidth, H = c.clientHeight; if (!W || !H) return;

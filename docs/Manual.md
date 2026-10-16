@@ -182,6 +182,38 @@ The SDR is still a full receiver: switch its audio on in the **Receivers** windo
 
 Receiver audio plays with about half a second of buffer; on a stuttering internet connection the buffer grows by itself (up to 2 s). If the connection to a receiver drops, Wellenwerk reconnects by itself. After a restart or an update, the radios and receivers connected before are connected again – with the last frequency and mode.
 
+### Tuning step
+
+Frequencies between channels are of no use – Wellenwerk therefore tunes in the **raster of the band**. The **Step** selector on the radio shows the current step; “automatic” chooses it by band and mode:
+
+| Range / mode | Step |
+|---|---|
+| Long and medium wave (AM) | 9 kHz (Region 1), 10 kHz (Region 2) |
+| Shortwave broadcast bands (AM) | 5 kHz |
+| CB radio | 10 kHz (channels 26.965 … 27.405 MHz) |
+| 10 m and 6 m FM | 10 kHz |
+| FM broadcast | 50 kHz |
+| Airband (AM) | 8.33 kHz |
+| 2 m FM, Freenet, marine, 23 cm | 12.5 kHz |
+| 70 cm FM (also DMR/D-STAR), PMR446 | 6.25 kHz |
+| SSB | 100 Hz |
+| CW, digital modes | 10 Hz |
+
+Any step from 10 Hz to 100 kHz can also be set by hand. A **click in the waterfall** snaps to the raster (signal identification also puts its measured frequency on the raster, AM broadcast e.g. on 5 kHz), **Page Up/Page Down** move one step, and the mouse wheel on the tuning scale jumps from channel to channel in channel rasters.
+
+### Markers in the waterfall: typical frequencies, broadcast, repeaters
+
+![Broadcast stations in the 49 m band, on air now (EiBi)](bilder/26-markierungen.png)
+
+Below the frequency scale the waterfall shows what to expect where – a click on a marker sets frequency **and** mode, hovering shows details:
+- **Typical frequencies** (turquoise): FT8, FT4, WSPR, JS8, PSK31, RTTY, SSTV, FreeDV, QRP and emergency centres of activity, calling frequencies, APRS, ISS, NCDXF beacons, QO-100 beacons; plus weather and time stations (DWD RTTY and fax, NAVTEX, VOLMET, DCF77, WWV), CB, PMR446 and Freenet channels, marine 16/70, AIS, air emergency. The list is part of the program and is updated daily from the project on GitHub – additions arrive without a new version.
+- **Broadcast** (yellow): stations transmitting on this frequency **now**, from the EiBi schedule (eibispace.de) with language and target area.
+- **Repeaters** (green = FM, blue = digital): repeaters within a radius (default 100 km) with callsign, mode, CTCSS or DMR colour code. The centre is the **receiver's location** (OpenWebRX reports it) – with your own devices (RTL-SDR, radio) your station (locator). Sources: DARC repeater list by DL3EL (relais.dl3el.de), BrandMeister (DMR, with last contact) and hearham.com.
+
+![Repeaters on 70 cm around the receiver](bilder/27-relais.png)
+
+**Repeaters: no guessing.** A click on a repeater – or anywhere in its channel – takes the data from the database: for **DMR, D-STAR, YSF** Wellenwerk switches on the matching decoder of the OpenWebRX directly, for **FM repeaters** it also sets **offset and CTCSS tone** on a real radio. The card shows callsign, offset, tone or colour code, place, distance and source. Only frequencies that are in no list are determined by signal identification. The three kinds can be switched on and off under **F8 → Waterfall**. The lists are cached in the data folder and fetched again at most once a week.
+
 ### Signal identification by click
 
 ![Signal identification: RTTY detected](bilder/24-signalerkennung.png)

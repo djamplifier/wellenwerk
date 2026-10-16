@@ -107,6 +107,38 @@ function wfPush(g, W, H, row, k) {
   const img = g.createImageData(W, k); for (let y = 0; y < k; y++) img.data.set(row, y * W * 4); g.putImageData(img, 0, 0);
 }
 
+// ---------- Abstimmraster: sinnvolle Schritte je Band und Betriebsart (Kanalraster, Rundfunkraster) ----------
+// Rueckgabe [Schritt Hz, Versatz Hz, Name]; Frequenzen liegen auf Versatz + n * Schritt
+const SW_BC = [[2300, 2495], [3200, 3400], [3900, 4000], [4750, 5060], [5900, 6200], [7200, 7450], [9400, 9900], [11600, 12100], [13570, 13870], [15100, 15800], [17480, 17900], [18900, 19020], [21450, 21850], [25670, 26100]];
+function rasterAuto(f, mode) {
+  const k = (f || 0) / 1000, m = (mode || "").toUpperCase(), r2 = /^R2/.test(store.get("rc.plan", "R1-HF")), in_ = (a, b) => k >= a && k <= b;
+  if (/^(AM|SAM)/.test(m)) {
+    if (in_(148.5, 283.5)) return [9000, 0, "Langwelle"];
+    if (r2 ? in_(530, 1700) : in_(526.5, 1606.5)) return r2 ? [10000, 0, "Mittelwelle"] : [9000, 0, "Mittelwelle"];
+    if (SW_BC.some(([a, b]) => in_(a, b))) return [5000, 0, "Kurzwellen-Rundfunk"];
+    if (in_(108000, 137000)) return [25000 / 3, 0, "Flugfunk 8,33 kHz"];
+    return [1000, 0, ""];
+  }
+  if (in_(26965, 27405)) return [10000, 5000, "CB-Funk"];
+  if (/FM/.test(m)) {
+    if (in_(28000, 29700) || in_(50000, 54000)) return [10000, 0, "FM-Kanäle"];
+    if (in_(87500, 108000)) return [50000, 0, "UKW-Rundfunk"];
+    if (in_(144000, 148000) || in_(149000, 149200) || in_(156000, 163000) || in_(1240000, 1300000)) return [12500, 0, "Kanalraster"];
+    if (in_(430000, 440000) || in_(446000, 446200)) return [6250, 0, "Kanalraster"];
+    return k > 30000 ? [12500, 0, "Kanalraster"] : [5000, 0, ""];
+  }
+  if (/^(USB|LSB)$/.test(m)) return [100, 0, "SSB"];
+  return [10, 0, ""];
+}
+const RASTER_STEPS = [10, 100, 500, 1000, 5000, 6250, 25000 / 3, 9000, 10000, 12500, 25000, 50000, 100000];
+function tuneRaster(f, mode) {
+  const o = store.get("tune.step", "auto");
+  if (o !== "auto" && +o > 0) return { step: +o, base: 0, auto: false, label: "" };
+  const [step, base, label] = rasterAuto(f ?? WW.rig.freq, mode ?? WW.rig.mode); return { step, base, label, auto: true };
+}
+function snapRaster(f, mode) { const r = tuneRaster(f, mode); return r.step <= 1 ? Math.round(f) : Math.round(Math.round((f - r.base) / r.step) * r.step + r.base); }
+const fmtStep = s => s >= 1000 ? (s / 1000).toLocaleString(I18N.locale, { maximumFractionDigits: 2 }) + " kHz" : Math.round(s) + " Hz";
+
 // ---------- Formatierung ----------
 const bandFor = hz => (WW.bands.find(b => hz >= b.lo && hz <= b.hi) || {}).name || "";
 const fmtMHz = hz => (hz / 1e6).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");

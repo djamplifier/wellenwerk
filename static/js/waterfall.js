@@ -62,6 +62,7 @@ function createWfPanel(root) {
     if (s.freq) { c.fillStyle = "rgba(255,80,80,.9)"; c.fillRect(fx(s.freq, W), 0, 1.5, H); }
     for (const t of SIG.tags) { if (t.until < Date.now() || t.rf < view[0] || t.rf > view[1]) continue; const x = fx(t.rf, W), w = c.measureText(t.label).width + 8;   // erkannte Signale
       c.fillStyle = "rgba(20,30,40,.8)"; c.fillRect(x - w / 2, 14, w, 14); c.fillStyle = "#ffd166"; c.fillText(t.label, x - w / 2 + 4, 25); c.fillRect(x, 28, 1, 6); }
+    if (typeof fmkDraw === "function") fmkDraw(c, W, view, srcs().data);           // typische Frequenzen, Rundfunk, Relais
     if (!FH) return; scr.lut = lut; scr.push({ l, L: L0 });
   };
   // Wasserfall laeuft gleichmaessig (wfScroller); Pixelwerte erst beim Zeichnen aus dem aktuellen Ausschnitt
@@ -140,7 +141,10 @@ function createWfPanel(root) {
   const tune = hz => { const id = src(); (id && id !== WW.current ? api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz } }) : post("/api/rig/freq", { hz })).catch(e => toast(e.message, true)); };
   [spec, fall].forEach(cv => {
     cv.addEventListener("click", e => { if (!view || cv._dragged) return; const r = cv.getBoundingClientRect(), f = Math.round((view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0])) / 10) * 10;
-      const S = srcs(); if (!sigOnClick(S.ctl, f, e, S.pan ? S.data : null, recent.filter(l => l.radio === S.data))) tune(f); });
+      const S = srcs(), mk = cv === spec && typeof fmkHit === "function" ? fmkHit(e.clientX - r.left, e.clientY - r.top) : null;
+      if (mk) return fmkTune(mk, S.ctl, S.data, e);                                   // Markierung angeklickt
+      if (!sigOnClick(S.ctl, f, e, S.pan ? S.data : null, recent.filter(l => l.radio === S.data))) tune(snapRaster(f, radioState().mode)); });   // im Abstimmraster
+    if (cv === spec) cv.addEventListener("mousemove", e => { if (typeof fmkTip !== "function") return; const r = cv.getBoundingClientRect(), t = fmkTip(e.clientX - r.left, e.clientY - r.top); if (cv.title !== t) cv.title = t; cv.style.cursor = t ? "pointer" : ""; });
     cv.addEventListener("wheel", e => { if (!view || !last) return; e.preventDefault(); scr.invalidate(); zoomed = true; const r = cv.getBoundingClientRect(), at = view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0]), k = e.deltaY > 0 ? 1.25 : 0.8;
       let a = at - (at - view[0]) * k, b = at + (view[1] - at) * k; if (b - a > last.high - last.low) [a, b] = [last.low, last.high]; if (b - a < 500) return;
       if (a < last.low) { b += last.low - a; a = last.low; } if (b > last.high) { a -= b - last.high; b = last.high; } view = [a, b]; }, { passive: false });
