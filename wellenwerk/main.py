@@ -2765,6 +2765,17 @@ async def ws_audio(websocket: WebSocket, radio: str = ""):
         AUDIO_SUBS.get(rid, {}).pop(websocket, None)
 
 
+@app.post("/api/ids", tags=["Frequenzen"])
+async def ids_lookup(body: dict):
+    """Namen zu Digitalfunk-Kennungen: {dmr: [IDs], nxdn: [IDs], tg: [Talkgroups], call: [Rufzeichen]} (RadioID.net, BrandMeister)."""
+    from . import ids
+    lim = lambda k: [x for x in (body.get(k) or [])][:200]
+    try:
+        return await asyncio.to_thread(ids.lookup, DATA, [int(x) for x in lim("dmr")], [int(x) for x in lim("nxdn")], [int(x) for x in lim("tg")], [str(x) for x in lim("call")])
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Kennungen müssen Zahlen sein (dmr, nxdn, tg)")
+
+
 @app.get("/api/freqs/typical", tags=["Frequenzen"])
 async def freqs_typical():
     """Typische Frequenzen der Betriebsarten (Aktivitaetszentren, Baken, Wetter- und Zeitsender ...) fuer die Wasserfall-Markierungen."""

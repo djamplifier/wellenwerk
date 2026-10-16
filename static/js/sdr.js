@@ -192,21 +192,66 @@ function createReceivers(root) {
 APPS.rig.panels.receivers = { title: "Empfänger", create: createReceivers, dock: { ref: "face", dir: "right" }, size: { width: 460 } };
 
 // ---------- Fenster „Datenempfang“: Meldungen der Empfaenger-Dekoder (OpenWebRX: DMR, D-STAR, YSF, APRS, Funksensoren, Wettersonden) ----------
-const DEC_LABEL = { dmr: "DMR", dstar: "D-STAR", ysf: "YSF", nxdn: "NXDN", p25: "P25", m17: "M17", packet: "APRS", ism: "Sensor", sonde: "Sonde" };
+const DEC_LABEL = { dmr: "DMR", dstar: "D-STAR", ysf: "YSF", nxdn: "NXDN", p25: "P25", m17: "M17", packet: "APRS", ism: "Sensor", sonde: "Sonde",
+  ft8: "FT8", ft4: "FT4", wspr: "WSPR", jt65: "JT65", jt9: "JT9", fst4: "FST4", fst4w: "FST4W", q65: "Q65", msk144: "MSK144", js8: "JS8", bpsk31: "PSK31", bpsk63: "PSK63",
+  rtty170: "RTTY", rtty450: "RTTY DWD", rtty85: "RTTY", cwdecoder: "CW", navtex: "NAVTEX", sitorb: "SITOR-B", dsc: "DSC", ais: "AIS", adsb: "ADS-B",
+  "lora-aprs": "LoRa-APRS", meshtastic: "Meshtastic", meshcom: "MeshCom", meshcore: "MeshCore", "lora-fanet": "FANET" };
+const DEC_WSJT = new Set(["ft8", "ft4", "wspr", "jt65", "jt9", "fst4", "fst4w", "q65", "msk144"]);
+// Absender einer WSJT-Nachricht: „CQ [DX|TEST|…] RUF LOC“ -> RUF, „AN VON …“ -> VON
+function decWsjtCall(msg) { const t = String(msg || "").trim().split(/\s+/), isCall = x => /^[A-Z0-9]{1,3}[0-9][A-Z0-9]{0,3}[A-Z](\/[A-Z0-9]+)?$/.test(x || "");
+  if (t[0] === "CQ") return isCall(t[1]) ? t[1] : isCall(t[2]) ? t[2] : ""; return isCall(t[1]) ? t[1] : ""; }
 function decTempC(v) { if (v.temperature_C != null) return +v.temperature_C; if (v.temperature_F != null) return (v.temperature_F - 32) * 5 / 9; if (v.temp != null) return +v.temp; return null; }
 // eine Zeile Text je Meldung
+// ---------- Namen zu Kennungen (RadioID.net, BrandMeister) – gesammelt beim eigenen Server angefragt, im Speicher gehalten ----------
+const IDS = { dmr: new Map(), nxdn: new Map(), tg: new Map(), call: new Map(), want: { dmr: new Set(), nxdn: new Set(), tg: new Set(), call: new Set() }, timer: 0 };
+function idName(kind, key) {
+  if (key == null || key === "" || key === false) return null; key = String(key).trim(); if (!key || key === "0") return null;
+  const m = IDS[kind]; if (m.has(key)) return m.get(key);
+  m.set(key, null); IDS.want[kind].add(key); clearTimeout(IDS.timer); IDS.timer = setTimeout(idFetch, 250); return null;
+}
+async function idFetch() {
+  const body = {}; for (const k of Object.keys(IDS.want)) { body[k] = [...IDS.want[k]]; IDS.want[k].clear(); }
+  try { const r = await api("/api/ids", { method: "POST", body });
+    if (r.loading) { for (const k of Object.keys(body)) for (const x of body[k]) IDS[k].delete(x); setTimeout(() => WW.emit("ids"), 1500); return; }
+    for (const k of Object.keys(body)) for (const x of body[k]) IDS[k].set(x, r[k]?.[x] || false);
+    WW.emit("ids");
+  } catch { }
+}
+// „DL5HZ Holger (Berlin)“ bzw. nur die Kennung, solange der Name (noch) unbekannt ist
+const idPerson = (u, fallback) => u ? `${u.c}${u.n ? " " + u.n.split(" ")[0] : ""}${u.city ? " (" + u.city + ")" : ""}` : fallback;
+const idTg = n => { if (n == null || n === "") return ""; const nm = idName("tg", n); return `TG ${n}${nm ? " " + nm.trim() : ""}`; };
 function decSummary(d) {
   const v = d.value; if (v == null) return ""; if (typeof v !== "object") return String(v);
   const j = (...a) => a.filter(x => x !== undefined && x !== null && x !== "").join(" · ");
   const pos = v.lat != null && v.lon != null ? `${Math.abs(v.lat).toFixed(4)}°${v.lat >= 0 ? "N" : "S"} ${Math.abs(v.lon).toFixed(4)}°${v.lon >= 0 ? "E" : "W"}` : "";
+  if (DEC_WSJT.has(d.decoder)) { const msg = v.msg ?? v.message ?? "", c = v.callsign || decWsjtCall(msg), u = c ? idName("call", c) : null;
+    return j(v.db != null ? `${v.db} dB` : v.snr != null ? `${v.snr} dB` : "", v.freq != null ? `${Math.round(v.freq)} Hz` : "", msg || j(v.callsign, v.locator, v.dbm != null ? v.dbm + " dBm" : ""), u ? `(${u.n || ""}${u.city ? ", " + u.city : ""})`.replace("(, ", "(") : ""); }
+  if (d.decoder === "js8") return j(v.db != null ? `${v.db} dB` : "", v.msg ?? v.message);
+  if (d.decoder === "ais") return j(v.shipname || v.name, v.callsign, v.mmsi != null ? "MMSI " + v.mmsi : "", pos, v.speed != null ? (+v.speed).toFixed(1) + " kn" : "", v.course != null ? Math.round(v.course) + "°" : "", v.destination ? "→ " + v.destination : "", v.text || v.message);
+  if (d.decoder === "adsb") { const alt = v.altitude ?? v.alt_baro ?? v.alt;
+    return j(String(v.flight || v.callsign || "").trim() || (v.icao || v.hex ? "ICAO " + (v.icao || v.hex) : ""), alt != null && alt !== "ground" ? `${Math.round(alt)} ft (${Math.round(alt * 0.3048)} m)` : alt === "ground" ? "am Boden" : "",
+      v.speed ?? v.gs ? Math.round(v.speed ?? v.gs) + " kn" : "", v.heading ?? v.track ? Math.round(v.heading ?? v.track) + "°" : "", pos, v.squawk ? "Squawk " + v.squawk : ""); }
+  if (d.decoder === "lora-aprs") return j(`${v.source || "?"} → ${v.destination || "?"}`, v.comment || v.data || v.text, pos);
+  if (/^(meshtastic|meshcom|meshcore|lora-fanet)$/.test(d.decoder)) return j(v.from || v.source || v.src || v.id, v.to || v.destination ? "→ " + (v.to || v.destination) : "", v.text || v.message || v.msg || v.name, pos, v.alt != null ? Math.round(v.alt) + " m" : "");
   if (d.decoder === "packet") return j(`${v.source || "?"} → ${v.destination || "?"}`, v.comment || v.data, pos);
   if (d.decoder === "ism") { const t = decTempC(v);
     return j(v.model, v.id != null ? "ID " + v.id : "", v.channel != null ? "Kanal " + v.channel : "", t != null ? t.toFixed(1) + " °C" : "", v.humidity != null ? v.humidity + " % Feuchte" : "",
       v.wind_avg_km_h != null ? v.wind_avg_km_h + " km/h Wind" : "", v.rain_mm != null ? v.rain_mm + " mm Regen" : "", v.pressure_hPa != null ? v.pressure_hPa + " hPa" : "", v.battery_ok === 0 ? "Batterie schwach" : ""); }
   if (d.decoder === "sonde") return j(v.type || v.model, v.id || v.serial, pos, v.alt != null ? Math.round(v.alt) + " m" : "", v.temp != null ? (+v.temp).toFixed(1) + " °C" : "", v.vel_v != null ? (+v.vel_v).toFixed(1) + " m/s" : "");
-  if (d.decoder === "dstar") return j(v.ourcall && `${v.ourcall} → ${v.yourcall || "CQCQCQ"}`, v.departure && `über ${v.departure}${v.destination ? " / " + v.destination : ""}`, v.message, pos);
-  if (d.decoder === "dmr") return j(v.slot != null ? "Zeitschlitz " + v.slot : "", v.type === "group" ? "Gruppe" : v.type, v.source != null && `${v.source} → ${v.target ?? "?"}`, v.talkeralias, v.sync);
-  if (d.decoder === "ysf") return j(v.source && `${v.source} → ${v.target || "ALL"}`, v.up && "über " + v.up, v.mode, pos);
+  const call = c => { c = String(c || "").trim(); return c ? idPerson(idName("call", c), c) : ""; };
+  if (d.decoder === "dstar") { if (!v.ourcall && !v.message) return "";
+    return j(v.ourcall && `${call(v.ourcall)} → ${String(v.yourcall || "CQCQCQ").trim()}`, v.departure && `über ${String(v.departure).trim()}${v.destination ? " / " + String(v.destination).trim() : ""}`, v.message, pos); }
+  if (d.decoder === "dmr") {                                                   // Sprecher (DMR-ID -> Rufzeichen/Name) und Talkgroup mit Namen
+    if (v.source == null || v.source === "") return "";                       // reine Synchronmeldungen ohne Inhalt nicht anzeigen
+    const src = idPerson(idName("dmr", v.source), "ID " + v.source), ta = String(v.talkeralias || "").trim();
+    const tgt = v.type === "direct" || v.type === "private" ? "privat → " + idPerson(idName("dmr", v.target), "ID " + v.target) : idTg(v.target);
+    return j(v.slot != null ? "TS" + (+v.slot + 1) : "", `${src}${ta && !src.startsWith(ta.split(" ")[0]) ? " „" + ta + "“" : ""}`, tgt, pos); }
+  if (d.decoder === "ysf") { if (!v.source) return ""; return j(`${call(v.source)} → ${String(v.target || "ALL").trim()}`, v.up && "über " + String(v.up).trim(), pos); }
+  if (d.decoder === "m17") { if (!v.source) return ""; return j(`${call(v.source)} → ${String(v.destination || v.target || "ALL").trim()}`, pos); }
+  if (d.decoder === "nxdn") { if (v.source == null || v.source === "") return "";
+    return j(idPerson(idName("nxdn", v.source), "ID " + v.source), v.destination != null || v.target != null ? (v.type === "private" ? "privat → " : "→ Gruppe ") + (v.destination ?? v.target) : "", pos); }
+  if (d.decoder === "p25") { if (v.source == null || v.source === "") return "";
+    return j(v.nac != null ? "NAC " + v.nac : "", idPerson(idName("dmr", v.source), "ID " + v.source), v.target != null ? "→ TG " + v.target : "", pos); }
   return Object.entries(v).filter(([k, x]) => x !== "" && x != null && typeof x !== "object" && !/^(mode|timestamp|color|raw|protocol)$/.test(k)).slice(0, 8).map(([k, x]) => `${k}=${x}`).join(" · ");
 }
 function createDecodes(root) {
@@ -219,13 +264,13 @@ function createDecodes(root) {
     const r = rxs().find(x => x.id === sel.value), d = r?.state?.sdr || {};
     $(".dc-mode", root).innerHTML = `<option value="">Dekoder aus</option>` + (d.decoders || []).map(x => `<option value="${x.id}" ${x.id === d.decoder ? "selected" : ""}>${esc(x.label)}</option>`).join("");
     $(".dc-hint", root).textContent = r ? "" : "Dekoder bietet z. B. ein OpenWebRX-Empfänger (Datei → Empfänger)."; };
-  const draw = () => { $("tbody", root).innerHTML = rows.slice(-200).reverse().map(d => `<tr><td>${new Date(d.t * 1000).toLocaleTimeString(I18N.locale)}</td><td>${esc(DEC_LABEL[d.decoder] || d.decoder)}</td><td>${d.freq ? (d.freq / 1e6).toFixed(4) : ""}</td><td translate="no">${esc(decSummary(d))}</td></tr>`).join("")
+  const draw = () => { $("tbody", root).innerHTML = rows.slice(-400).filter(d => decSummary(d)).slice(-200).reverse().map(d => `<tr><td>${new Date(d.t * 1000).toLocaleTimeString(I18N.locale)}</td><td>${esc(DEC_LABEL[d.decoder] || d.decoder)}</td><td>${d.freq ? (d.freq / 1e6).toFixed(4) : ""}</td><td translate="no">${esc(decSummary(d))}</td></tr>`).join("")
     || `<tr><td colspan="4" class="hint">Noch keine Meldungen. Dekoder wählen (z. B. APRS auf 144,800 MHz, Funksensoren auf 433,92 MHz) oder im Wasserfall auf ein Signal klicken.</td></tr>`; };
   $(".dc-rx", root).onchange = e => { store.set("dc.rx", e.target.value); fill(); };
   $(".dc-mode", root).onchange = e => api(`/api/radios/${$(".dc-rx", root).value}/rig/decoder`, { method: "POST", body: { mode: e.target.value } }).catch(err => { toast(err.message, true); fill(); });
   $(".dc-clr", root).onclick = () => { rows = []; draw(); };
   api("/api/sdr/decodes").then(l => { rows = l.concat(rows); draw(); }).catch(() => { });
-  const offs = [WW.on("decode", d => { rows.push(d); if (rows.length > 500) rows.splice(0, 100); draw(); }), WW.on("radios", fill), WW.on("rig-any", () => { const k = rxs().map(r => r.id + ":" + (r.state.sdr.decoder || "") + (r.state.sdr.decoders || []).length).join(); if (k !== fill.k && document.activeElement !== $(".dc-mode", root)) { fill.k = k; fill(); } })];
+  const offs = [WW.on("decode", d => { rows.push(d); if (rows.length > 500) rows.splice(0, 100); draw(); }), WW.on("ids", draw), WW.on("radios", fill), WW.on("rig-any", () => { const k = rxs().map(r => r.id + ":" + (r.state.sdr.decoder || "") + (r.state.sdr.decoders || []).length).join(); if (k !== fill.k && document.activeElement !== $(".dc-mode", root)) { fill.k = k; fill(); } })];
   fill(); draw(); return () => offs.forEach(f => f());
 }
 APPS.rig.panels.decodes = { title: "Datenempfang", create: createDecodes, dock: { ref: "face", dir: "right" }, size: { width: 520 } };

@@ -1847,5 +1847,14 @@
 "⚠ abweichend: {} erkannt – Eintrag der Datenbank passt nicht": "⚠ different: {} detected – database entry does not match",
 "Relais in der Nähe markieren (DARC-Relaisliste DL3EL, EchoLink, BrandMeister, hearham.com) – Klick stellt Betriebsart, Dekoder bzw. Ablage und CTCSS ein": "Mark nearby repeaters (DARC list by DL3EL, EchoLink, BrandMeister, hearham.com) – a click sets mode, decoder or offset and CTCSS",
 "EchoLink online": "EchoLink online",
-"EchoLink offline": "EchoLink offline"
+"EchoLink offline": "EchoLink offline",
+"Vom Empfänger dekodieren lassen ({})": "Let the receiver decode ({})",
+"privat → {}": "private → {}",
+"am Boden": "on the ground",
+"Squawk {}": "Squawk {}",
+"NAVTEX (Seewetter)": "NAVTEX (marine weather)",
+"DSC (Seenot-/Anrufkanal)": "DSC (distress/calling)",
+"AIS (Schiffe)": "AIS (ships)",
+"ADS-B / Mode S (Flugzeuge)": "ADS-B / Mode S (aircraft)",
+"FANET (Gleitschirme)": "FANET (paragliders)"
 }

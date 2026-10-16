@@ -81,6 +81,7 @@ function sigOnClick(radioId, f, e, tapId, rfLines) {
   if (wfOpts().sig === false) return false;
   const dr = sigRadio(tapId || radioId), decs = dr?.state?.sdr?.decoders || [];
   const st0 = sigState(radioId), ssbSeg = SIG_SB[st0.mode] !== undefined && SIG_NB.some(([a, z]) => f >= a && f <= z);   // Schmalband-Segmente (SSB/CW/Baken): kein Digitalfunk
+  if (decs.length && f <= 30e6) { const L = sigProbeList(f, decs); if (L.length && SIG_FIXF[L[0]]) { sigProbe({ radio: dr.id, ctl: radioId || dr.id, rf: f, x: e?.clientX, y: e?.clientY }, L.slice(0, 1), decs); return true; } }
   if (f > 30e6 && !ssbSeg && typeof fmkRepAt === "function" && wfOpts().mrep !== false) {   // bekanntes Relais: Daten aus der Datenbank, nichts erraten
     const rep = fmkRepAt(f); if (rep) { fmkRepeater(rep, radioId || dr?.id, dr?.id, e); return true; } }
   if (f > 30e6 && !ssbSeg && (decs.length || isSdr(dr))) {
@@ -102,12 +103,17 @@ function sigOnDmClick(af, e) {
 
 // ---------- VHF/UHF: Dekoder des Empfaengers (OpenWebRX) durchprobieren ----------
 const SIG_NB = [[50e6, 50.5e6], [70e6, 70.25e6], [144e6, 144.5e6], [432e6, 432.5e6], [1296e6, 1296.8e6], [2320e6, 2320.5e6], [10368e6, 10368.5e6], [10489.5e6, 10490e6]];
-const SIG_FIXED = ["packet", "ism", "sonde"];              // nach Frequenz eindeutig: Dekoder bleibt an, Meldungen kommen in Abstaenden
+const SIG_FIXED = ["packet", "ism", "sonde", "ais", "adsb", "lora-aprs", "meshcom", "meshtastic", "meshcore", "dsc", "navtex"];
+// feste Frequenzen der Dienste (Mitte des Signals); Kurzwelle: abgestimmt wird 1500 Hz tiefer (USB), der Dekoder sitzt bei 1500 Hz im Ton
+const SIG_FIXF = { ais: [161975000, 162025000], adsb: [1090000000], "lora-aprs": [433775000], meshcom: [433175000], meshtastic: [869525000], meshcore: [869618000],
+  dsc: [156525000, 2187500, 4207500, 6312000, 8414500, 12577000, 16804500], navtex: [490000, 518000, 4209500] };
+const sigFixF = (id, f) => (SIG_FIXF[id] || []).reduce((b, x) => Math.abs(x - f) < Math.abs(b - f) ? x : b, f);              // nach Frequenz eindeutig: Dekoder bleibt an, Meldungen kommen in Abstaenden
 function sigProbeList(f, decs) {
   const has = id => decs.some(d => d.id === id), near = (a, t = 8000) => Math.abs(f - a) < t, L = [];
   if ([144800000, 144390000, 144575000, 145825000, 144640000, 144660000, 432500000].some(a => near(a))) L.push("packet");
   if ((f >= 433.05e6 && f <= 434.79e6) || (f >= 868e6 && f <= 868.6e6) || (f >= 314e6 && f <= 316e6) || (f >= 915e6 && f <= 928e6)) L.push("ism");
   if (f >= 400e6 && f <= 406.1e6) L.push("sonde");
+  for (const [id, fs] of Object.entries(SIG_FIXF)) if (fs.some(x => near(x, x > 30e6 ? (id === "adsb" ? 1.5e6 : id.startsWith("mesh") || id === "lora-aprs" ? 70000 : 12500) : 1200))) L.unshift(id);   // vor ISM: LoRa liegt im 433-MHz-Band
   if (f >= 50e6) L.push("dmr", "dstar", "ysf", "m17", "nxdn", "p25");
   return [...new Set(L)].filter(has);
 }
@@ -122,11 +128,13 @@ async function sigProbe(o, list, decs, opt = {}) {
     return Math.abs(c - r) <= Math.min(1500, Math.max(200, res * 0.65)) ? r : Math.round(c / 50) * 50; };
   const meas = (at, ms, hw = 7500) => sigRfCenter(sigLines(o.radio, ms), at, hw);
   const m0 = fx ? null : meas(o.rf, 3000);
-  let f = fx === "ism" ? (Math.abs(o.rf - 433.92e6) < 60e3 ? 433920000 : Math.abs(o.rf - 868.3e6) < 300e3 ? 868300000 : o.rf) : fx ? Math.round(o.rf / 6250) * 6250 : (m0 ? snap(m0.center, m0.res) : Math.round(o.rf / 6250) * 6250);
+  let f = fx === "ism" ? (Math.abs(o.rf - 433.92e6) < 60e3 ? 433920000 : Math.abs(o.rf - 868.3e6) < 300e3 ? 868300000 : o.rf) : SIG_FIXF[fx] ? sigFixF(fx, o.rf) : fx ? Math.round(o.rf / 6250) * 6250 : (m0 ? snap(m0.center, m0.res) : Math.round(o.rf / 6250) * 6250);
+  const hfText = fx && f < 30e6;                                                  // NAVTEX/DSC auf Kurzwelle: USB, Signal bei 1500 Hz im Ton
+  if (o.keep) f = sigState(o.ctl).freq || f;                                      // Dekoder fuer die aktuelle Einstellung (z. B. FT8 im Empfaenger)
   // AM (Flugfunk, Traeger mit zwei Seitenbaendern): auf den Traeger bzw. das 8,33-kHz-Raster
   if (o.am) f = o.am.carrier ? snap(o.am.carrier) : o.am.air ? snapRaster(o.rf, "AM") : f;
   if (o.rep) f = o.rep.f;                                                         // Relais aus der Datenbank: genau dessen Frequenz
-  R.track = !fx && !o.am && !o.rep; R.f0 = f; R.f0m = m0 ? f : 0;
+  R.track = !fx && !o.am && !o.rep && !o.keep; R.f0 = f; R.f0m = m0 ? f : 0;
   // waehrend der Pruefung und des Empfangs: Mitte erneut messen und nachstimmen (max. 12,5 kHz vom Klick weg)
   R.retune = async () => { if (!R.track || R.stop || Date.now() - (R.tuned || 0) < 1500) return false; const m = meas(f, 1500, 4500); if (!m || m.bw < 2000) return false;
     const nf = snap(m.center, m.res); if (Math.abs(nf - f) < Math.max(300, m.res * 0.6) || Math.abs(nf - o.rf) > 12500 || (R.f0m && Math.abs(nf - R.f0m) > 3000)) return false;   // nicht weiter als 3 kHz von der ersten Messung (Nachbarkanal)
@@ -136,7 +144,7 @@ async function sigProbe(o, list, decs, opt = {}) {
   const msgs = [];
   R.un = WW.on("decode", d => { if (d.radio !== o.radio || R.stop) return; msgs.push(d); R.onMsg?.(d); });
   const mod = o.am ? "AM" : "FM";
-  try { await sigRig(o.ctl, "mode", { mode: mod, passband: 0 }); await sigRig(o.ctl, "freq", { hz: f }); } catch (e) { body.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
+  if (!o.keep) try { await sigRig(o.ctl, "mode", { mode: hfText ? "USB" : mod, passband: 0 }); await sigRig(o.ctl, "freq", { hz: hfText ? f - 1500 : f }); } catch (e) { body.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
   const secs = () => ((Date.now() - T0) / 1000).toFixed(1).replace(".", I18N.lang === "de" ? "," : ".");
   // Ergebnis ohne Digitalfunk (analog, Rauschen …) anzeigen
   const showAnalog = (fm, tried) => {
@@ -211,8 +219,12 @@ async function sigProbe(o, list, decs, opt = {}) {
     ${!fx && Math.abs(f - o.rf) >= 500 ? `<div class="hint sig-auto">✓ <span>auf Signalmitte abgestimmt (${f > o.rf ? "+" : "−"}${(Math.abs(f - o.rf) / 1000).toFixed(1)} kHz)</span></div>` : ""}
     <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(name(found))}</b><i class="grow"></i><button type="button" class="sig-live-x">Dekoder aus</button></div><pre translate="no"></pre></div>
     <div class="hint sig-db"></div><div class="sig-act"></div>`;
-  const pre = $("pre", body); let lines = [];
-  const add = d => { const sum = d.decoder === found ? decSummary(d) : ""; if (!sum.trim()) return; lines.push(`${new Date((d.t || Date.now() / 1000) * 1000).toLocaleTimeString(I18N.locale)}  ${sum}`); lines = lines.slice(-60); pre.textContent = lines.join("\n"); pre.scrollTop = 1e9; };
+  const pre = $("pre", body); let got = [];
+  // Zeilen bei jedem Neuzeichnen aus den Meldungen bilden – so erscheinen Namen (Rufzeichen, Talkgroup), sobald sie nachgeladen sind
+  const render = () => { const L = got.map(d => [d, decSummary(d)]).filter(x => x[1].trim()).slice(-60).map(([d, s]) => `${new Date((d.t || Date.now() / 1000) * 1000).toLocaleTimeString(I18N.locale)}  ${s}`);
+    if (L.length) { pre.textContent = L.join("\n"); pre.scrollTop = 1e9; } };
+  const add = d => { if (d.decoder !== found) return; got.push(d); if (got.length > 300) got = got.slice(-200); render(); };
+  const offIds = WW.on("ids", () => { if (pre.isConnected) render(); else offIds(); });
   pre.textContent = fx ? "warte auf die nächste Aussendung …" : ""; msgs.forEach(add); R.onMsg = add;
   // Nachfuehren, solange der Dekoder laeuft (Sender mit Ablage, Drift); Handabstimmen beendet es
   R.onTune = nf => { const el = $(".sig-tf", body); if (el) el.textContent = fmtMHz(nf); SIG.tags.forEach(t => { if (t.radio === o.radio && t.label === name(found)) t.rf = nf; }); };
@@ -434,7 +446,9 @@ function sigActions(R, res, el) {
   if (b.id === "FREEDV") btn("FreeDV öffnen", () => { const st = store.get("fdv", {}); if (b.freedv) store.set("fdv", { ...st, mode: b.freedv }); switchApp("dm"); if (!panelOpen("dm", "freedv")) addPanel("dm", "freedv"); sigCancel(); }, true);
   if (["FT8", "FT4", "WSPR", "JT9", "JT65"].includes(b.id)) {
     const p = (SIGID.planFor(o.rf) || []).find(x => x.id === b.id), std = p ? p.lo - (b.id === "WSPR" ? 1350 : 100) : 0;
-    el.insertAdjacentHTML("beforeend", `<div class="hint">Dekodieren mit WSJT-X – Wellenwerk übernimmt dessen Meldungen (Optionen → WSJT-X).</div>`);
+    const rr = sigRadio(o.radio), decs = rr?.state?.sdr?.decoders || [], sid = b.id.toLowerCase();
+    if (decs.some(d => d.id === sid)) btn(`Vom Empfänger dekodieren lassen (${b.id})`, () => sigProbe({ ...o, ctl: o.ctl || o.radio, keep: true }, [sid], decs, { noPre: true, only: sid }), true);
+    else el.insertAdjacentHTML("beforeend", `<div class="hint">Dekodieren mit WSJT-X – Wellenwerk übernimmt dessen Meldungen (Optionen → WSJT-X).</div>`);
     if (std && Math.abs(std - o.dial) > 10) btn(`Auf ${fmtMHz(std)} MHz (Standard) abstimmen`, async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "USB", passband: 3000 }); await sigRig(o.ctl || o.radio, "freq", { hz: std }); sigCancel(); });
   }
   if (b.id === "VOICE_INV" && o.dial) {

@@ -5,6 +5,7 @@ Profil gewaehlt. Protokoll nach dem quelloffenen OpenWebRX (J. Ketterl u. a.), e
 Parameter: profile (Profil-ID oder Teil des Namens), freq/mode (Start), smeter_offset (dB, S-Meter-Abgleich)."""
 import asyncio
 import json
+import logging
 import math
 import re
 from urllib.parse import urlparse
@@ -14,12 +15,25 @@ import websockets
 from ..rig import RigError
 from .base import SdrBusy, SdrRefused, SdrRig
 
+log = logging.getLogger("ww.sdr")
+
 OWRX_MODES = {"USB": "usb", "PKTUSB": "usb", "RTTY": "usb", "LSB": "lsb", "PKTLSB": "lsb", "CW": "cw", "CWR": "cw",
               "AM": "am", "SAM": "sam", "FM": "nfm"}
 # Dekoder des OpenWebRX, die Wellenwerk anbietet: digitale Sprache (Kennungen, Talker Alias, Textnachrichten) und
 # Datendienste (APRS, Funk-Sensoren/Wetterstationen ueber rtl_433, Wettersonden). Name -> Anzeige
+# Dekoder der OpenWebRX(+)-Server, die Wellenwerk anbietet: Amateurfunk, Rundfunk und Aussendungen fuer die Allgemeinheit
+# (Positionen von Schiffen/Flugzeugen, Seewetter, Notrufe). Bewusst NICHT: Pager (page), Selektivruf/ZVEI (BOS), Firmendaten
+# der Luftfahrt (ACARS, VDL2, HFDL), Verbrauchszaehler (wmbus), LoRaWAN – deren Empfang ist in Deutschland nicht erlaubt (§ 5 TDDDG).
 OWRX_DECODERS = {"dmr": "DMR", "dstar": "D-STAR", "ysf": "YSF (C4FM)", "nxdn": "NXDN", "p25": "P25", "m17": "M17",
-                 "packet": "APRS / Packet", "ism": "Funksensoren 433/868 MHz", "sonde": "Wettersonden"}
+                 "packet": "APRS / Packet", "ism": "Funksensoren 433/868 MHz", "sonde": "Wettersonden",
+                 "ft8": "FT8", "ft4": "FT4", "wspr": "WSPR", "jt65": "JT65", "jt9": "JT9", "fst4": "FST4", "fst4w": "FST4W", "q65": "Q65",
+                 "msk144": "MSK144", "js8": "JS8Call", "bpsk31": "PSK31", "bpsk63": "PSK63", "rtty170": "RTTY 45 Bd / 170 Hz",
+                 "rtty450": "RTTY 50 Bd / 450 Hz (Wetterdienst)", "rtty85": "RTTY 50 Bd / 85 Hz", "cwdecoder": "CW",
+                 "navtex": "NAVTEX (Seewetter)", "sitorb": "SITOR-B", "dsc": "DSC (Seenot-/Anrufkanal)", "ais": "AIS (Schiffe)",
+                 "adsb": "ADS-B / Mode S (Flugzeuge)", "lora-aprs": "LoRa-APRS", "meshtastic": "Meshtastic", "meshcom": "MeshCom",
+                 "meshcore": "MeshCore", "lora-fanet": "FANET (Gleitschirme)"}
+# Dekoder, die Text zeichenweise liefern: zu Zeilen sammeln
+OWRX_TEXT = {"bpsk31", "bpsk63", "rtty170", "rtty450", "rtty85", "cwdecoder", "sitorb", "navtex"}
 IDX = [-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8]
 STEP = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118,
         130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796, 876, 963, 1060,
@@ -106,7 +120,8 @@ def name_spans(name: str, exact: bool = False) -> list:
     for b, lo, hi, _ in BANDS:
         if re.search(rf"(?<![\d.]){re.escape(b)}\b", name, re.I) or any(lo <= float(x.replace(",", ".")) * 1e6 <= hi
                                                                           for x in re.findall(rf"{num}\s*MHz", name, re.I)):
-            out.append([lo, hi])
+            m = min(500e3, max(50e3, (hi - lo) * 0.5))      # Profil ist meist breiter als das Band (Rundfunk/Wetter knapp daneben)
+            out.append([lo - m, hi + m])
     return out
 
 
@@ -130,6 +145,7 @@ class OpenWebRXRig(SdrRig):
         self.out_rate = 12000
         self.cfg_event = asyncio.Event()
         self.owrx_modes, self.decoder, self._last_dec = {}, "", ("", 0.0)
+        self._rate, self._tbuf, self._tflush, self._seen_types = {}, "", None, set()
         self.prof_event = asyncio.Event()
         self.state["levels"].update(SQL=0.0)
         self.state["sdr"]["url"] = self.p.get("url", "")
@@ -173,6 +189,9 @@ class OpenWebRXRig(SdrRig):
 
     async def _json(self, j):
         t, v = j.get("type"), j.get("value")
+        if t not in self._seen_types:                    # neue Nachrichtenarten einmal ins Protokoll (Fehlersuche bei Dekodern)
+            self._seen_types.add(t)
+            log.log(int(__import__("os").environ.get("WW_OWRX_TRACE", 10)), "OpenWebRX-Nachricht %s: %s", t, str(v)[:160])
         if t == "config":
             # beim Profilwechsel kommt die Konfiguration in Bruchstuecken (Felder fehlen oder sind null)
             self.center = v.get("center_freq") or self.center
@@ -210,9 +229,18 @@ class OpenWebRXRig(SdrRig):
             self.owrx_modes = {m.get("modulation"): m for m in v if isinstance(m, dict)}
             self.state["sdr"]["decoders"] = [dict(id=k, label=n) for k, n in OWRX_DECODERS.items() if k in self.owrx_modes]
             await self.changed(True)
+        elif t == "secondary_demod" and self.decoder in OWRX_TEXT and isinstance(v, str):
+            self._text(v)
         elif t in ("metadata", "secondary_demod") and self.decoder:
             txt = json.dumps(v, sort_keys=True)
             now = asyncio.get_running_loop().time()
+            if isinstance(v, dict) and self.decoder in ("adsb", "ais"):   # je Flugzeug/Schiff hoechstens alle 10 s
+                key = str(v.get("icao") or v.get("hex") or v.get("mmsi") or v.get("source") or "")
+                if key and now - self._rate.get(key, 0) < 10:
+                    return
+                self._rate[key] = now
+                if len(self._rate) > 5000:
+                    self._rate.clear()
             if txt == self._last_dec[0] and now - self._last_dec[1] < 2:   # digitale Sprache meldet je Rahmen
                 return
             self._last_dec = (txt, now)
@@ -375,16 +403,22 @@ class OpenWebRXRig(SdrRig):
         sql = self.state["levels"].get("SQL", 0)
         par = {"low_cut": lo, "high_cut": hi, "offset_freq": int(f - self.center), "mod": OWRX_MODES.get(self.state["mode"], "usb"),
                "secondary_mod": False, "squelch_level": -150 if not sql else -130 + sql * 100}
+        if self.decoder in OWRX_TEXT:
+            par["secondary_offset_freq"] = 1500          # Textdekoder auf 1500 Hz im Ton (wie die Signalerkennung abstimmt)
         m = self.owrx_modes.get(self.decoder) if self.decoder else None
         if m:                                            # Dekoder: eigene Modulation bzw. Grundmodulation + Zweitdemodulator
             if m.get("type") == "digimode":
-                par.update(mod=(m.get("underlying") or ["nfm"])[0], secondary_mod=self.decoder, squelch_level=-150)
+                und = m.get("underlying") or ["nfm"]
+                cur = OWRX_MODES.get(self.state["mode"], "")
+                par.update(mod=cur if cur in und else und[0], secondary_mod=self.decoder, squelch_level=-150)   # z. B. RTTY in LSB = umgekehrte Lage
             else:
                 par.update(mod=self.decoder, squelch_level=-150)
             bp = m.get("bandpass") or {}
             if bp.get("low_cut") is not None:
                 par.update(low_cut=bp["low_cut"], high_cut=bp["high_cut"])
         await self._send({"type": "dspcontrol", "params": par})
+        if self.decoder in OWRX_TEXT:                    # wie die OpenWebRX-Oberflaeche: Versatz des Textdekoders getrennt nach dem Wechsel
+            await self._send({"type": "dspcontrol", "params": {"secondary_offset_freq": 1500}})
 
     async def set_mode(self, mode: str, passband: int = 0):
         if self.decoder:                                 # Betriebsart von Hand gewaehlt: Dekoder aus
@@ -392,13 +426,31 @@ class OpenWebRXRig(SdrRig):
             self.state["sdr"]["decoder"] = ""
         await super().set_mode(mode, passband)
 
+    def _text(self, chunk: str):
+        """Zeichen eines Textdekoders sammeln; Zeile ausgeben bei Zeilenende, 72 Zeichen oder 2 s Pause."""
+        self._tbuf += chunk.replace("\r\n", "\n").replace("\r", "\n")
+        while "\n" in self._tbuf or len(self._tbuf) >= 72:
+            i = self._tbuf.find("\n")
+            i = i if 0 <= i < 72 else 72
+            line, self._tbuf = self._tbuf[:i], self._tbuf[i + 1 if self._tbuf[i:i + 1] == "\n" else i:]
+            if line.strip():
+                self.emit_decode(dict(decoder=self.decoder, kind="text", freq=self.state.get("freq"), value=line.strip()))
+        if self._tflush:
+            self._tflush.cancel()
+        async def flush():
+            await asyncio.sleep(2)
+            line, self._tbuf = self._tbuf.strip(), ""
+            if line:
+                self.emit_decode(dict(decoder=self.decoder, kind="text", freq=self.state.get("freq"), value=line))
+        self._tflush = asyncio.ensure_future(flush())
+
     async def set_decoder(self, mode: str) -> str:
         mode = (mode or "").lower()
         if mode and mode not in self.owrx_modes:
             raise RigError(f"Dieser OpenWebRX bietet den Dekoder „{OWRX_DECODERS.get(mode, mode)}“ nicht an")
         self.decoder = mode
         self.state["sdr"]["decoder"] = mode
-        self._last_dec = ("", 0.0)
+        self._last_dec, self._tbuf, self._rate = ("", 0.0), "", {}
         await self.tune()
         await self.changed(True)
         return mode
