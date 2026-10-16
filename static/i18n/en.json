@@ -1732,5 +1732,14 @@
 "Alle 10 Minuten meldet Wellenwerk, dass es läuft. Übertragen werden nur eine zufällige Programm-Nummer und die Version; das Land ermittelt der Empfangsdienst (Cloudflare) aus der Verbindung. IP-Adresse, Rufzeichen und Standort werden nicht gespeichert.": "Every 10 minutes Wellenwerk reports that it is running. Only a random program number and the version are sent; the receiving service (Cloudflare) determines the country from the connection. IP address, callsign and location are not stored.",
 "Größe der Oberfläche": "Interface size",
 "automatisch (große Bildschirme bis 4K vergrößern)": "automatic (enlarge large screens up to 4K)",
-"Geräteanzeige beim Öffnen des Wasserfalls schmal daneben legen (wie SDR-Console), beim Schließen zurück": "When the waterfall opens, put the radio display narrow beside it (as in SDR-Console), back when it closes"
+"Geräteanzeige beim Öffnen des Wasserfalls schmal daneben legen (wie SDR-Console), beim Schließen zurück": "When the waterfall opens, put the radio display narrow beside it (as in SDR-Console), back when it closes",
+"Nach der Erkennung automatisch umschalten (AM, Seitenband) und den Text live in der Karte mitschreiben": "After identification switch automatically (AM, sideband) and write the text live in the card",
+"Signal-Datenbank:": "Signal database:",
+"auf AM umgeschaltet": "switched to AM",
+"AM (Träger mit zwei Seitenbändern)": "AM (carrier with two sidebands)",
+"angehalten": "stopped",
+"umgestimmt": "retuned",
+"Live: {}": "Live: {}",
+"auf {} umgeschaltet": "switched to {}",
+"Umschalten nicht möglich: {}": "Cannot switch: {}"
 }

@@ -50,3 +50,7 @@ Kurzwellen-Sendeplan [EiBi](http://www.eibispace.de/),
 Satellitenbahnen [CelesTrak](https://celestrak.org/), Sender [SatNOGS](https://db.satnogs.org/),
 Contest-Kalender [WA7BNM](https://www.contestcalendar.com/), DXpeditionen [NG3K ADXO](https://www.ng3k.com/Misc/adxo.html),
 sowie die vom Nutzer eingerichteten Dienste (HamQTH, QRZ.com, eQSL, LoTW, Club Log, DX-Cluster).
+
+## Signal-Datenbank (static/sigdb.json)
+
+Auszug aus dem Signal Identification Wiki (https://www.sigidwiki.com): Signalnamen, Frequenzangaben, Betriebsart, Modulation, Bandbreite und ACF von rund 550 Signalseiten (Stand 2026-10-16). Übernommen wurden nur diese Sachangaben, keine Beschreibungstexte, Bilder oder Tonbeispiele; jeder Eintrag verlinkt auf die Originalseite.

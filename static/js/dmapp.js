@@ -31,14 +31,19 @@ function dmFill(t) {
 }
 
 // ---------- Audio-Kette ----------
+// Dekoder fuer eine Betriebsart (auch fuer die Live-Anzeige der Signalerkennung): out(ch) bekommt den Text
+function dmNewRx(mode, f, out, o = {}) {
+  const M = DIGI_MODES[mode], baud = o.baud || 45.45, shift = o.shift || 170, usos = o.usos !== false;
+  return PSK_BAUD[mode] ? new Psk31Rx(f, out, PSK_BAUD[mode]) : mode === "RTTY" ? (o.auto !== false ? new RttyAuto(f, out, baud, shift, usos)
+      : Object.assign(new RttyRx(f, out, o.markHigh !== false, baud, shift), { usos })) : mode === "CW" ? new CwRx(f, out)
+    : M.image === "hell" ? M.rx(f, o.hell || (() => { })) : M.rx(f, out);
+}
 function dmMakeRx() {
   const f = D.rx ? D.rx.freq : +store.get("dm.f", 1500), out = ch => WW.emit("dm-char", ch);
   const markHigh = !/LSB|RTTYR/.test(WW.rig.mode || "USB") !== (store.get("dm.rev", "auto") === true);
   if (!DM_ALL.includes(D.mode)) D.mode = "PSK31";
-  const M = DIGI_MODES[D.mode];
-  D.rx = PSK_BAUD[D.mode] ? new Psk31Rx(f, out, PSK_BAUD[D.mode]) : D.mode === "RTTY" ? (store.get("dm.rev", "auto") === "auto" ? new RttyAuto(f, out, +store.get("dm.rtty.baud", 45.45), +store.get("dm.rtty.shift", 170), store.get("dm.rtty.usos", true))
-      : Object.assign(new RttyRx(f, out, markHigh, +store.get("dm.rtty.baud", 45.45), +store.get("dm.rtty.shift", 170)), { usos: store.get("dm.rtty.usos", true) })) : D.mode === "CW" ? new CwRx(f, out)
-    : M.image === "hell" ? M.rx(f, col => WW.emit("dm-hell", col)) : M.rx(f, out);
+  D.rx = dmNewRx(D.mode, f, out, { markHigh, auto: store.get("dm.rev", "auto") === "auto", baud: +store.get("dm.rtty.baud", 45.45), shift: +store.get("dm.rtty.shift", 170),
+    usos: store.get("dm.rtty.usos", true), hell: col => WW.emit("dm-hell", col) });
   D.rx.sql = store.get("dm.sql", 25) / 100; if (D.rx instanceof RttyAuto) D.rx.sqlv = D.rx.sql; if (D.rx instanceof Psk31Rx) { D.rx.afc = store.get("dm.afc", true); D.rx.freqCb = f2 => WW.emit("dm-freq", f2); }
   WW.emit("dm-freq", f); WW.emit("dm-mode");
 }

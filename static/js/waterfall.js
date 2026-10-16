@@ -8,7 +8,7 @@ const WF_PALETTES = {
   meer: [[0, 5, 10, 40], [0.4, 0, 90, 140], [0.7, 60, 200, 170], [1, 230, 255, 200]],
   nacht: [[0, 0, 0, 0], [0.5, 120, 0, 0], [1, 255, 90, 60]],
 };
-function wfOpts() { return Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, pps: 25, height: 1, sig: true, sigsecs: 15, side: true }, store.get("opts", {}).wf || {}); }
+function wfOpts() { return Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, pps: 25, height: 1, sig: true, sigsecs: 15, side: true, sigauto: true }, store.get("opts", {}).wf || {}); }
 function wfLut(name) { const st = WF_PALETTES[name] || WF_PALETTES.klassisch, lut = new Uint8Array(256 * 4);
   for (let i = 0; i < 256; i++) { const v = i / 255; let k = 1; while (k < st.length - 1 && v > st[k][0]) k++; const a = st[k - 1], b = st[k], t = Math.max(0, Math.min(1, (v - a[0]) / ((b[0] - a[0]) || 1)));
     for (let c = 0; c < 3; c++) lut[i * 4 + c] = Math.round(a[c + 1] + (b[c + 1] - a[c + 1]) * t); lut[i * 4 + 3] = 255; } return lut; }
@@ -116,7 +116,7 @@ function createWfPanel(root) {
     const M = new Float32Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += P[k * 4 + j] * R[i * 4 + k]; M[i * 4 + j] = s; } return M; }
   // ---------- Daten ----------
   let skip = 0;
-  let reqSpan = null, vkey = "", zoomed = false;
+  let reqSpan = null, vkey = "", zoomed = false; const recent = [];   // letzte Spektrumzeilen (AM-Pruefung der Signalerkennung)
   const onLine = l => { const S = srcs(); if (l.radio !== S.data) return; if (++skip % Math.max(1, o.speed) !== 0) return;
     if (reqSpan !== `${S.data}:${st.span}`) applySpan();
     const full = l.high - l.low, want = Math.min(full, st.span > 0 ? st.span : full), s = radioState();
@@ -127,8 +127,8 @@ function createWfPanel(root) {
     if (s.freq && view[1] - view[0] < full * 0.98 && (s.freq < view[0] + (view[1] - view[0]) * 0.1 || s.freq > view[1] - (view[1] - view[0]) * 0.1)) {   // Abstimmen aus dem Bild: nachziehen
       const pb = wfPass(s), c = s.freq + (pb[0] + pb[1]) / 2, w = view[1] - view[0]; view = [c - w / 2, c + w / 2]; }
     if (view[0] < l.low) view = [l.low, l.low + (view[1] - view[0])]; if (view[1] > l.high) view = [Math.max(l.low, l.high - (view[1] - view[0])), l.high];
-    if (vkey !== view.join()) { vkey = view.join(); scr.invalidate(); }
-    last = l; rows++; const L = level(l.data);
+    if (vkey !== view.join()) { vkey = view.join(); scr.invalidate(); root.dataset.view = vkey; }   // data-view: Ausschnitt (auch fuer Tests)
+    last = l; rows++; const L = level(l.data); recent.push(l); if (recent.length > 24) recent.shift();
     $(".wf-info", root).textContent = `${((view[1] - view[0]) / 1000).toFixed(1)} kHz · ${l.name || ""}${S.pan ? " · Panadapter für " + ((WW.radios || []).find(r => r.id === S.ctl)?.name || "Funkgerät") : ""}`;
     st.mode === "3d" ? row3d(l, L) : draw2d(l, L); };
   // Breite: SDR rechnet den Ausschnitt selbst (feinere Aufloesung), Icom-Scope ueber SPECTRUM_SPAN, sonst nur Zoom
@@ -140,7 +140,7 @@ function createWfPanel(root) {
   const tune = hz => { const id = src(); (id && id !== WW.current ? api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz } }) : post("/api/rig/freq", { hz })).catch(e => toast(e.message, true)); };
   [spec, fall].forEach(cv => {
     cv.addEventListener("click", e => { if (!view || cv._dragged) return; const r = cv.getBoundingClientRect(), f = Math.round((view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0])) / 10) * 10;
-      const S = srcs(); if (!sigOnClick(S.ctl, f, e, S.pan ? S.data : null)) tune(f); });
+      const S = srcs(); if (!sigOnClick(S.ctl, f, e, S.pan ? S.data : null, recent.filter(l => l.radio === S.data))) tune(f); });
     cv.addEventListener("wheel", e => { if (!view || !last) return; e.preventDefault(); scr.invalidate(); zoomed = true; const r = cv.getBoundingClientRect(), at = view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0]), k = e.deltaY > 0 ? 1.25 : 0.8;
       let a = at - (at - view[0]) * k, b = at + (view[1] - at) * k; if (b - a > last.high - last.low) [a, b] = [last.low, last.high]; if (b - a < 500) return;
       if (a < last.low) { b += last.low - a; a = last.low; } if (b > last.high) { a -= b - last.high; b = last.high; } view = [a, b]; }, { passive: false });

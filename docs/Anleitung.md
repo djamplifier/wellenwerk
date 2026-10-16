@@ -188,6 +188,10 @@ Welche Betriebsart ist das? In **USB/LSB** genügt ein Klick auf das Signal im W
 
 Wo Wellenwerk selbst dekodieren kann, wird zur Bestätigung probehalber dekodiert; lesbarer Text erscheint in der Karte. Knöpfe führen direkt weiter: **Im Digitalbetrieb dekodieren** (Betriebsart, Baud/Shift und Tonfrequenz werden übernommen), **SSTV-Empfang öffnen**, **FreeDV öffnen**, **Als LSB abstimmen**, **AM/CW einstellen** oder bei FT8 **Auf die Standardfrequenz abstimmen**. Erkannte Signale bekommen im Wasserfall für 30 Sekunden ein Etikett.
 
+**Automatisch umschalten und live mitlesen:** Nach der Erkennung stellt Wellenwerk AM-Rundfunk auf AM und Sprache im falschen Seitenband auf das richtige Seitenband um. Bei Betriebsarten, die Wellenwerk dekodiert (RTTY, PSK, CW, MFSK, Olivia, Contestia, DominoEX, THOR, MT63 …), läuft der Text danach **live in der Karte** weiter – mit **Stopp**; die Anzeige endet von selbst, wenn umgestimmt wird. Abschaltbar unter **F8 → Wasserfall**. AM erkennt Wellenwerk beim SDR-Wasserfall auch am HF-Spektrum (Träger mit zwei gleich starken Seitenbändern), selbst wenn der Empfänger auf USB steht.
+
+**Signal-Datenbank:** Unter dem Ergebnis nennt die Karte bekannte Signale, die auf dieser Frequenz mit passender Modulation und Breite vorkommen – aus einem Auszug des *Signal Identification Wiki* ([sigidwiki.com](https://www.sigidwiki.com), rund 550 Einträge: Name, Frequenzen, Modulation, Bandbreite). Ein Klick öffnet die Beschreibung mit Hörprobe und Wasserfallbild.
+
 **Alt+Klick** stimmt nur ab, ohne Erkennung. In AM, FM und CW stimmt ein Klick wie bisher direkt ab. Ein- und ausschalten und die Höchstdauer einstellen unter **F8 → Wasserfall**. Die Erkennung ist eine gut begründete Schätzung, kein Beweis: bei sehr schwachen oder sich überlagernden Signalen meldet sie lieber „unbekanntes Signal“ mit Vermutungen.
 
 ### Fernbetrieb-Audio

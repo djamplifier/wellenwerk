@@ -194,6 +194,10 @@ Which mode is that? In **USB/LSB** a click on the signal in the waterfall (windo
 
 Where Wellenwerk can decode by itself, it decodes on trial to confirm; readable text appears in the card. Buttons lead straight on: **Decode in Digital modes** (mode, baud/shift and audio frequency are taken over), **Open SSTV receive**, **Open FreeDV**, **Tune as LSB**, **Set AM/CW** or for FT8 **Tune to the standard frequency**. Identified signals get a label in the waterfall for 30 seconds.
 
+**Switch automatically and read live:** after identification Wellenwerk switches AM broadcasts to AM and voice in the wrong sideband to the right sideband. For modes Wellenwerk decodes (RTTY, PSK, CW, MFSK, Olivia, Contestia, DominoEX, THOR, MT63 …) the text then continues **live in the card** – with **Stop**; the display ends by itself when you retune. Can be switched off under **F8 → Waterfall**. With an SDR waterfall Wellenwerk also recognises AM from the RF spectrum (carrier with two equally strong sidebands), even when the receiver is set to USB.
+
+**Signal database:** below the result the card lists known signals that occur on this frequency with matching modulation and width – from an extract of the *Signal Identification Wiki* ([sigidwiki.com](https://www.sigidwiki.com), about 550 entries: name, frequencies, modulation, bandwidth). A click opens the description with audio sample and waterfall picture.
+
 **Alt+click** only tunes, without identification. In AM, FM and CW a click tunes directly as before. Switch on/off and set the maximum duration under **F8 → Waterfall**. The identification is a well-founded estimate, not proof: with very weak or overlapping signals it prefers to report “unknown signal” with guesses.
 
 ### Remote audio

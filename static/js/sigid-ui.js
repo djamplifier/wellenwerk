@@ -30,14 +30,30 @@ async function sigTap(o, fn) {
 
 // Klick im Wasserfall eines Geraets/Empfaengers (f in Hz). Rueckgabe true: Klick erledigt (abgestimmt + Erkennung laeuft)
 // tapId: Geraet, dessen Ton analysiert wird (SDR als Panadapter folgt dem Funkgeraet und liefert den Ton)
-function sigOnClick(radioId, f, e, tapId) {
+// AM im HF-Spektrum (SDR-Wasserfall): starker Traeger mit symmetrischen Seitenbaendern 1..6 kHz daneben.
+// Im Ton (USB/LSB) ist nur ein Seitenband sichtbar – daher die Pruefung am Spektrum.
+function sigRfAm(lines, f) {
+  if (!lines || lines.length < 4 || !f) return null;
+  const l0 = lines[lines.length - 1], n = l0.data.length, hz = (l0.high - l0.low) / n; if (hz > 1500 || f < l0.low || f > l0.high) return null;
+  const avg = new Float32Array(n); let k = 0; for (const l of lines) { if (l.low !== l0.low || l.high !== l0.high || l.data.length !== n) continue; for (let i = 0; i < n; i++) avg[i] += l.data[i]; k++; }
+  if (k < 4) return null; for (let i = 0; i < n; i++) avg[i] /= k;
+  const bin = x => Math.round((x - l0.low) / hz), c0 = bin(f), w = Math.max(1, Math.round(300 / hz));
+  let cb = c0, cp = -1e9; for (let i = c0 - w; i <= c0 + w; i++) if (i >= 0 && i < n && avg[i] > cp) { cp = avg[i]; cb = i; }
+  const mean = (a, b) => { let s = 0, m = 0; for (let i = Math.max(0, a); i <= Math.min(n - 1, b); i++) { s += avg[i]; m++; } return m ? s / m : NaN; };
+  const lo = mean(cb - Math.round(6000 / hz), cb - Math.round(1000 / hz)), hi = mean(cb + Math.round(1000 / hz), cb + Math.round(6000 / hz));
+  const floor = [...avg].sort((a, b) => a - b)[Math.floor(n * 0.3)], dyn = cp - floor;
+  if (!(dyn > 12) || !Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+  const am = lo > floor + dyn * 0.12 && hi > floor + dyn * 0.12 && Math.abs(lo - hi) < dyn * 0.35 && cp > Math.max(lo, hi) + dyn * 0.25;
+  return am ? { carrier: Math.round(l0.low + (cb + 0.5) * hz) } : null;
+}
+function sigOnClick(radioId, f, e, tapId, rfLines) {
   if (e && e.altKey) return false;                                   // Alt+Klick: nur abstimmen
   if (wfOpts().sig === false) return false;
   const st = sigState(radioId), inv = SIG_SB[st.mode];
   if (inv === undefined) return false;                               // AM/FM/CW: wie bisher direkt abstimmen
   const dial = Math.round(inv ? f + 1500 : f - 1500);
   sigRig(radioId, "freq", { hz: dial }).catch(err => toast(err.message, true));
-  sigIdentify({ radio: tapId || radioId || WW.current, ctl: radioId || WW.current, fc: 1500, rf: f, dial, inverted: inv, x: e?.clientX, y: e?.clientY, settle: tapId ? 1.8 : 1.2 });
+  sigIdentify({ radio: tapId || radioId || WW.current, ctl: radioId || WW.current, rfAm: sigRfAm(rfLines, f), fc: 1500, rf: f, dial, inverted: inv, x: e?.clientX, y: e?.clientY, settle: tapId ? 1.8 : 1.2 });
   return true;
 }
 // Klick im Wasserfall des Digitalbetriebs (Tonfrequenz af): ohne Umstimmen
@@ -47,7 +63,31 @@ function sigOnDmClick(af, e) {
   sigIdentify({ radio: WW.current, dmTap: true, fc: af, rf: dial ? (inv ? dial - af : dial + af) : 0, dial, inverted: inv, x: e?.clientX, y: e?.clientY, settle: 0 });
 }
 
-function sigCancel() { const R = SIG.run; if (!R) return; R.stop = true; try { R.un?.(); } catch { } R.card?.remove(); SIG.run = null; }
+function sigCancel() { const R = SIG.run; if (!R) return; R.stop = true; try { R.un?.(); } catch { } try { R.live?.un?.(); } catch { } R.card?.remove(); SIG.run = null; }
+// Nach der Erkennung (Option „automatisch umschalten“): AM/Seitenband einstellen bzw. den Inhalt live in der Karte mitschreiben
+async function sigAuto(R, res) {
+  const o = R.o, b = res.best; if (wfOpts().sigauto === false || R.stop || !b || b.score < 0.6) return;
+  const c = R.card, af = Math.round(b.center || res.center || o.fc), ctl = o.ctl || o.radio, note = t => $(".sig-body", c)?.insertAdjacentHTML("beforeend", `<div class="hint sig-auto">✓ ${esc(t)}</div>`);
+  try {
+    if (b.id === "AM" && o.dial && !o.dmTap) { await sigRig(ctl, "mode", { mode: "AM", passband: 0 }); await sigRig(ctl, "freq", { hz: Math.round(o.inverted ? o.dial - af : o.dial + af) }); note("auf AM umgeschaltet"); return; }
+    if (b.id === "VOICE_INV" && o.dial && !o.dmTap) { const sb = o.inverted ? "USB" : "LSB"; await sigRig(ctl, "mode", { mode: sb, passband: 2700 }); await sigRig(ctl, "freq", { hz: Math.round(o.inverted ? o.rf - 1500 : o.rf + 1500) }); note(`auf ${sb} umgeschaltet`); return; }
+  } catch (e) { note("Umschalten nicht möglich: " + e.message); return; }
+  const mode = DM_ALL.includes(b.decode) ? b.decode : DM_ALL.includes(b.id) ? b.id : null;
+  if (!mode || DIGI_MODES[mode]?.image) return;
+  const box = document.createElement("div"); box.className = "sig-live";
+  box.innerHTML = `<div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(DIGI_MODES[mode]?.label || mode)}</b><i class="grow"></i><button type="button" class="sig-live-x">Stopp</button></div><pre translate="no"></pre>`;
+  $(".sig-body", c).insertBefore(box, $(".sig-act", c)); const pre = $("pre", box);
+  let txt = b.text && b.textScore > 0.6 ? b.text + " " : "", last = Date.now();
+  const out = ch => { txt = (txt + ch).slice(-4000); pre.textContent = txt; pre.scrollTop = 1e9; last = Date.now(); };
+  const rx = dmNewRx(mode, af, out, { baud: b.baud, shift: b.shift }); rx.sql = 0.1; if ("sqlv" in rx) rx.sqlv = 0.1;
+  pre.textContent = txt || "…";
+  const stop = why => { try { R.live?.un?.(); } catch { } R.live = null; box.classList.add("off"); $(".sig-live-x", box).remove(); if (why) $(".sig-live-h b", box).textContent += " – " + why; };
+  $(".sig-live-x", box).onclick = () => stop("angehalten");
+  let n = 0;
+  try { R.live = { un: await sigTap(o, x => { rx.process(x);
+    if (++n % 40 === 0 && o.dial) { const f = sigState(o.radio).freq; if (f && Math.abs(f - o.dial) > 30) stop("umgestimmt"); } }) }; }
+  catch (e) { stop(e.message); }
+}
 async function sigIdentify(o) {
   sigCancel();
   const R = SIG.run = { o, buf: [], n: 0, stop: false, last: null }, max = Math.max(6, Math.min(30, +wfOpts().sigsecs || 15)) * 8000;
@@ -78,7 +118,11 @@ async function sigIdentify(o) {
   finally { try { R.un?.(); } catch { } R.un = null; }
   if (R.stop) return;
   if (R.err) { sigRender(R, res ? { ...res, abort: R.err } : { error: R.err }, !!res); return; }   // abgebrochen: Meldung bleibt sichtbar
-  if (res) { sigRender(R, res, false); sigTag(o, res); WW.emit("sig-result", { o, res }); }
+  if (res && o.rfAm && ["UNKNOWN", "CARRIER", "VOICE", "VOICE_INV", "NOISE", "AM"].includes(res.best?.id)) {   // AM aus dem HF-Spektrum
+    const am = { id: "AM", label: "AM (Träger mit zwei Seitenbändern)", score: 0.85, center: o.fc + (o.rfAm.carrier - o.rf) * (o.inverted ? -1 : 1) };
+    res = { ...res, best: am, cands: [am, ...(res.cands || []).filter(x => x.id !== "AM")] };
+  }
+  if (res) { sigRender(R, res, false); sigTag(o, res); WW.emit("sig-result", { o, res }); sigAuto(R, res); }
 }
 
 // ---------- Ergebnis ----------
@@ -100,6 +144,34 @@ function sigCard(o) {
 }
 function sigProgress(R, p) { const b = R.card && $(".sig-bar i", R.card); if (b) b.style.width = Math.min(100, p * 100) + "%"; }
 const sigPct = v => Math.round(v * 100) + " %";
+// ---------- Signal-Datenbank: Auszug aus dem Signal Identification Wiki (sigidwiki.com), static/sigdb.json ----------
+const SIGDB = { data: null, p: null };
+function sigDbLoad() { return SIGDB.p ||= fetch("/static/sigdb.json").then(r => r.json()).then(d => (SIGDB.data = d)).catch(() => null); }
+const SIG_MOD = [[/^(RTTY|NAVTEX|FSK|PACKET|PACTOR|SITOR)/, /(?<![M48G]-?)FSK|IFK/i], [/^Q?PSK/, /PSK/i], [/^(FT8|FT4|WSPR|JT|MFSK|OLIVIA|CONTESTIA|DOMINO|THOR)/, /MFSK|8-FSK|4FSK|IFK/i],
+  [/^CW/, /CW|OOK|ASK/i], [/^(AM|CARRIER)/, /\bAM\b|CW/i], [/^VOICE/, /USB|LSB|SSB|\bAM\b|\bFM\b|NFM/i], [/^(MT63|OFDM|FREEDV)/, /OFDM|PSK/i], [/^(FAX|SSTV|HELL)/, /\bFM\b|\bAM\b/i]];
+// Passende Eintraege zur Empfangsfrequenz rf: Frequenz muss passen; Modulation und Breite der Erkennung gewichten
+function sigDbMatch(rf, best, bw, ham) {
+  const d = SIGDB.data; if (!d || !rf) return [];
+  const modRe = (SIG_MOD.find(([a]) => a.test(best?.id || "")) || [])[1], out = [];
+  for (const s of d.signals) {
+    let hit = false;
+    for (const [lo, hi] of s.f) { const tol = lo === hi ? Math.max(3000, Math.min((s.bw || 0) / 2, lo * 0.003)) : 0; if (rf >= lo - tol && rf <= hi + tol) { hit = true; break; } }
+    if (!hit) continue;
+    const span = Math.max(...s.f.map(([a, b]) => b - a));                // sehr breite Bereiche sagen wenig
+    let sc = 1 - Math.min(0.6, Math.log10(1 + span / 1e6) * 0.3);
+    if (modRe) sc += modRe.test(`${s.mod} ${s.m}`) ? 0.6 : -0.5;
+    if (bw > 0 && s.bw > 0) sc += 0.3 - Math.min(0.6, Math.abs(Math.log2(s.bw / bw)) * 0.15);
+    if (s.c.includes("Inactive")) sc -= 0.3;
+    if (ham) sc += s.c.includes("Amateur Radio") ? 0.4 : /jammer|radar/i.test(s.n) || s.c.includes("Military") ? -0.4 : 0;   // im Amateurfunkband
+    out.push({ s, sc });
+  }
+  return out.sort((a, b) => b.sc - a.sc).filter(x => x.sc > 0.5).slice(0, 3);
+}
+function sigDbHtml(rf, best, bw, ham) {
+  const m = sigDbMatch(rf, best, bw, ham); if (!m.length) return "";
+  const fb = v => v >= 1e6 ? (v / 1e6).toFixed(v % 1e6 ? 1 : 0) + " MHz" : v >= 1e3 ? Math.round(v / 1e3) + " kHz" : v + " Hz";
+  return `<span>Signal-Datenbank:</span> ${m.map(({ s }) => `<a href="${SIGDB.data.base + s.u}" target="_blank" rel="noopener" title="${esc([s.mod, s.m, s.acf].filter(Boolean).join(" · "))}">${esc(s.n)}</a>${s.mod || s.bw ? ` <span class="sig-dbm">(${esc([s.mod, s.bw ? fb(s.bw) : ""].filter(Boolean).join(", "))})</span>` : ""}`).join(" · ")}`;
+}
 function sigRender(R, res, interim) {
   const c = R.card; if (!c) return; const body = $(".sig-body", c);
   if (res.error) { body.innerHTML = `<div class="err">${esc(res.error)}</div>`; $(".sig-bar", c).classList.add("done"); return; }
@@ -113,7 +185,10 @@ function sigRender(R, res, interim) {
     ${b.text && b.textScore > 0.6 ? `<div class="sig-text" translate="no">${esc(b.text)}</div>` : ""}
     ${res.plan && res.plan.length ? `<div class="hint"><span>Bandplan: typisch für</span> ${res.plan.map(p => `<span>${esc(p)}</span>`).join(", ")}</div>` : ""}
     ${others.length ? `<div class="hint"><span>auch möglich:</span> ${others.map(x => `<span>${esc(x.label)}</span> ${sigPct(x.score)}`).join(" · ")}</div>` : ""}
+    <div class="hint sig-db"></div>
     ${res.abort ? `<div class="err">${esc(res.abort)}</div>` : ""}<div class="sig-act"></div>`;
+  const rf = R.o.rf, dbEl = $(".sig-db", body);
+  if (rf && !interim && !(/^(AM|VOICE|CARRIER|NOISE)/.test(b.id || "") && b.score >= 0.5)) sigDbLoad().then(() => { if (dbEl.isConnected) dbEl.innerHTML = sigDbHtml(rf, b, res.bw, !!(res.plan && res.plan.length) || !!bandFor(rf)); });
   if (!interim) sigActions(R, res, $(".sig-act", body)); else if (res.abort) sigActions(R, { best: { id: "", label: "" } }, $(".sig-act", body));
 }
 function sigActions(R, res, el) {
