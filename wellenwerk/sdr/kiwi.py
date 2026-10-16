@@ -218,6 +218,9 @@ class KiwiRig(SdrRig):
         if n:
             pcm = struct.pack(f"<{n}h", *struct.unpack(f">{n}h", data[:n * 2]))     # Kiwi sendet big endian
             self.on_audio and self.on_audio(pcm, self.audio_rate)
+            if self.state.get("mode") == "FM":
+                import numpy as np
+                self.dv_feed(np.frombuffer(pcm, "<i2"), self.audio_rate)
         await self.changed()
 
     def _wf(self, body: bytes):

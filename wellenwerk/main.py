@@ -2810,6 +2810,13 @@ async def radio_rig_cmd(pid: str, what: str, body: dict):
             return {"decoder": await r.set_decoder(str(body.get("mode") or ""))}
         except RigError as e:
             raise HTTPException(400, str(e))
+    if what == "dvdetect":                   # Digitalfunk erkennen (DMR, D-STAR, YSF, P25, NXDN, M17 gleichzeitig) – eigene Auswertung
+        if not hasattr(r, "dv_detect"):
+            raise HTTPException(400, "Digitalfunk-Erkennung gibt es nur bei Empfängern")
+        try:
+            return await r.dv_detect(min(30.0, float(body.get("secs") or 1.5)), dump=bool(body.get("dump")))
+        except RigError as e:
+            raise HTTPException(400, str(e))
     if what == "span":                       # Breite des Wasserfalls (nur Empfaenger/SDR; 0 = ganzer Bereich)
         if not hasattr(r, "set_span"):
             raise HTTPException(400, "Breite ist bei diesem Gerät nicht einstellbar")

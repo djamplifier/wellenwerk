@@ -69,6 +69,45 @@ class SdrRig:
                     ui_ops=[], ui_choices=[dict(name="AGC", label="AGC", options=[dict(value=a, label=AGC_NAMES[a]) for a in (0, 2, 6, 3)])],
                     meters=["STRENGTH"], receiver=True)
 
+    # ---------- Digitalfunk-Erkennung: FM-Diskriminator der letzten Sekunden (dvsync, alle Verfahren gleichzeitig) ----------
+    def dv_feed(self, x, rate: int):
+        """Diskriminator-Signal (bzw. unverfaelschter FM-Ton) anhaengen; nur in FM ohne laufenden Server-Dekoder."""
+        if self.state.get("mode") != "FM" or getattr(self, "decoder", ""):
+            self._dv = None
+            return
+        import numpy as np
+        b = getattr(self, "_dv", None)
+        if b is None or b["rate"] != rate:
+            b = self._dv = dict(rate=rate, buf=deque(), n=0)
+        a = np.asarray(x, np.float32)
+        b["buf"].append((time.monotonic(), a))
+        b["n"] += len(a)
+        while len(b["buf"]) > 1 and b["n"] - len(b["buf"][0][1]) >= rate * 6:
+            b["n"] -= len(b["buf"].popleft()[1])
+
+    async def dv_detect(self, secs: float = 1.5, timeout: float = 8.0, dump: bool = False) -> dict:
+        """Die naechsten secs Sekunden nach DMR, D-STAR, YSF, P25, NXDN, M17 durchsuchen (parallel, siehe dvsync)."""
+        import numpy as np
+        from . import dvsync
+        if self.state.get("mode") != "FM":
+            raise RigError("Digitalfunk-Erkennung braucht FM")
+        t0 = time.monotonic()
+        while True:
+            b = getattr(self, "_dv", None)
+            parts = [a for t, a in (b["buf"] if b else []) if t >= t0]
+            if b and sum(len(a) for a in parts) >= secs * b["rate"]:
+                break
+            if time.monotonic() - t0 > secs + timeout:
+                raise RigError("kein FM-Ton vom Empfänger")
+            await asyncio.sleep(0.1)
+        x = np.concatenate(parts)
+        res = await asyncio.to_thread(dvsync.detect, x, b["rate"])
+        out = dict(rate=b["rate"], secs=round(len(x) / b["rate"], 2), found=res, diag=dvsync.diag(x, b["rate"]))
+        if dump:                                          # Rohdaten (float32, base64) fuer Fehlersuche und Tests
+            import base64
+            out["raw"] = base64.b64encode(x.astype("<f4").tobytes()).decode()
+        return out
+
     def emit_decode(self, msg: dict):
         if DECODE["sink"]:
             try:

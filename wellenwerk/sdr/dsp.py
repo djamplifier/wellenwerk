@@ -76,6 +76,7 @@ class Receiver:
         self.fm_last = 0j
         self.dc = 0.0
         self.deemph = 0.0
+        self.disc = None
 
     def set(self, offset: float, mode: str, pb: tuple[int, int]):
         if (mode, pb) != (self.mode, self.pb):
@@ -111,6 +112,7 @@ class Receiver:
             prev = np.concatenate([[self.fm_last], x[:-1]])
             self.fm_last = x[-1]
             y = np.angle(x * np.conj(prev)).astype(np.float32)
+            self.disc = y                                    # Diskriminator vor der Deemphasis (Digitalfunk-Erkennung)
             a = 1 - math.exp(-1 / (AUDIO_RATE * 75e-6))      # Deemphasis
             out = np.empty_like(y)
             s = self.deemph

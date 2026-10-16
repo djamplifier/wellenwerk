@@ -54,6 +54,9 @@ class IqRig(SdrRig):
         pcm = await loop.run_in_executor(None, self.rx.process, iq)
         if len(pcm) and self.on_audio:
             self.on_audio(pcm.tobytes(), AUDIO_RATE)
+        if self.state["mode"] == "FM" and self.rx.disc is not None:
+            self.dv_feed(self.rx.disc, AUDIO_RATE)
+            self.rx.disc = None
         if self.zoom_span:                                   # lange FFT braucht die letzten Bloecke
             self._hist.append(iq)
             while len(self._hist) > 1 and sum(len(b) for b in self._hist[1:]) >= (1 << 18):

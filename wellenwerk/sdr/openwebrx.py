@@ -248,6 +248,9 @@ class OpenWebRXRig(SdrRig):
                 pcm = bytes(data)
             if pcm:
                 self.on_audio(pcm, self.out_rate)
+                if self.state.get("mode") == "FM":
+                    import numpy as np
+                    self.dv_feed(np.frombuffer(pcm, "<i2"), self.out_rate)
         elif kind == 1 and self.on_spectrum and self.rate:
             if self.fft_comp == "adpcm":
                 self.fftc.reset()
