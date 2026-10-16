@@ -87,7 +87,8 @@ function sigOnClick(radioId, f, e, tapId, rfLines) {
   if (f > 30e6 && !ssbSeg && typeof fmkRepAt === "function" && wfOpts().mrep !== false) {   // bekanntes Relais: Daten aus der Datenbank, nichts erraten
     const rep = fmkRepAt(f); if (rep) { fmkRepeater(rep, radioId || dr?.id, dr?.id, e); return true; } }
   if (f > 30e6 && !ssbSeg && (decs.length || isSdr(dr) || sigProbeList(f, []).length)) {   // auch Funkgeraet: APRS ueber die Soundkarte
-    const lines = rfLines && rfLines.length ? rfLines : sigLines(dr.id, 4000), am = sigRfAm(lines, f), air = f >= 108e6 && f <= 137e6;
+    const air = f >= 108e6 && f <= 137e6, amBand = f <= 137e6 || (f >= 225e6 && f <= 400e6);   // AM oberhalb 30 MHz nur bis Flugfunk bzw. UHF-Flugfunk – 4FSK sieht gemittelt sonst wie AM aus
+    const lines = rfLines && rfLines.length ? rfLines : sigLines(dr.id, 4000), am = amBand ? sigRfAm(lines, f) : null;
     sigProbe({ radio: dr.id, ctl: radioId || dr.id, rf: f, x: e?.clientX, y: e?.clientY, am: am || air ? { carrier: am?.carrier, air } : null }, sigProbeList(f, decs), decs); return true; }
   const st = sigState(radioId), inv = SIG_SB[st.mode];
   if (inv === undefined) return false;                               // AM/FM/CW: wie bisher direkt abstimmen
@@ -184,7 +185,7 @@ async function sigProbe(o, list, decs, opt = {}) {
       const hit = (dv?.found || []).find(x => x.score >= 0.6);
       if (hit) {
         const sid = hit.id === "nxdn48" ? "nxdn" : hit.id;
-        const rr = sigRadio(o.radio), own = rr?.state?.sdr?.hw && ["dmr"].includes(sid);   // eigenes IQ-Geraet: Wellenwerk dekodiert selbst
+        const rr = sigRadio(o.radio), own = rr?.state?.sdr?.hw && ["dmr", "dstar", "ysf", "m17"].includes(sid);   // eigenes IQ-Geraet: Wellenwerk dekodiert selbst
         if (own) { try { await api(`/api/radios/${encodeURIComponent(o.radio)}/rig/dvdecode`, { method: "POST", body: { proto: sid } }); opt.only = sid; opt.own = true; R.dv = hit; } catch { return sigDvResult(R, o, f, body, hit, mod, secs()); } }
         else if (list.includes(sid)) { opt.only = sid; R.dv = hit; }            // Server-Dekoder direkt waehlen
         else return sigDvResult(R, o, f, body, hit, mod, secs());               // Verfahren anzeigen

@@ -110,7 +110,7 @@ class SdrRig:
         return out
 
     # ---------- eigenes Dekodieren (dvdec): laufend aus dem Diskriminator-Puffer ----------
-    DV_LOCAL = {"dmr"}
+    DV_LOCAL = {"dmr", "dstar", "ysf", "m17"}
 
     def dv_decode(self, proto: str) -> str:
         """Eigenen Dekoder ein-/ausschalten (\"\" = aus). Nur sinnvoll mit sauberem Signal (eigene IQ-Empfaenger)."""
@@ -126,7 +126,7 @@ class SdrRig:
     async def _dv_loop(self):
         import numpy as np
         from . import dvdec
-        done, seen = None, {}
+        done, seen, ds_txt, ds_last, ysf_cur, m17_cur, hw = None, {}, [], {}, {}, {}, {}
         try:
             while getattr(self, "_dvdec", ""):
                 await asyncio.sleep(1.0)
@@ -144,8 +144,83 @@ class SdrRig:
                         break
                 x = np.concatenate(parts[::-1]).astype(np.float64)
                 start = total - len(x)
-                bursts = await asyncio.to_thread(dvdec.dmr_bursts, x, rate)
                 now = asyncio.get_running_loop().time()
+                if self._dvdec == "m17":                    # LSF direkt oder aus 6 LICH-Teilen (Spaeteinstieg)
+                    for e in await asyncio.to_thread(dvdec.m17, x, rate):
+                        pos = start + int(e["t"] * rate)
+                        if pos < done - int(rate * 0.05) or pos <= hw.get("m17", -1) + rate * 0.01:   # schon im letzten Durchgang
+                            continue
+                        hw["m17"] = pos
+                        if pos - m17_cur.get("_pos", pos) > rate * 1.0:
+                            m17_cur.clear()
+                        m17_cur["_pos"] = pos
+                        lsf = None
+                        if e["kind"] == "lsf":
+                            lsf = e
+                        else:
+                            m17_cur.setdefault("lich", {})[e["cnt"]] = e["lich"]
+                            lsf = dvdec.m17_lich_collect(m17_cur["lich"])
+                        if lsf:
+                            v = dict(protocol="M17", **{k: lsf[k] for k in ("source", "destination", "can", "meta_text", "encrypted") if k in lsf})
+                            sent = m17_cur.get("_sent") or {}
+                            if not all(sent.get(k) == w for k, w in v.items()):
+                                m17_cur["_sent"] = dict(sent, **v)
+                                self.emit_decode(dict(decoder="m17", kind="local", freq=self.state.get("freq"), value=v))
+                        if e.get("last"):
+                            m17_cur.clear()
+                    done = total
+                    continue
+                if self._dvdec == "ysf":                    # Felder (Ziel/Quelle/Down/Up) sammeln, melden sobald Quelle bekannt
+                    for e in await asyncio.to_thread(dvdec.ysf, x, rate):
+                        pos = start + int(e["t"] * rate)
+                        if pos < done - int(rate * 0.05) or pos <= hw.get("ysf", -1) + rate * 0.01:   # schon im letzten Durchgang
+                            continue
+                        hw["ysf"] = pos
+                        if e["fi"] == 0:
+                            ysf_cur.clear()
+                        if pos - ysf_cur.get("_pos", pos) > rate * 1.5:  # Pause: neue Aussendung
+                            ysf_cur.clear()
+                        ysf_cur["_pos"] = pos
+                        ysf_cur["dgid"] = e.get("dgid")
+                        for k in ("source", "target", "down", "up"):
+                            if e.get(k):
+                                ysf_cur[k] = e[k]
+                        if not ysf_cur.get("source"):
+                            continue
+                        v = dict(protocol="YSF", **{k: ysf_cur[k] for k in ("source", "target", "down", "up", "dgid") if k in ysf_cur})
+                        sent = ysf_cur.get("_sent") or {}
+                        if all(sent.get(k) == v.get(k) for k in ("source", "target", "up")):   # nichts Neues in dieser Aussendung
+                            continue
+                        ysf_cur["_sent"] = dict(sent, **v)
+                        self.emit_decode(dict(decoder="ysf", kind="local", freq=self.state.get("freq"), value=v))
+                        if e["fi"] == 2:
+                            ysf_cur.clear()
+                    done = total
+                    continue
+                if self._dvdec == "dstar":
+                    for e in await asyncio.to_thread(dvdec.dstar, x, rate):
+                        pos = start + int(e["t"] * rate)
+                        if pos < done - int(rate * 0.05):
+                            continue
+                        if e["kind"] == "text-raw":       # Textnachricht: ueber die Aussendung abstimmen, besser werdend melden
+                            ds_txt.append(e["raw"])
+                            msg = dvdec.ds_text_vote(ds_txt[-12:])
+                            if msg and msg != ds_last.get("msg"):
+                                ds_last["msg"] = msg
+                                self.emit_decode(dict(decoder="dstar", kind="local", freq=self.state.get("freq"), value=dict(ds_last.get("hdr") or {}, protocol="DSTAR", message=msg)))
+                            continue
+                        v = {k: e[k] for k in ("protocol", "ourcall", "yourcall", "departure", "destination")}
+                        if v != ds_last.get("hdr"):       # neuer Sprecher/neue Aussendung: Text neu sammeln
+                            ds_txt.clear(); ds_last.pop("msg", None)
+                        ds_last["hdr"] = v
+                        key = tuple(v.values())
+                        if now - seen.get(key, 0) < 5:
+                            continue
+                        seen[key] = now
+                        self.emit_decode(dict(decoder="dstar", kind="local", freq=self.state.get("freq"), value=v))
+                    done = total
+                    continue
+                bursts = await asyncio.to_thread(dvdec.dmr_bursts, x, rate)
                 for e in bursts:
                     pos = start + int(e["t"] * rate)
                     if pos < done - int(rate * 0.05):           # schon im letzten Durchgang gemeldet

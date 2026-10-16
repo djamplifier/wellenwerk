@@ -248,7 +248,7 @@ function decSummary(d) {
     const tgt = v.type === "direct" || v.type === "private" ? "privat → " + idPerson(idName("dmr", v.target), "ID " + v.target) : v.type === "data" || v.sync === "data" ? "Daten → ID " + v.target : idTg(v.target);
     return j(v.slot != null ? "TS" + (+v.slot + 1) : "", `${src}${ta && !src.startsWith(ta.split(" ")[0]) ? " „" + ta + "“" : ""}`, tgt, pos); }
   if (d.decoder === "ysf") { if (!v.source) return ""; return j(`${call(v.source)} → ${String(v.target || "ALL").trim()}`, v.up && "über " + String(v.up).trim(), pos); }
-  if (d.decoder === "m17") { if (!v.source) return ""; return j(`${call(v.source)} → ${String(v.destination || v.target || "ALL").trim()}`, pos); }
+  if (d.decoder === "m17") { if (!v.source) return ""; return j(`${call(v.source)} → ${String(v.destination || v.target || "ALL").trim()}`, v.can ? "CAN " + v.can : "", v.meta_text, v.encrypted ? "verschlüsselt" : "", pos); }
   if (d.decoder === "nxdn") { if (v.source == null || v.source === "") return "";
     return j(idPerson(idName("nxdn", v.source), "ID " + v.source), v.destination != null || v.target != null ? (v.type === "private" ? "privat → " : "→ Gruppe ") + (v.destination ?? v.target) : "", pos); }
   if (d.decoder === "p25") { if (v.source == null || v.source === "") return "";
