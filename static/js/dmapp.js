@@ -72,6 +72,7 @@ async function dmFeedBuffer(samples, sr) {   // Testeinspeisung durch dieselbe K
 }
 function dmFeed(x, peak) {
   if (D.rx) D.rx.process(x);
+  WW.emit("dm-pcm", x);   // Signalerkennung
   if (D.sstv) D.sstv.process(x);
   if (D.sweepOn) D.sweep.forEach(ch => ch.rx.process(x));
   WW.emit("dm-level", peak);
@@ -144,7 +145,7 @@ function createWaterfall(root) {
     const mk = $(".dm-mk", root); mk.style.left = ((D.rx.freq - bw / 2) / WF_MAX * W) + "px"; mk.style.width = Math.max(3, bw / WF_MAX * W) + "px"; };
   $(".dm-scale", root).innerHTML = Array.from({ length: WF_MAX / 250 + 1 }, (_, i) => i * 250).map(f => `<span style="left:${f / WF_MAX * 100}%">${f % 500 === 0 ? f : "·"}</span>`).join("");
   audioDevices("audioinput").then(ds => { $(".dm-in", root).innerHTML += ds.filter(d => d.deviceId !== "__sdr").map(d => `<option value="${esc(d.deviceId)}" ${d.deviceId === store.get("dm.in", "") ? "selected" : ""}>${esc(d.label || d.deviceId.slice(0, 8))}</option>`).join(""); });
-  cv.addEventListener("click", e => { const r = cv.getBoundingClientRect(); dmSetFreq(Math.round(dmSnap((e.clientX - r.left) / r.width * WF_MAX))); });
+  cv.addEventListener("click", e => { const r = cv.getBoundingClientRect(), f = Math.round(dmSnap((e.clientX - r.left) / r.width * WF_MAX)); dmSetFreq(f); if (!e.altKey) sigOnDmClick((e.clientX - r.left) / r.width * WF_MAX, e); });
   root.addEventListener("change", e => { const t = e.target;
     if (t.classList.contains("dm-mode")) dmSetMode(t.value);
     if (t.classList.contains("dm-in")) { store.set("dm.in", t.value); if (D.running) { dmStop(); dmStart(t.value); } }

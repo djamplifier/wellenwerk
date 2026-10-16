@@ -160,6 +160,18 @@ Wellenwerk computes spectrum, waterfall and audio (USB, LSB, CW, AM, FM) itself;
 
 Receiver audio plays with about half a second of buffer; on a stuttering internet connection the buffer grows by itself (up to 2 s). If the connection to a receiver drops, Wellenwerk reconnects by itself. After a restart or an update, the radios and receivers connected before are connected again – with the last frequency and mode.
 
+### Signal identification by click
+
+Which mode is that? In **USB/LSB** a click on the signal in the waterfall (window **Waterfall**, **Receivers** or the waterfall in **Digital modes**) is enough. Wellenwerk tunes so that the signal lies at 1500 Hz audio, listens for up to 15 seconds and shows in a small card what it has identified – with confidence in percent, centre, width and distance from the noise:
+
+- **Digital modes:** RTTY (with baud and shift), SITOR-B/NAVTEX, PSK31/63/125, QPSK, CW (with speed), Hellschreiber, MFSK, Olivia/Contestia, DominoEX/THOR, MT63, ALE
+- **WSJT modes:** FT8, FT4 (by their sync patterns), WSPR, JT9, JT65
+- **Image and voice:** SSTV (with mode, e.g. “Martin M1”), weather fax, FreeDV, voice (also “other sideband”), AM broadcast, unmodulated carrier
+
+Where Wellenwerk can decode by itself, it decodes on trial to confirm; readable text appears in the card. Buttons lead straight on: **Decode in Digital modes** (mode, baud/shift and audio frequency are taken over), **Open SSTV receive**, **Open FreeDV**, **Tune as LSB**, **Set AM/CW** or for FT8 **Tune to the standard frequency**. Identified signals get a label in the waterfall for 30 seconds.
+
+**Alt+click** only tunes, without identification. In AM, FM and CW a click tunes directly as before. Switch on/off and set the maximum duration under **F8 → Waterfall**. The identification is a well-founded estimate, not proof: with very weak or overlapping signals it prefers to report “unknown signal” with guesses.
+
 ### Remote audio
 
 ![Remote audio](bilder/18-fernbetrieb-audio.png)

@@ -306,14 +306,16 @@ function openOptions(tab = "station") {
       <label>Funkkanal am Packet-Modem<input name="agw_radio_port" type="number" min="0" max="15" value="${s.agw_radio_port || 0}"></label><span></span>
       <p class="hint wide">ARDOP: das freie Modem <i>ardopcf</i> starten (z. B. <code>ardopcf 8515 Soundkarte Soundkarte</code>). Packet: <i>Direwolf</i> mit AGWPORT 8000. VARA ist ein eigenständiges Programm mit eigener Lizenz; Wellenwerk spricht nur seine TCP-Schnittstelle an. Wellenwerk tastet das Funkgerät, wenn das Modem PTT anfordert.</p></div></div>
     <div class="dtab ${tab === "wf" ? "" : "hidden"}" data-t="wf"><div class="grid2">
-      ${(() => { const w = Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, height: 1 }, o.wf || {}); return `
+      ${(() => { const w = wfOpts(); return `
       <label>Farben<select name="wf_palette" data-local data-wf>${[["klassisch", "Klassisch"], ["feuer", "Feuer"], ["meer", "Meer"], ["grau", "Grau"], ["nacht", "Nachtsicht (rot)"]].map(([k, l]) => `<option value="${k}" ${w.palette === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label class="chkrow"><input type="checkbox" name="wf_auto" data-local data-wf ${w.auto ? "checked" : ""}> Pegel automatisch anpassen</label>
       <label>Pegel unten (0–1, ohne Automatik)<input type="number" step="0.05" min="0" max="1" name="wf_lo" data-local data-wf value="${w.lo}"></label><label>Pegel oben<input type="number" step="0.05" min="0" max="1" name="wf_hi" data-local data-wf value="${w.hi}"></label>
       <label>Tempo (jede n-te Zeile)<input type="number" min="1" max="10" name="wf_speed" data-local data-wf value="${w.speed}"></label>
       <label>3D: Tiefe (Zeilen, nach Neuöffnen)<input type="number" min="40" max="400" name="wf_depth" data-local data-wf value="${w.depth}"></label>
       <label>3D: Höhe der Spitzen<input type="number" step="0.1" min="0.2" max="4" name="wf_height" data-local data-wf value="${w.height}"></label>
-      <p class="hint wide">Wasserfall-Fenster: Mausrad = zoomen, Ziehen = verschieben, Klick = abstimmen. 3D: Ziehen dreht, Mausrad ändert den Abstand.</p>`; })()}</div></div>
+      <label class="chkrow wide"><input type="checkbox" name="wf_sig" data-local data-wf ${w.sig !== false ? "checked" : ""}> Signal beim Anklicken erkennen (RTTY, PSK, FT8, SSTV, CW, Sprache …)</label>
+      <label>Erkennung: höchstens (Sekunden)<input type="number" min="6" max="30" name="wf_sigsecs" data-local data-wf value="${w.sigsecs}"></label><span></span>
+      <p class="hint wide">Wasserfall-Fenster: Mausrad = zoomen, Ziehen = verschieben, Klick = abstimmen. In USB/LSB legt ein Klick das Signal auf 1500 Hz im Ton und erkennt die Betriebsart; Alt+Klick stimmt nur ab. 3D: Ziehen dreht, Mausrad ändert den Abstand.</p>`; })()}</div></div>
     <div class="dtab ${tab === "plugins" ? "" : "hidden"}" data-t="plugins"><div class="pl-opts"></div></div>
     <div class="dtab ${tab === "support" ? "" : "hidden"}" data-t="support">${supportOptionsHtml(s)}</div>
     <div class="dtab ${tab === "access" ? "" : "hidden"}" data-t="access"><div class="grid2">

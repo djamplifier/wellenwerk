@@ -8,7 +8,7 @@ const WF_PALETTES = {
   meer: [[0, 5, 10, 40], [0.4, 0, 90, 140], [0.7, 60, 200, 170], [1, 230, 255, 200]],
   nacht: [[0, 0, 0, 0], [0.5, 120, 0, 0], [1, 255, 90, 60]],
 };
-function wfOpts() { return Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, height: 1 }, store.get("opts", {}).wf || {}); }
+function wfOpts() { return Object.assign({ palette: "klassisch", auto: true, lo: 0.15, hi: 0.95, depth: 160, speed: 1, height: 1, sig: true, sigsecs: 15 }, store.get("opts", {}).wf || {}); }
 function wfLut(name) { const st = WF_PALETTES[name] || WF_PALETTES.klassisch, lut = new Uint8Array(256 * 4);
   for (let i = 0; i < 256; i++) { const v = i / 255; let k = 1; while (k < st.length - 1 && v > st[k][0]) k++; const a = st[k - 1], b = st[k], t = Math.max(0, Math.min(1, (v - a[0]) / ((b[0] - a[0]) || 1)));
     for (let c = 0; c < 3; c++) lut[i * 4 + c] = Math.round(a[c + 1] + (b[c + 1] - a[c + 1]) * t); lut[i * 4 + 3] = 255; } return lut; }
@@ -45,6 +45,8 @@ function createWfPanel(root) {
     c.fillStyle = "rgba(255,255,255,.6)"; c.font = "10px sans-serif"; const stp = niceStep((view[1] - view[0]) / 7);
     for (let f = Math.ceil(view[0] / stp) * stp; f < view[1]; f += stp) { const x = fx(f, W); c.fillRect(x, 0, 1, 5); c.fillText((f / 1e6).toFixed(stp < 1000 ? 4 : 3), x + 2, 11); }
     if (s.freq) { c.fillStyle = "rgba(255,80,80,.9)"; c.fillRect(fx(s.freq, W), 0, 1.5, H); }
+    for (const t of SIG.tags) { if (t.until < Date.now() || t.rf < view[0] || t.rf > view[1]) continue; const x = fx(t.rf, W), w = c.measureText(t.label).width + 8;   // erkannte Signale
+      c.fillStyle = "rgba(20,30,40,.8)"; c.fillRect(x - w / 2, 14, w, 14); c.fillStyle = "#ffd166"; c.fillText(t.label, x - w / 2 + 4, 25); c.fillRect(x, 28, 1, 6); }
     if (!FH) return; const g = fall.getContext("2d");
     const row = new Uint8ClampedArray(W * 4); for (let x = 0; x < W; x++) { const k = norm(val(x), L) * 4; row[x * 4] = lut[k]; row[x * 4 + 1] = lut[k + 1]; row[x * 4 + 2] = lut[k + 2]; row[x * 4 + 3] = 255; }
     wfPush(g, W, FH, row, wfRows("wf:" + l.radio));
@@ -102,7 +104,8 @@ function createWfPanel(root) {
   // ---------- Bedienung ----------
   const tune = hz => { const id = src(); (id && id !== WW.current ? api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz } }) : post("/api/rig/freq", { hz })).catch(e => toast(e.message, true)); };
   [spec, fall].forEach(cv => {
-    cv.addEventListener("click", e => { if (!view || cv._dragged) return; const r = cv.getBoundingClientRect(); tune(Math.round((view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0])) / 10) * 10); });
+    cv.addEventListener("click", e => { if (!view || cv._dragged) return; const r = cv.getBoundingClientRect(), f = Math.round((view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0])) / 10) * 10;
+      if (!sigOnClick(src(), f, e)) tune(f); });
     cv.addEventListener("wheel", e => { if (!view || !last) return; e.preventDefault(); const r = cv.getBoundingClientRect(), at = view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0]), k = e.deltaY > 0 ? 1.25 : 0.8;
       let a = at - (at - view[0]) * k, b = at + (view[1] - at) * k; if (b - a > last.high - last.low) [a, b] = [last.low, last.high]; if (b - a < 500) return;
       if (a < last.low) { b += last.low - a; a = last.low; } if (b > last.high) { a -= b - last.high; b = last.high; } view = [a, b]; }, { passive: false });

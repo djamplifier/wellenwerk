@@ -392,3 +392,20 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .pa-spec, .pa-wf { cursor: crosshair; }
 .ww-notes h1, .ww-notes h2, .ww-notes h3, .ww-notes h4 { background: none; border: 0; padding: 0; margin: 12px 0 4px; font-size: 14px; } .ww-notes ul { margin: 4px 0; padding-left: 22px; }
 .alpha-badge { background: #d97706; color: #fff; border: 0; border-radius: 3px; padding: 0 6px; font: 600 11px system-ui; cursor: pointer; margin-left: 4px; }
+/* Signalerkennung */
+.sig-card { position: fixed; z-index: 9000; background: var(--panel, #fff); color: var(--text); border: 1px solid var(--line, #9aa9bd); box-shadow: 0 8px 26px rgba(0, 0, 0, .3); border-radius: 4px; font-size: 12px; max-width: calc(100vw - 16px); }
+.sig-h { display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 8px; background: var(--pane-head); border-bottom: 1px solid var(--line2, var(--line)); cursor: move; user-select: none; }
+.sig-h .ic { width: 15px; height: 15px; color: var(--accent); }
+.sig-h .sig-f { font-variant-numeric: tabular-nums; }
+.sig-x { border: 0; background: none; font-size: 16px; line-height: 1; padding: 0 4px; color: inherit; cursor: pointer; }
+.sig-bar { height: 3px; background: var(--line2, #ddd); } .sig-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.sig-bar.done { display: none; }
+.sig-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 5px; }
+.sig-res { display: flex; align-items: baseline; gap: 8px; }
+.sig-name { font-size: 15px; font-weight: 600; flex: 1; }
+.sig-conf { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.sig-res.sure .sig-name { color: var(--ok); } .sig-res.weak .sig-name { color: var(--muted); }
+.sig-cbar { height: 4px; background: var(--line2, #ddd); border-radius: 2px; overflow: hidden; } .sig-cbar i { display: block; height: 100%; background: var(--accent); }
+.sig-res.sure + .sig-cbar i { background: var(--ok); }
+.sig-text { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--panel2); border: 1px solid var(--line2, var(--line)); padding: 4px 6px; border-radius: 3px; word-break: break-word; }
+.sig-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; } .sig-act .hint { flex-basis: 100%; }
