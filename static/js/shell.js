@@ -257,7 +257,8 @@ function openOptions(tab = "station") {
     <div class="dtab ${tab === "station" ? "" : "hidden"}" data-t="station"><div class="grid2">
       <label>Rufzeichen<input name="callsign" value="${esc(s.callsign)}"></label><label>Locator<input name="locator" value="${esc(s.locator)}"></label>
       <label>Operator (falls anders)<input name="operator" value="${esc(s.operator)}"></label><label>Standard-Leistung W<input name="tx_pwr" value="${esc(s.tx_pwr)}"></label>
-      <label>Name (für Makros)<input name="opname" value="${esc(o.opname || "")}" data-local></label><label>QTH (für Makros)<input name="opqth" value="${esc(o.opqth || "")}" data-local></label></div></div>
+      <label>Name (für Makros)<input name="opname" value="${esc(o.opname || "")}" data-local></label><label>QTH (für Makros)<input name="opqth" value="${esc(o.opqth || "")}" data-local></label>
+      <label>DMR-ID (RadioID.net)<input name="dmr_id" inputmode="numeric" placeholder="z. B. 2621234" value="${esc(s.dmr_id || "")}"></label><span class="hint dmrid-chk"></span></div></div>
     <div class="dtab ${tab === "cluster" ? "" : "hidden"}" data-t="cluster"><div class="grid2">
       <label>Host<input name="cluster_host" value="${esc(s.cluster_host)}"></label><label>Port<input name="cluster_port" type="number" value="${esc(s.cluster_port)}"></label>
       <label class="wide">Befehle nach Login (mit ; trennen)<input name="cluster_cmds" value="${esc(s.cluster_cmds)}" placeholder="SET/SKIMMER;SET/FT8"></label></div></div>
@@ -374,6 +375,13 @@ function openOptions(tab = "station") {
   const wkSt = () => { const w = WW.winkey || {}; d.querySelector(".wk-st").textContent = w.connected ? `verbunden an ${w.device}${w.version ? ", Firmware " + w.version : ""}` : (w.error || "nicht verbunden"); };
   api("/api/hamlib/ports").then(ps => { const sel = d.querySelector(".wk-dev"), cur = sel.value; sel.innerHTML = `<option value="">– wählen –</option>` + ps.map(p => `<option value="${esc(p.device)}" ${p.device === cur ? "selected" : ""}>${esc(p.device)}${p.desc ? " – " + esc(p.desc) : ""}</option>`).join("") + (cur && !ps.some(p => p.device === cur) ? `<option selected>${esc(cur)}</option>` : ""); }).catch(() => { });
   pluginOptions(d.querySelector(".pl-opts"));
+  // DMR-ID: in der RadioID-Liste nachsehen, ob sie zum eigenen Rufzeichen gehoert
+  const dmrChk = async () => { const el = d.querySelector(".dmrid-chk"), v = d.querySelector('[name="dmr_id"]').value.trim(), call = d.querySelector('[name="callsign"]').value.trim().toUpperCase(); if (!el) return;
+    if (!/^\d{6,9}$/.test(v)) { el.textContent = v ? "7 Ziffern, z. B. 2621234" : "Für Digitalfunk (DMR, NXDN) – kostenlos bei radioid.net"; return; }
+    try { const r = await api("/api/ids", { method: "POST", body: { dmr: [+v.slice(0, 7)] } }), u = r.dmr?.[v.slice(0, 7)];
+      el.textContent = r.loading ? "Liste wird geladen …" : !u ? "Diese ID steht nicht in der RadioID-Liste" : `${u.c} ${u.n || ""}${u.city ? ", " + u.city : ""}${call && u.c !== call ? " – passt nicht zum Rufzeichen " + call : " ✓"}`;
+      if (r.loading) setTimeout(dmrChk, 2000); } catch { } };
+  d.querySelector('[name="dmr_id"]')?.addEventListener("input", dmrChk); dmrChk();
   supportOptionsInit(d);
   const mcpCfg = () => api("/api/access/mcp_config").then(c => { d.querySelector(".ac-mcp").value = JSON.stringify(c, null, 2); }).catch(() => { });
   mcpCfg();

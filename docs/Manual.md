@@ -55,7 +55,7 @@ On the first start the **program options** open. Enter at least your **callsign*
 
 The options can be opened at any time with **F8** or via **Options** in the toolbar. Important tabs:
 
-- **Station:** callsign, locator, name/QTH for macros
+- **Station:** callsign, locator, name/QTH for macros, **DMR ID** (for digital voice; Wellenwerk checks in the RadioID list that it belongs to your callsign)
 - **DX cluster:** server (e.g. `dxc.ve7cc.net`, port 23) and login commands
 - **Online services:** credentials for callbook and uploads (see [chapter 9](#9-online-services))
 - **WSJT-X:** UDP port (default 2237)

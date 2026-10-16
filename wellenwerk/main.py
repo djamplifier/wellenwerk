@@ -49,7 +49,7 @@ BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("WW_DATA", BASE / "data"))
 DATA.mkdir(parents=True, exist_ok=True)
 CFG_PATH = DATA / "config.json"
-DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100", lang="",
+DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100", lang="", dmr_id="",
                 cluster_host="dxc.ve7cc.net", cluster_port=23, cluster_cmds="",
                 wsjtx_port=2237,
                 rot_enabled=False, rot_host="127.0.0.1", rot_port=4533, rot_park=0,
@@ -158,7 +158,7 @@ def station_identity() -> dict:
     return dict(callsign=call, home_callsign=(cfg.get("callsign") or "").upper(), operator=(st.get("operator") or cfg.get("operator") or "").upper(),
                 locator=loc, lat=ll[0] if ll else None, lon=ll[1] if ll else None, tx_pwr=st.get("tx_pwr") or cfg.get("tx_pwr") or "",
                 profile=st.get("name", ""), profile_id=st.get("id", ""), my_pota_ref=st.get("my_pota_ref", ""), my_sota_ref=st.get("my_sota_ref", ""),
-                my_wwff_ref=st.get("my_wwff_ref", ""), winlink_call=(cfg.get("wl_call") or call).upper(),
+                my_wwff_ref=st.get("my_wwff_ref", ""), winlink_call=(cfg.get("wl_call") or call).upper(), dmr_id=str(st.get("dmr_id") or cfg.get("dmr_id") or ""),
                 lang=cfg.get("lang") or "de")
 
 
@@ -705,6 +705,10 @@ async def put_settings(new: dict):
         raise HTTPException(400, f"unbekannte Einstellungen: {', '.join(sorted(unknown))}")
     if new.get("locator") and not geo.valid_grid(new["locator"]):
         raise HTTPException(400, "Locator ungueltig (z. B. JO31ab)")
+    if "dmr_id" in new:                          # DMR-ID (RadioID.net): 7 Ziffern; mit Hotspot-Endung 9 Ziffern
+        new["dmr_id"] = str(new["dmr_id"] or "").strip()
+        if new["dmr_id"] and not (new["dmr_id"].isdigit() and 6 <= len(new["dmr_id"]) <= 9):
+            raise HTTPException(400, "DMR-ID ungültig (7 Ziffern, z. B. 2621234)")
     for k in ("cluster_port", "wsjtx_port", "rot_port", "rot_model", "rig_poll_ms", "winkey_wpm", "n1mm_port", "backup_keep",
               "wl_telnet_port", "ardop_port", "vara_port", "agw_port", "agw_radio_port", "sync_offset", "catemu_port", "adif_udp_port", "smtp_port", "err_mail_interval"):
         if k in new:

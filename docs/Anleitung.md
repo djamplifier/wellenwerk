@@ -49,7 +49,7 @@ Beim ersten Start öffnen sich die **Programmoptionen**. Tragen Sie mindestens *
 
 Die Optionen erreichen Sie jederzeit mit **F8** oder über **Optionen** in der Werkzeugleiste. Wichtige Registerkarten:
 
-- **Station:** Rufzeichen, Locator, Name/QTH für Makros
+- **Station:** Rufzeichen, Locator, Name/QTH für Makros, **DMR-ID** (für Digitalfunk; Wellenwerk prüft in der RadioID-Liste, ob sie zum Rufzeichen gehört)
 - **DX-Cluster:** Server (z. B. `dxc.ve7cc.net`, Port 23) und Anmeldebefehle
 - **Online-Dienste:** Zugangsdaten für Callbook und Uploads (siehe [Kapitel 9](#9-online-dienste))
 - **WSJT-X:** UDP-Port (Standard 2237)

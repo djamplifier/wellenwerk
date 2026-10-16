@@ -1860,5 +1860,12 @@
 "lese {} im nächsten Zeitschlitz …": "reading {} in the next time slot …",
 "{} · {} Telegramm gelesen": "{} · {} message read",
 "{} · {} Telegramme gelesen": "{} · {} messages read",
-"warte auf den nächsten Zeitschlitz ({} s) …": "waiting for the next time slot ({} s) …"
+"warte auf den nächsten Zeitschlitz ({} s) …": "waiting for the next time slot ({} s) …",
+"DMR-ID (RadioID.net)": "DMR ID (RadioID.net)",
+"z. B. 2621234": "e.g. 2621234",
+"7 Ziffern, z. B. 2621234": "7 digits, e.g. 2621234",
+"Für Digitalfunk (DMR, NXDN) – kostenlos bei radioid.net": "For digital voice (DMR, NXDN) – free at radioid.net",
+"Diese ID steht nicht in der RadioID-Liste": "This ID is not in the RadioID list",
+"{} – passt nicht zum Rufzeichen {}": "{} – does not match callsign {}",
+"DMR-ID ungültig (7 Ziffern, z. B. 2621234)": "Invalid DMR ID (7 digits, e.g. 2621234)"
 }
