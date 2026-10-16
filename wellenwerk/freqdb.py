@@ -1,7 +1,8 @@
 """Frequenz-Datenbanken fuer Wasserfall und Signalerkennung, im Datenordner zwischengespeichert:
 
 - Relais: hearham.com (weltweit, alle Betriebsarten, offene Daten), BrandMeister (DMR-Relais mit Colorcode
-  und letztem Kontakt) und die DARC-Relaisliste von DL3EL (relais.dl3el.de, Umkreissuche, FM-Relais mit CTCSS). Optional repeatermap.de (DK3ML) mit eigenem API-Token (beim Betreiber anfragen).
+  und letztem Kontakt) die DARC-Relaisliste von DL3EL (relais.dl3el.de, Umkreissuche, FM-Relais mit CTCSS) und EchoLink
+  (Relais und Links mit Frequenz, CTCSS und aktuellem Status, weltweit). Optional repeatermap.de (DK3ML) mit eigenem API-Token (beim Betreiber anfragen).
 - Rundfunk: EiBi-Sendeplan (eibispace.de, Saison A/B), gefiltert auf die aktuelle Sendezeit.
 - Typische Frequenzen der Betriebsarten: static/freqs.json im Programm, taeglich aus dem Projekt auf GitHub aktualisiert.
 Alle Abrufe mit eigener Kennung, hoechstens einmal pro Woche (Relais, Rundfunk) bzw. Tag (typische Frequenzen)."""
@@ -26,6 +27,7 @@ SRC = {
     "brandmeister": "https://api.brandmeister.network/v2/device",
     "freqs": "https://raw.githubusercontent.com/djamplifier/wellenwerk/main/static/freqs.json",
     "eibi": "http://www.eibispace.de/dx/sked-{season}.csv",
+    "echolink": "https://www.echolink.org/links.jsp?sel=gridsq&gs={grid}&d=150",
     "dl3el": "http://relais.dl3el.de/cgi-bin/relais.pl?sel=gridsq&gs={grid}&maxgateways=200&printas=csv&type_el=1&type_il=1&type_ds=1&type_ws=1&type_dm=1&type_fr=1&type_dl3el=1&kmmls=km",
 }
 _lock = threading.Lock()
@@ -157,6 +159,63 @@ def dl3el(data: Path, lat: float, lon: float) -> list[dict]:
     return out
 
 
+# EchoLink: Relais (-R) und Links (-L) mit Frequenz, CTCSS, Standort und aktuellem Status; weltweit. Je Gebiet eine Anfrage pro Tag.
+def _std_offset(f: int) -> int:
+    """Uebliche Relaisablage, wenn die Quelle nur die Ausgabefrequenz nennt (Region 1; 2 m US: −600 kHz bzw. +600 kHz)."""
+    if 145_550_000 <= f <= 145_800_000 or 146_000_000 <= f <= 148_000_000:
+        return -600_000
+    if 438_000_000 <= f <= 439_600_000:                 # Region 1 (Deutschland: Ausgaben 438,0125 … 439,5875)
+        return -7_600_000
+    if 29_620_000 <= f <= 29_690_000:
+        return -100_000
+    if 1_298_000_000 <= f <= 1_299_000_000:
+        return -28_000_000
+    return 0
+
+
+def echolink(data: Path, lat: float, lon: float) -> list[dict]:
+    import re
+    from .geo import latlon_to_grid
+    cell = (round(lat * 4) / 4, round(lon * 4) / 4)
+    path = data / "relais-echolink" / f"{cell[0]:.2f}_{cell[1]:.2f}.json"
+    if path.exists() and time.time() - path.stat().st_mtime < DAY:
+        return json.loads(path.read_text(encoding="utf-8"))
+    out = []
+    try:
+        html = _fetch(SRC["echolink"].format(grid=latlon_to_grid(*cell)), 60).decode("utf-8", "replace")
+        txt = lambda c: _unent(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", c))).strip()
+        for row in re.findall(r'(?s)<tr class="(?:online|offline|busy)">(.*?)(?=<tr|</table)', html):
+            cells = re.findall(r"(?s)<td[^>]*>(.*?)(?=<td|$)", row)
+            g = re.search(r"clat=([-\d.]+)&clon=([-\d.]+)", row)
+            if len(cells) < 13 or not g:
+                continue
+            try:
+                call, desc, fq, tone, st = txt(cells[0]).upper(), txt(cells[1]), txt(cells[7]), txt(cells[8]), txt(cells[12])
+                f = int(round(float(fq) * 1e6))
+                if not f:
+                    continue
+                exact = re.search(r"(\d{2,4}[.,]\d{3,5})", desc)                   # genauere Angabe in der Beschreibung (438.5875)
+                if exact and abs(float(exact.group(1).replace(",", ".")) * 1e6 - f) < 1500:
+                    f = int(round(float(exact.group(1).replace(",", ".")) * 1e6))
+                elif abs(f - round(f / 6250) * 6250) <= 700:
+                    f = int(round(f / 6250) * 6250)
+                e = dict(c=call, f=f, rx=f + (_std_offset(f) if call.endswith("-R") else 0), m="FM", lat=round(float(g.group(1)), 4), lon=round(float(g.group(2)), 4),
+                         city=desc[:60], s="echolink", online=st.lower().startswith(("on", "busy")))
+                if tone and tone.replace(".", "").isdigit():
+                    e["tone"] = tone
+                out.append(e)
+            except (ValueError, IndexError):
+                continue
+    except Exception as e:
+        log.warning("EchoLink-Liste nicht abrufbar: %s", e)
+    if out:
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    elif path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return out
+
+
 def repeaters_ready(data: Path) -> bool:
     """Relaisliste geladen? Sonst Laden im Hintergrund anstossen (erster Abruf dauert bis zu einer Minute)."""
     if "rep" in _cache:
@@ -180,7 +239,7 @@ def repeaters(data: Path, lat: float, lon: float, radius_km: float = 80, lo: flo
     if not repeaters_ready(data):
         return []
     cand = []
-    extra = dl3el(data, lat, lon) if -60 < lat < 75 else []
+    extra = (dl3el(data, lat, lon) + echolink(data, lat, lon)) if -60 < lat < 75 else []
     for r in extra + _cache["rep"]:
         if hi and not (lo <= r["f"] <= hi):
             continue
@@ -193,7 +252,7 @@ def repeaters(data: Path, lat: float, lon: float, radius_km: float = 80, lo: flo
                 x["cc"], x["tone"] = int(x["tone"][2:] or 0), ""
             cand.append(x)
     # Vorrang bei Doppelten: DMR aus BrandMeister (Colorcode, letzter Kontakt), sonst die DARC-Liste (CTCSS), dann hearham
-    rank = lambda r: (0 if r["s"] == "brandmeister" and r["m"] == "DMR" else 1 if r["s"] == "dl3el" else 2)
+    rank = lambda r: (0 if r["s"] == "brandmeister" and r["m"] == "DMR" else 1 if r["s"] == "dl3el" else 2 if r["s"] == "echolink" else 3)
     cand.sort(key=lambda r: (rank(r), not r.get("tone"), "-" in r["c"], r["km"]))
     seen, res = set(), []
     for r in cand:

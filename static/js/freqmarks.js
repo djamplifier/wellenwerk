@@ -106,5 +106,6 @@ function fmkRepFacts(r) {
   const off = r.rx - r.f;
   return [`${fmtMHz(r.f)} MHz`, off ? `Ablage ${off > 0 ? "+" : "−"}${(Math.abs(off) / 1e6).toLocaleString(I18N.locale, { maximumFractionDigits: 4 })} MHz` : "Simplex",
     r.m === "DMR" && r.cc != null ? `Colorcode ${r.cc}` : "", r.tone && !FMK_DV[r.m] ? `CTCSS ${String(r.tone).replace(".", ",")} Hz` : "", r.city || "", `${String(r.km).replace(".", ",")} km`,
-    r.seen ? `zuletzt aktiv ${r.seen}` : "", `Quelle: ${{ brandmeister: "BrandMeister", dl3el: "DARC-Relaisliste (DL3EL)" }[r.s] || "hearham.com"}`].filter(Boolean);
+    r.seen ? `zuletzt aktiv ${r.seen}` : "", r.online === true ? "EchoLink online" : r.online === false ? "EchoLink offline" : "",
+    `Quelle: ${{ brandmeister: "BrandMeister", dl3el: "DARC-Relaisliste (DL3EL)", echolink: "EchoLink" }[r.s] || "hearham.com"}`].filter(Boolean);
 }

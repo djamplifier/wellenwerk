@@ -54,7 +54,7 @@ sowie die vom Nutzer eingerichteten Dienste (HamQTH, QRZ.com, eQSL, LoTW, Club L
 ## Frequenz- und Relaisdaten (zur Laufzeit abgerufen, nicht im Programm enthalten)
 
 - Rundfunk-Sendeplan: EiBi (eibispace.de, Eike Bierwirth) – frei verwendbare Sendeliste, mit Quellenangabe.
-- Relais: DARC-Relaisliste von DL3EL (relais.dl3el.de, Umkreissuche als CSV), BrandMeister-Geräteliste (api.brandmeister.network, DMR-Relais), hearham.com (offene Relais-Datenbank).
+- Relais: DARC-Relaisliste von DL3EL (relais.dl3el.de, Umkreissuche als CSV), EchoLink-Linkliste (echolink.org/links.jsp, Umkreissuche), BrandMeister-Geräteliste (api.brandmeister.network, DMR-Relais), hearham.com (offene Relais-Datenbank).
 - Typische Frequenzen (static/freqs.json): zusammengestellt aus dem IARU-Region-1-Bandplan (Aktivitätszentren), den Standardfrequenzen von WSJT-X sowie öffentlich bekannten Wetter-, Zeit-, CB-, PMR446- und Freenet-Frequenzen.
 
 ## Signal-Datenbank (static/sigdb.json)

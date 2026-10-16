@@ -1841,9 +1841,11 @@
 "Relais in der Nähe markieren (hearham.com, BrandMeister) – Klick stellt Betriebsart, Dekoder bzw. Ablage und CTCSS ein": "Mark nearby repeaters (DARC list by DL3EL, BrandMeister, hearham.com) – a click sets mode, decoder or offset and CTCSS",
 "Relais im Umkreis von (km)": "Repeaters within (km)",
 "Mittelpunkt: Standort des Empfängers (OpenWebRX meldet ihn), sonst der eigene Locator.": "Centre: the receiver's location (reported by OpenWebRX), otherwise your own locator.",
-"Relais in der Nähe markieren (DARC-Relaisliste DL3EL, BrandMeister, hearham.com) – Klick stellt Betriebsart, Dekoder bzw. Ablage und CTCSS ein": "Mark nearby repeaters (DARC list by DL3EL, BrandMeister, hearham.com) – a click sets mode, decoder or offset and CTCSS",
 "prüfe das Signal …": "checking the signal …",
 "gerade kein Digitalsignal zu hören": "no digital signal at the moment",
 "✓ {} bestätigt (Synchronmuster)": "✓ {} confirmed (sync pattern)",
-"⚠ abweichend: {} erkannt – Eintrag der Datenbank passt nicht": "⚠ different: {} detected – database entry does not match"
+"⚠ abweichend: {} erkannt – Eintrag der Datenbank passt nicht": "⚠ different: {} detected – database entry does not match",
+"Relais in der Nähe markieren (DARC-Relaisliste DL3EL, EchoLink, BrandMeister, hearham.com) – Klick stellt Betriebsart, Dekoder bzw. Ablage und CTCSS ein": "Mark nearby repeaters (DARC list by DL3EL, EchoLink, BrandMeister, hearham.com) – a click sets mode, decoder or offset and CTCSS",
+"EchoLink online": "EchoLink online",
+"EchoLink offline": "EchoLink offline"
 }
