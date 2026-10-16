@@ -42,7 +42,7 @@ from .winlink.message import Message as WlMessage
 from .errorlog import ErrorLog
 from .updater import Updater, restart_process
 
-VERSION = "1.2.1"
+VERSION = "1.3.0"
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("WW_DATA", BASE / "data"))
 DATA.mkdir(parents=True, exist_ok=True)

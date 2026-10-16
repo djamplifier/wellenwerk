@@ -3,6 +3,17 @@
 Stationssteuerung, Logbuch und Digitalbetrieb für Funkamateure – ein Desktop-Programm für Windows, macOS und Linux.
 Code, Logo und Icons sind eigenständig.
 
+## Download (Version 1.3.0)
+| System | Datei |
+|---|---|
+| Windows 10/11 | [Wellenwerk-1.3.0-Windows-Setup.exe](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.0/Wellenwerk-1.3.0-Windows-Setup.exe) |
+| Mac mit Apple-Chip (M1–M4) | [Wellenwerk-1.3.0-Mac-AppleSilicon.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.0/Wellenwerk-1.3.0-Mac-AppleSilicon.dmg) |
+| Mac mit Intel-Chip | [Wellenwerk-1.3.0-Mac-Intel.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.0/Wellenwerk-1.3.0-Mac-Intel.dmg) |
+| Linux (alle Distributionen) | [Wellenwerk-1.3.0-Linux.AppImage](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.0/Wellenwerk-1.3.0-Linux.AppImage) |
+| Debian/Ubuntu | [wellenwerk_1.3.0_amd64.deb](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.0/wellenwerk_1.3.0_amd64.deb) |
+
+Alle Versionen und Neuerungen: [Releases](https://github.com/djamplifier/wellenwerk/releases). Installierte Programme melden neue Versionen selbst.
+
 ## Funktionen
 - **Gerätesteuerung** (Hamlib, über 300 Funkgeräte, mehrere gleichzeitig): große Frequenzanzeige, VFO A/B, Split, RIT/XIT,
   alle Regler und Schalter des Geräts, Abstimmleisten je Band, Feinabstimmung, Schnellspeicher, Favoriten, Speicherkanäle,
@@ -14,9 +25,14 @@ Code, Logo und Icons sind eigenständig.
   QSL (Papier, LoTW, eQSL), Uploads zu QRZ.com/eQSL/LoTW/Club Log, Diplome, Etiketten, Cabrillo, ADIF,
   POTA/SOTA/WWFF mit Stationsprofilen, Filter-Bedingungen und gespeicherte Ansichten, QSO-Austausch mit N1MM, VarAC, JTAlert, GridTracker
 - **Digitalbetrieb**: Wasserfall, PSK/QPSK, RTTY, CW, MFSK, DominoEX, THOR, Olivia, Contestia, Throb, MT63, Hellschreiben,
-  SSTV (18 Bildmodi mit Vorlagen und Galerie), Makros, WWK Sweeper (bis 16 Signale gleichzeitig)
+  SSTV (18 Bildmodi mit Vorlagen und Galerie), FreeDV (700D/700E/1600), Makros, WWK Sweeper (bis 16 Signale gleichzeitig),
+  Chat (Tastatur-QSO) über ARDOP, VARA, Packet und Telnet
+- **Signalerkennung per Klick**: Klick auf ein Signal im Wasserfall zeigt die Betriebsart (z. B. RTTY mit Baud/Shift, FT8, PSK31,
+  SSTV mit Bildmodus, CW mit Tempo, Olivia, Sprache, AM) und öffnet auf Wunsch gleich den passenden Dekoder
+- **Empfänger ohne Funkgerät**: KiwiSDR, OpenWebRX, RTL-SDR, Hermes Lite 2 (Empfang), öffentliche Empfängerlisten, Wasserfall 2D/3D
 - **Winlink**: E-Mail über Funk – Postfach, Verfassen mit Anhängen, Austausch über Telnet, ARDOP, VARA (TCP-Schnittstelle) und Packet (AGW/Direwolf)
 - **Satelliten** (Doppler- und Rotor-Nachführung, Zeitplan, gemeinsame Sichtbarkeit), **Rotor** (Anschlag, Versatz, Überlauf), **Karten**
+- **Erweiterungen** (Plugins), Oberfläche Deutsch/Englisch, automatische Aktualisierung, Rückmeldung an die Entwickler aus dem Programm
 - Andockbare Fenster (lösen, auf zweiten Bildschirm, Layouts speichern), Rechtsklick-Menüs überall
 
 ## Aufbau
@@ -29,8 +45,8 @@ Code, Logo und Icons sind eigenständig.
 
 ## Installation (eigenes Programm, kein Browser)
 Wellenwerk ist ein Desktop-Programm mit eigenem Fenster; der Dienst und Hamlib (Funkgeräte-/Rotorsteuerung) sind eingebaut.
-- **Windows:** `Wellenwerk-Setup-x.y.z.exe` ausführen. Beim ersten Start meldet Windows evtl. „Unbekannter Herausgeber“ → „Weitere Informationen“ → „Trotzdem ausführen“. USB-Treiber des Funkgeräts (z. B. Silicon Labs CP210x) installieren.
-- **macOS:** `Wellenwerk-x.y.z-arm64.dmg` (Apple Silicon) bzw. `-x64` (Intel) öffnen, Wellenwerk in „Programme“ ziehen. Beim ersten Start Rechtsklick → „Öffnen“ (nicht notarisiert). Mikrofon-Zugriff erlauben (für Digitalbetrieb/SSTV).
+- **Windows:** `Wellenwerk-x.y.z-Windows-Setup.exe` ausführen. Beim ersten Start meldet Windows evtl. „Unbekannter Herausgeber“ → „Weitere Informationen“ → „Trotzdem ausführen“. USB-Treiber des Funkgeräts (z. B. Silicon Labs CP210x) installieren.
+- **macOS:** `Wellenwerk-x.y.z-Mac-AppleSilicon.dmg` (Apple-Chip) bzw. `-Mac-Intel.dmg` öffnen, Wellenwerk in „Programme“ ziehen. Beim ersten Start Rechtsklick → „Öffnen“ (nicht notarisiert). Mikrofon-Zugriff erlauben (für Digitalbetrieb/SSTV).
 - **Linux:** `.deb` installieren oder die `.AppImage` ausführbar machen und starten; Benutzer in die Gruppe `dialout` aufnehmen.
 
 Danach: Gerätesteuerung → Verbinden → Hersteller/Modell, COM-Port, Baudrate (oder „Baudrate suchen“), bei Icom die CI-V-Adresse.
