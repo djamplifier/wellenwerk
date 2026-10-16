@@ -1856,5 +1856,9 @@
 "DSC (Seenot-/Anrufkanal)": "DSC (distress/calling)",
 "AIS (Schiffe)": "AIS (ships)",
 "ADS-B / Mode S (Flugzeuge)": "ADS-B / Mode S (aircraft)",
-"FANET (Gleitschirme)": "FANET (paragliders)"
+"FANET (Gleitschirme)": "FANET (paragliders)",
+"lese {} im nächsten Zeitschlitz …": "reading {} in the next time slot …",
+"{} · {} Telegramm gelesen": "{} · {} message read",
+"{} · {} Telegramme gelesen": "{} · {} messages read",
+"warte auf den nächsten Zeitschlitz ({} s) …": "waiting for the next time slot ({} s) …"
 }

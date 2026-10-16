@@ -222,6 +222,10 @@ Wo Wellenwerk selbst dekodieren kann, wird zur Bestätigung probehalber dekodier
 
 **Automatisch umschalten und live mitlesen:** Nach der Erkennung stellt Wellenwerk AM-Rundfunk auf AM und Sprache im falschen Seitenband auf das richtige Seitenband um. Bei Betriebsarten, die Wellenwerk dekodiert (RTTY, PSK, CW, MFSK, Olivia, Contestia, DominoEX, THOR, MT63 …), läuft der Text danach **live in der Karte** weiter – mit **Stopp**; die Anzeige endet von selbst, wenn umgestimmt wird. Abschaltbar unter **F8 → Wasserfall**.
 
+**Signal suchen statt raten:** Wellenwerk sucht das Signal zuerst im Spektrum – den belegten Bereich, der dem Klick am nächsten liegt – und wertet nur diesen aus; Nachbarsignale und Rauschen im übrigen Durchlassbereich werden weggefiltert. Ein Klick daneben oder ein zu breites Filter stören deshalb kaum noch.
+
+**FT8 und FT4 liest Wellenwerk selbst** (Dekoder ft8_lib): Ein Klick irgendwo ins FT8-Band genügt. Wellenwerk wartet, bis ein ganzer Zeitschlitz (15 s, FT4 7,5 s, nach UTC) aufgenommen ist, liest die Telegramme und zeigt danach **live jeden Zeitschlitz** in der Karte – mit Name und Ort zu bekannten Rufzeichen, z. B. „CQ DO5HOK JO41 (Holger, Harsewinkel)“. WSJT-X wird dafür nicht gebraucht; die Rechneruhr sollte genau gehen (Abweichung unter einer Sekunde).
+
 **Genau abstimmen:** Ein Klick trifft selten exakt. Nach der Erkennung stimmt Wellenwerk deshalb selbst nach (Hinweis in der Karte, z. B. „auf Signalmitte abgestimmt (−240 Hz)“):
 - **Datensignale und CW** (RTTY, PSK, Olivia, CW …): Die gemessene Signalmitte kommt genau auf 1500 Hz im Ton.
 - **SSB-Sprache:** Bei USB/LSB ist nicht die Signalmitte der Abstimmpunkt, sondern der unterdrückte Träger an der Kante des Seitenbands. Wellenwerk misst, wo die Sprache im Ton beginnt (richtig abgestimmt etwa 300 Hz über dem Träger), und stimmt auf den Träger. Liegt die Sprache im falschen Seitenband, wird auf das richtige Seitenband umgeschaltet und der Träger an der Oberkante gesucht. Ist die Lage nicht sicher bestimmbar (die Filter der Geräte schneiden unterschiedlich ab), bleibt die Abstimmung unverändert.

@@ -233,7 +233,8 @@ function decSummary(d) {
       v.speed ?? v.gs ? Math.round(v.speed ?? v.gs) + " kn" : "", v.heading ?? v.track ? Math.round(v.heading ?? v.track) + "°" : "", pos, v.squawk ? "Squawk " + v.squawk : ""); }
   if (d.decoder === "lora-aprs") return j(`${v.source || "?"} → ${v.destination || "?"}`, v.comment || v.data || v.text, pos);
   if (/^(meshtastic|meshcom|meshcore|lora-fanet)$/.test(d.decoder)) return j(v.from || v.source || v.src || v.id, v.to || v.destination ? "→ " + (v.to || v.destination) : "", v.text || v.message || v.msg || v.name, pos, v.alt != null ? Math.round(v.alt) + " m" : "");
-  if (d.decoder === "packet") return j(`${v.source || "?"} → ${v.destination || "?"}`, v.comment || v.data, pos);
+  if (d.decoder === "packet") return j(`${call(v.source) || "?"} → ${v.to ? call(v.to) : v.destination || "?"}`, v.object ? "Objekt " + v.object : "", v.message || v.status || v.comment || v.data, pos,
+    v.speed ? v.speed + " kn" : "", v.temperature_C != null ? v.temperature_C + " °C" : "");
   if (d.decoder === "ism") { const t = decTempC(v);
     return j(v.model, v.id != null ? "ID " + v.id : "", v.channel != null ? "Kanal " + v.channel : "", t != null ? t.toFixed(1) + " °C" : "", v.humidity != null ? v.humidity + " % Feuchte" : "",
       v.wind_avg_km_h != null ? v.wind_avg_km_h + " km/h Wind" : "", v.rain_mm != null ? v.rain_mm + " mm Regen" : "", v.pressure_hPa != null ? v.pressure_hPa + " hPa" : "", v.battery_ok === 0 ? "Batterie schwach" : ""); }

@@ -228,6 +228,10 @@ Where Wellenwerk can decode by itself, it decodes on trial to confirm; readable 
 
 **Switch automatically and read live:** after identification Wellenwerk switches AM broadcasts to AM and voice in the wrong sideband to the right sideband. For modes Wellenwerk decodes (RTTY, PSK, CW, MFSK, Olivia, Contestia, DominoEX, THOR, MT63 …) the text then continues **live in the card** – with **Stop**; the display ends by itself when you retune. Can be switched off under **F8 → Waterfall**.
 
+**Find the signal instead of guessing:** Wellenwerk first looks for the signal in the spectrum – the occupied range nearest to the click – and analyses only that; neighbouring signals and noise in the rest of the passband are filtered out. A click beside the signal or a too-wide filter therefore hardly matter any more.
+
+**Wellenwerk reads FT8 and FT4 itself** (decoder ft8_lib): a click anywhere into the FT8 segment is enough. Wellenwerk waits until a whole time slot (15 s, FT4 7.5 s, UTC) has been recorded, reads the messages and then shows **every time slot live** in the card – with name and place for known callsigns, e.g. “CQ DO5HOK JO41 (Holger, Harsewinkel)”. WSJT-X is not needed for this; the computer clock should be accurate (deviation below one second).
+
 **Exact tuning:** a click is rarely spot on. After identification Wellenwerk therefore retunes by itself (note in the card, e.g. “tuned to signal centre (−240 Hz)”):
 - **Data signals and CW** (RTTY, PSK, Olivia, CW …): the measured signal centre is put exactly at 1500 Hz audio.
 - **SSB voice:** with USB/LSB the tuning point is not the centre of the signal but the suppressed carrier at the edge of the sideband. Wellenwerk measures where the voice starts in the audio (about 300 Hz above the carrier when tuned correctly) and tunes to the carrier. If the voice is in the wrong sideband, it switches to the right sideband and looks for the carrier at the upper edge. If the position cannot be determined reliably (radio filters cut off differently), the tuning is left unchanged.

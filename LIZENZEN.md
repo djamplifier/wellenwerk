@@ -51,6 +51,10 @@ Satellitenbahnen [CelesTrak](https://celestrak.org/), Sender [SatNOGS](https://d
 Contest-Kalender [WA7BNM](https://www.contestcalendar.com/), DXpeditionen [NG3K ADXO](https://www.ng3k.com/Misc/adxo.html),
 sowie die vom Nutzer eingerichteten Dienste (HamQTH, QRZ.com, eQSL, LoTW, Club Log, DX-Cluster).
 
+## ft8_lib (native/ftx, static/vendor/ftx.js)
+
+FT8/FT4-Dekoder von Karlis Goba, https://github.com/kgoba/ft8_lib – MIT-Lizenz (native/ftx/ft8_lib/LICENSE). In Wellenwerk als WebAssembly übersetzt (native/ftx/build.sh), unverändert bis auf die Lautstärke der Protokollmeldungen.
+
 ## Frequenz- und Relaisdaten (zur Laufzeit abgerufen, nicht im Programm enthalten)
 
 - Rundfunk-Sendeplan: EiBi (eibispace.de, Eike Bierwirth) – frei verwendbare Sendeliste, mit Quellenangabe.

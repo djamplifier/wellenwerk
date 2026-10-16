@@ -39,6 +39,34 @@ const SIGID = (() => {
   const smooth = (P, r) => { const o = new Float64Array(P.length); const n = P.length;
     for (let i = 0; i < n; i++) { let a = 0, c = 0; for (let k = Math.max(0, i - r); k <= Math.min(n - 1, i + r); k++) { a += P[k]; c++; } o[i] = a / c; } return o; };
 
+  // ---------- 0. Signal finden: belegte Bereiche im Spektrum, der dem Klick naechste (bei aehnlichem Abstand der staerkste) ----------
+  // Bereiche mit weniger als 500 Hz Luecke gehoeren zusammen (FSK-Toene, FT8-Gruppen); alles weiter Entfernte ist ein Nachbarsignal.
+  function locate(x, fc) {
+    const N = 4096, df = FS / N, P = smooth(psd(x, N), Math.max(1, Math.round(15 / df)));
+    const i0 = Math.round(120 / df), i1 = Math.round(3850 / df), band = []; for (let i = i0; i < i1; i++) band.push(P[i]);
+    const floor = pct(band, 0.25) || 1e-12, thr = floor * 4;              // 6 dB ueber dem Rauschen
+    const on = new Uint8Array(i1 + 1); for (let i = i0; i < i1; i++) on[i] = P[i] > thr ? 1 : 0;
+    const regs = []; let st = -1;
+    for (let i = i0; i <= i1; i++) { if (on[i] && st < 0) st = i; if ((!on[i] || i === i1) && st >= 0) { if ((i - st) * df >= 12) regs.push([st, i - 1]); st = -1; } }
+    if (!regs.length) return null;
+    const merged = [regs[0].slice()]; for (const r of regs.slice(1)) { const m = merged[merged.length - 1]; if ((r[0] - m[1]) * df < 500) m[1] = r[1]; else merged.push(r.slice()); }
+    let best = null;
+    for (const [a, b] of merged) {
+      let e = 0, ef = 0, pk = 0; for (let i = a; i <= b; i++) { const v = Math.max(0, P[i] - floor); e += v; ef += v * i * df; if (P[i] > pk) pk = P[i]; }
+      const lo = a * df, hi = (b + 1) * df, dist = fc < lo ? lo - fc : fc > hi ? fc - hi : 0, score = e / (1 + (dist / 250) ** 2);
+      if (!best || score > best.score) best = { lo, hi, c: ef / (e || 1), bw: hi - lo, snr: db(pk / floor), score, n: merged.length };
+    }
+    return best;
+  }
+  // Bandpass per FFT (weiche Flanken 60 Hz): Nachbarsignale und Rauschen ausserhalb des gefundenen Bereichs entfernen
+  function bandpass(x, lo, hi) {
+    let N = 1; while (N < x.length) N <<= 1;
+    const re = new Float64Array(N), im = new Float64Array(N); re.set(x); fft(re, im);
+    const g = f => { const a = Math.abs(f), t = 60; if (a < lo - t || a > hi + t) return 0; if (a < lo) return 0.5 - 0.5 * Math.cos(Math.PI * (a - lo + t) / t); if (a > hi) return 0.5 + 0.5 * Math.cos(Math.PI * (a - hi) / t); return 1; };
+    for (let i = 0; i < N; i++) { const f = (i <= N / 2 ? i : i - N) * FS / N, k = g(f); re[i] *= k; im[i] = -im[i] * k; }   // konjugiert: inverse FFT ueber die Vorwaerts-FFT
+    fft(re, im); const y = new Float32Array(x.length); for (let i = 0; i < x.length; i++) y[i] = re[i] / N; return y;
+  }
+
   // Komplexes Basisband um fc (±half Hz): mischen, Tiefpass (Blackman-sinc), dezimieren um M
   let bbCache = null;   // je Analyse: gleiche Mitte/Breite nur einmal filtern
   function baseband(x, fc, half, M) {
@@ -176,6 +204,16 @@ const SIGID = (() => {
       if (qual > best.q || (qual === best.q && on / all > best.r)) Object.assign(best, { q: qual, r: on / (all || 1e-12), conf: all / (outside || 1e-12), hits: hf, used, arrays, f: fc + (b0 + h / 2) * S.sp, dt: t0 * q / fs });
     }
     return best;
+  }
+
+  // starke, schmale Spitzen (Abstand mind. 60 Hz) zwischen lo und hi – Kandidaten fuer einzelne FT8/FT4-Signale
+  function ftPeaks(x, lo, hi, n) {
+    const N = 2048, df = FS / N, P = smooth(psd(x, N), 2), a = Math.max(2, Math.round(lo / df)), b = Math.min(N / 2 - 3, Math.round(hi / df));
+    const fl = pct(Array.from(P.subarray(a, b + 1)), 0.3) || 1e-12, out = [];
+    for (let i = a; i <= b; i++) if (P[i] > fl * 3 && P[i] >= P[i - 1] && P[i] >= P[i + 1]) out.push([P[i], i * df]);
+    out.sort((u, v) => v[0] - u[0]); const sel = [];
+    for (const [, f] of out) { if (sel.every(g => Math.abs(g - f) >= 60)) sel.push(f); if (sel.length >= n) break; }
+    return sel;
   }
 
   // ---------- 4. FSK: Tonraster, Symbolrate ----------
@@ -460,10 +498,14 @@ const SIGID = (() => {
   }
   // x: Float32Array (8 kHz), opts: { fc: Tonfrequenz des Signals, inverted: LSB-Lage, rf: Hochfrequenz des Signals (Hz), decode: true }
   function analyze(x, opts = {}) {
-    const t0 = Date.now(), fc = opts.fc || 1500, secs = x.length / FS, C = []; bbCache = { x, m: new Map() };
+    const t0 = Date.now(), secs = x.length / FS, C = []; let fc = opts.fc || 1500;
+    // erst das Signal suchen (auch weit neben dem Klick), dann nur dieses auswerten – unabhaengig von Filterbreite und Abstimmung
+    const loc = opts.locate === false ? null : locate(x, fc);
+    if (loc) { fc = loc.c; if (loc.bw < 3300 && loc.n > 1) x = bandpass(x, loc.lo - 80, loc.hi + 80); }
+    bbCache = { x, m: new Map() };
     const add = (id, label, score, extra = {}) => C.push({ id, label: label || NAMES[id] || id, score: Math.max(0, Math.min(1, score)), ...extra });
     const occ = occupancy(x, fc);
-    const res = { secs, center: occ.center, bw: occ.bw, snr: occ.snr, peak: occ.peak };
+    const res = { secs, center: occ.center, bw: occ.bw, snr: occ.snr, peak: occ.peak, located: loc ? { lo: Math.round(loc.lo), hi: Math.round(loc.hi), c: Math.round(loc.c) } : null };
     if (occ.snr < 6 && !(occ.wide.excess > 2 && occ.wide.bw > 150)) { add("NOISE", null, 1); return finish(); }
     // Schmale Traegersignale
     const narrowHalf = Math.max(60, Math.min(400, occ.bw / 2 + 40));
@@ -492,11 +534,14 @@ const SIGID = (() => {
       }
     }
     // FT8 / FT4
+    // Spitzen im gefundenen Bereich: bei vielen FT8-Signalen nebeneinander jede pruefen (je ±60 Hz), die beste zaehlt
+    const ftAt = [fc, ...ftPeaks(x, loc ? loc.lo : fc - 1500, loc ? loc.hi : fc + 1500, 5)];
     if (secs >= 4) for (const name of ["FT8", "FT4"]) {
-      const c = costas(x, fc, name, !!opts.inverted);
+      let c = { q: 0, r: 0 }; for (const p of [...new Set(ftAt.map(v => Math.round(v / 40) * 40))]) { const k = costas(x, p, name, !!opts.inverted); if (k.q > c.q || (k.q === c.q && k.r > c.r)) c = k; }
       res["sync" + name] = c;
-      const need = name === "FT8" ? 0.62 : 0.8;   // Zufall: 1/8 bzw. 1/4 Treffer; dazu Energie auf den Block begrenzt
-      if (c.q > need && c.r > 2.5 && c.conf > 1.5) add(name, null, Math.min(0.98, 0.55 + (c.q - need) * 0.8 + Math.min(0.1, (c.r - 2.5) * 0.03)), { center: c.f + FT[name].sp * (FT[name].n - 1) / 2, dt: c.dt, arrays: c.arrays });
+      // Zufall: 1/8 bzw. 1/4 Treffer. FT4 (kurze Muster, 4 Toene): mindestens 3 der 4 Synchronbloecke, sonst passt auch Olivia zufaellig
+      const need = name === "FT8" ? 0.62 : 0.8, okConf = c.conf > 1.5 && (name === "FT8" || (c.arrays || 0) >= 3);   // volles Band: das echte Dekodieren (ft8_lib) entscheidet
+      if (c.q > need && c.r > 2.5 && okConf) add(name, null, Math.min(0.98, 0.55 + (c.q - need) * 0.8 + Math.min(0.1, (c.r - 2.5) * 0.03)), { center: c.f + FT[name].sp * (FT[name].n - 1) / 2, dt: c.dt, arrays: c.arrays });
     }
     // Zwei-Ton-FSK
     let twoTone = false;
@@ -552,6 +597,8 @@ const SIGID = (() => {
       // Bandplan als Zusatz
       const plan = planFor(opts.rf); res.plan = plan.map(p => p.id + (p.note ? " (" + p.note + ")" : ""));
       for (const c of C) if (plan.some(p => p.id === c.id || (p.id === "PSK31" && /PSK/.test(c.id)))) { c.score = Math.min(1, c.score + 0.08); c.planOk = true; }
+      // Synchronmuster (FT8/FT4) ist ein Beweis: einzelne FT-Toene sehen auch wie getastetes CW oder Mehrton-FSK aus
+      if (C.some(c => /^FT[48]$/.test(c.id) && c.score >= 0.6)) for (const c of C) if (/^(CW|Olivia|Contestia|MFSK|DominoEX|THOR|CARRIER|HELL)/.test(c.id)) c.score *= 0.6;
       C.sort((a, b) => b.score - a.score);
       // Probe-Dekodierung der besten Textkandidaten
       if (opts.decode !== false) {

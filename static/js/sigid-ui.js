@@ -13,6 +13,8 @@ function sigWorker() {
   return SIG.worker;
 }
 function sigAnalyze(x, opts) { return new Promise((resolve, reject) => { const id = ++SIG.seq; SIG.jobs.set(id, { resolve, reject }); sigWorker().postMessage({ id, x, opts }); }); }
+// FT8/FT4 dekodieren (ft8_lib im Worker): [{snr, dt, f, text}]
+function sigFtx(x, ft4) { return new Promise((resolve, reject) => { const id = ++SIG.seq; SIG.jobs.set(id, { resolve, reject }); sigWorker().postMessage({ id, x, ftx: { ft4, rate: 8000 } }); }); }
 const sigRadio = id => (WW.radios || []).find(r => r.id === (id || WW.current));
 const sigState = id => sigRadio(id)?.state || WW.rig || {};
 const sigRig = (id, what, body) => id && id !== WW.current ? api(`/api/radios/${encodeURIComponent(id)}/rig/${what}`, { method: "POST", body }) : post(`/api/rig/${what}`, body);
@@ -84,7 +86,7 @@ function sigOnClick(radioId, f, e, tapId, rfLines) {
   if (decs.length && f <= 30e6) { const L = sigProbeList(f, decs); if (L.length && SIG_FIXF[L[0]]) { sigProbe({ radio: dr.id, ctl: radioId || dr.id, rf: f, x: e?.clientX, y: e?.clientY }, L.slice(0, 1), decs); return true; } }
   if (f > 30e6 && !ssbSeg && typeof fmkRepAt === "function" && wfOpts().mrep !== false) {   // bekanntes Relais: Daten aus der Datenbank, nichts erraten
     const rep = fmkRepAt(f); if (rep) { fmkRepeater(rep, radioId || dr?.id, dr?.id, e); return true; } }
-  if (f > 30e6 && !ssbSeg && (decs.length || isSdr(dr))) {
+  if (f > 30e6 && !ssbSeg && (decs.length || isSdr(dr) || sigProbeList(f, []).length)) {   // auch Funkgeraet: APRS ueber die Soundkarte
     const lines = rfLines && rfLines.length ? rfLines : sigLines(dr.id, 4000), am = sigRfAm(lines, f), air = f >= 108e6 && f <= 137e6;
     sigProbe({ radio: dr.id, ctl: radioId || dr.id, rf: f, x: e?.clientX, y: e?.clientY, am: am || air ? { carrier: am?.carrier, air } : null }, sigProbeList(f, decs), decs); return true; }
   const st = sigState(radioId), inv = SIG_SB[st.mode];
@@ -115,8 +117,9 @@ function sigProbeList(f, decs) {
   if (f >= 400e6 && f <= 406.1e6) L.push("sonde");
   for (const [id, fs] of Object.entries(SIG_FIXF)) if (fs.some(x => near(x, x > 30e6 ? (id === "adsb" ? 1.5e6 : id.startsWith("mesh") || id === "lora-aprs" ? 70000 : 12500) : 1200))) L.unshift(id);   // vor ISM: LoRa liegt im 433-MHz-Band
   if (f >= 50e6) L.push("dmr", "dstar", "ysf", "m17", "nxdn", "p25");
-  return [...new Set(L)].filter(has);
+  return [...new Set(L)].filter(id => has(id) || SIG_LOCAL.has(id));
 }
+const SIG_LOCAL = new Set(["packet"]);                     // dekodiert Wellenwerk selbst – auch ohne Dekoder im Empfaenger
 async function sigProbe(o, list, decs, opt = {}) {
   sigCancel();
   const R = SIG.run = { o, stop: false, card: sigCard(o) }, c = R.card, body = $(".sig-body", c), name = id => (decs.find(d => d.id === id) || {}).label || id;
@@ -159,6 +162,7 @@ async function sigProbe(o, list, decs, opt = {}) {
     btn("Nochmal", () => sigProbe(o, list, decs));
   };
   let found = "";
+  if (fx === "packet" || (!fx && !list.length && opt.local === "packet")) return sigAprsLive(R, f, name("packet"));   // APRS liest Wellenwerk selbst
   if (fx) { found = fx; await setDec(fx).catch(e => { body.innerHTML = `<div class="err">${esc(e.message)}</div>`; found = null; }); if (found === null) return; }
   else {
     // 1) schnell (2,5 s) in den Ton hoeren: Sprache, Unterton, Packet-Toene -> analog, fertig – kein Durchprobieren der Digitaldekoder.
@@ -298,6 +302,7 @@ async function sigAuto(R, res) {
     if (b.id === "VOICE_INV" && o.dial && !o.dmTap) { const sb = o.inverted ? "USB" : "LSB", hz = sigSsbCarrier(o, b); await sigRig(ctl, "mode", { mode: sb, passband: 2700 }); await sigRig(ctl, "freq", { hz }); note(`auf ${sb} umgeschaltet · Träger ${fmtMHz(hz)} MHz`); return; }
     if (b.id === "VOICE" && o.dial && !o.dmTap) { const hz = sigSsbCarrier(o, b); if (hz && Math.abs(hz - o.dial) >= 120) { await sigRig(ctl, "freq", { hz }); note(`auf den Träger nachgestimmt (${(hz > o.dial) ? "+" : "−"}${Math.abs(hz - o.dial)} Hz)`); } return; }
   } catch (e) { note("Umschalten nicht möglich: " + e.message); return; }
+  if (/^FT[48]$/.test(b.id)) return sigFtxLive(R, b.id);
   const mode = DM_ALL.includes(b.decode) ? b.decode : DM_ALL.includes(b.id) ? b.id : null;
   if (!mode || DIGI_MODES[mode]?.image) return;
   // genau abstimmen: Signalmitte auf 1500 Hz im Ton legen (Klick liegt meist etwas daneben; Dekoder fangen so sicher)
@@ -324,12 +329,65 @@ async function sigAuto(R, res) {
     if (++n % 40 === 0 && o.dial) { const f = sigState(o.radio).freq; if (f && Math.abs(f - o.dial) > 30) stop("umgestimmt"); } }) }; }
   catch (e) { stop(e.message); }
 }
+// APRS/Packet live: eigener Dekoder (aprs.js) auf dem FM-Ton; Meldungen auch ins Fenster „Datenempfang“
+async function sigAprsLive(R, f, label) {
+  const o = R.o, c = R.card, body = $(".sig-body", c);
+  $(".sig-bar", c).classList.add("done"); sigProgress(R, 1);
+  body.innerHTML = `<div class="sig-res sure"><span class="sig-name">APRS / Packet</span><span class="sig-conf">nach Frequenz</span></div>
+    <div class="hint"><span>Wellenwerk dekodiert selbst</span> (AFSK 1200 Bd) · ${fmtMHz(f)} MHz · <span>Meldungen auch im Fenster „Datenempfang“</span></div>
+    <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: APRS</b><i class="grow"></i><button type="button" class="sig-live-x">Stopp</button></div><pre translate="no"></pre></div><div class="hint sig-db"></div><div class="sig-act"></div>`;
+  const pre = $("pre", body); let got = [];
+  const render = () => { pre.textContent = got.length ? got.slice(-50).map(d => `${new Date(d.t * 1000).toLocaleTimeString(I18N.locale)}  ${decSummary(d)}`).join("\n") : "warte auf die nächste Aussendung …"; pre.scrollTop = 1e9; };
+  render(); const offIds = WW.on("ids", () => pre.isConnected ? render() : offIds());
+  const stop = why => { try { R.live?.un?.(); } catch { } R.live = null; body.querySelector(".sig-live")?.classList.add("off"); $(".sig-live-x", body)?.remove(); if (why) { const b = $(".sig-live-h b", body); if (b) b.textContent += " – " + why; } };
+  $(".sig-live-x", body).onclick = () => stop("angehalten");
+  sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbLink("packet"); });
+  SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - f) > 3000).concat({ rf: f, label: "APRS", until: Date.now() + 60000, radio: o.radio });
+  const rx = APRS.Rx(8000, v => { const d = { decoder: "packet", radio: o.radio, freq: f, t: Date.now() / 1000, value: v, local: true };
+    got.push(d); if (got.length > 300) got = got.slice(-200); render(); WW.decodes?.unshift(d); WW.emit("decode", d); });
+  let n = 0;
+  try { R.live = { un: await sigTap(o, x => { rx.process(x); if (++n % 40 === 0) { const g = sigState(o.ctl || o.radio).freq; if (g && Math.abs(g - f) > 3000) stop("umgestimmt"); } }) }; }
+  catch (e) { stop(e.message); }
+}
+// FT8/FT4 live in der Karte: Ton mitschneiden, nach jedem UTC-Zeitschlitz (15 s bzw. 7,5 s) diesen dekodieren – wie WSJT-X,
+// mit Namen zu den Rufzeichen. Ende bei Stopp, Umstimmen oder Schliessen der Karte.
+async function sigFtxLive(R, id) {
+  const o = R.o, c = R.card, P = id === "FT8" ? 15000 : 7500, chunks = [];   // [Ankunftszeit, Abtastwerte]
+  const box = document.createElement("div"); box.className = "sig-live";
+  box.innerHTML = `<div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${id}</b><i class="grow"></i><button type="button" class="sig-live-x">Stopp</button></div><pre translate="no"></pre>`;
+  $(".sig-body", c).insertBefore(box, $(".sig-act", c)); const pre = $("pre", box);
+  let got = [], next = Math.ceil(Date.now() / P) * P, busy = false, timer = 0;
+  const line = m => { const call = decWsjtCall(m.text), u = call ? idName("call", call) : null;
+    return `${new Date(m.t).toISOString().slice(11, 19)} ${String(Math.round(m.f)).padStart(4)} Hz  ${m.text}${u ? `  (${u.n || ""}${u.city ? ", " + u.city : ""})`.replace("(, ", "(") : ""}`; };
+  const render = () => { pre.textContent = got.length ? got.slice(-40).map(line).join("\n") : `warte auf den nächsten Zeitschlitz (${P / 1000} s) …`; pre.scrollTop = 1e9; };
+  render(); const offIds = WW.on("ids", () => pre.isConnected ? render() : offIds());
+  const stop = why => { clearInterval(timer); try { R.live?.un?.(); } catch { } R.live = null; box.classList.add("off"); $(".sig-live-x", box)?.remove(); if (why) $(".sig-live-h b", box).textContent += " – " + why; };
+  $(".sig-live-x", box).onclick = () => stop("angehalten");
+  try { R.live = { un: await sigTap(o, x => { chunks.push([Date.now(), Float32Array.from(x)]); while (chunks.length && chunks[0][0] < Date.now() - 40000) chunks.shift(); }) }; }
+  catch (e) { return stop(e.message); }
+  timer = setInterval(async () => {
+    if (R.stop || !box.isConnected) return stop();
+    const f = sigState(o.ctl || o.radio).freq; if (o.dial && f && Math.abs(f - o.dial) > 30) return stop("umgestimmt");
+    if (busy || Date.now() < next + P - 500) return;
+    const s0 = next; next += P; busy = true;
+    try {                                                                         // Abtastwerte des Zeitschlitzes s0 (−1 s … +P), Zeit je Wert aus der Ankunftszeit
+      const a = s0 - 1000, e = s0 + P - 300, parts = [];
+      for (const [t, d] of chunks) { const t1 = t, t0 = t - d.length / 8; if (t1 <= a || t0 >= e) continue; const i0 = Math.max(0, Math.round((a - t0) * 8)), i1 = Math.min(d.length, Math.round((e - t0) * 8)); parts.push(d.subarray(i0, i1)); }
+      const n = parts.reduce((s, p) => s + p.length, 0); if (n < (P - 1500) * 8) return;
+      const x = new Float32Array(n); let k = 0; for (const p of parts) { x.set(p, k); k += p.length; }
+      const msgs = await sigFtx(x, id === "FT4"); for (const m of msgs) got.push({ ...m, t: s0 }); if (got.length > 300) got = got.slice(-200); render();
+      WW.emit("ftx", { radio: o.radio, mode: id, slot: s0, msgs });
+    } catch (e) { } finally { busy = false; }
+  }, 250);
+}
 async function sigIdentify(o) {
   sigCancel();
   const R = SIG.run = { o, buf: [], n: 0, stop: false, last: null }, max = Math.max(6, Math.min(30, +wfOpts().sigsecs || 15)) * 8000;
   R.card = sigCard(o);
   let skip = Math.round((o.settle || 0) * 8000);   // nach dem Umstimmen kurz warten (Empfaenger-Laufzeit, Regelung)
-  try { R.un = await sigTap(o, x => { if (R.stop) return; if (skip > 0) { skip -= x.length; return; } R.buf.push(Float32Array.from(x)); R.n += x.length; }); }
+  try { R.un = await sigTap(o, x => { if (R.stop) return; if (skip > 0) { skip -= x.length; return; }
+    if (!R.n) R.tAt0 = Date.now() - x.length / 8;                                  // Uhrzeit des ersten Abtastwerts (fuer FT8/FT4-Zeitschlitze)
+    R.buf.push(Float32Array.from(x)); R.n += x.length; }); }
   catch (err) { sigRender(R, { error: err.message }); return; }
   if (R.stop) { R.un(); return; }
   const steps = [...new Set([4, 8, 15].map(s => s * 8000).filter(n => n < max).concat(max))];
@@ -348,7 +406,18 @@ async function sigIdentify(o) {
       res = await sigAnalyze(x, { fc: o.fc, rf: o.rf, inverted: o.inverted });
       if (R.stop) return;
       R.last = res; sigRender(R, res, need < max);
-      const b = res.best; if (b && b.score >= 0.85 && !["NOISE", "UNKNOWN"].includes(b.id)) break;
+      const b = res.best; if (b && b.score >= 0.85 && !["NOISE", "UNKNOWN"].includes(b.id) && !(/^FT[48]$/.test(b.id) && !b.ftx)) break;
+    }
+    // FT8/FT4 erkannt, aber noch nicht gelesen: weiter aufnehmen, bis ein ganzer UTC-Zeitschlitz im Puffer liegt, und diesen dekodieren
+    const fb = res?.best; if (!R.stop && fb && /^FT[48]$/.test(fb.id) && !fb.ftx && R.tAt0) {
+      const P = fb.id === "FT8" ? 15000 : 7500, s0 = Math.ceil((R.tAt0 + 300) / P) * P, until = s0 + P - 800;
+      $(".sig-body .hint", R.card)?.insertAdjacentHTML("beforeend", ` · <span>lese ${fb.id} im nächsten Zeitschlitz …</span>`);
+      while (!R.stop && Date.now() < until && Date.now() - t0 < 34000) { await new Promise(r => setTimeout(r, 250)); sigProgress(R, 0.5 + 0.5 * (1 - (until - Date.now()) / P)); }
+      if (R.stop) return;
+      const a = Math.max(0, Math.round((s0 - 1000 - R.tAt0) * 8)), len = Math.round((P + 500) * 8), x = new Float32Array(len); let k = 0, pos = 0;
+      for (const bb of R.buf) { const e = pos + bb.length; if (e > a && k < len) { const from = Math.max(0, a - pos), part = bb.subarray(from, Math.min(bb.length, from + len - k)); x.set(part, k); k += part.length; } pos = e; }
+      const msgs = await sigFtx(x.subarray(0, k), fb.id === "FT4").catch(() => []);
+      if (msgs.length) Object.assign(fb, { score: 0.99, text: msgs.map(m => m.text).join(" · "), textScore: 1, ftx: msgs, label: `${fb.id} · ${msgs.length} ${msgs.length === 1 ? "Telegramm" : "Telegramme"} gelesen` });
     }
   } catch (err) { R.err = err.message; }
   finally { try { R.un?.(); } catch { } R.un = null; }
@@ -447,7 +516,8 @@ function sigActions(R, res, el) {
   if (["FT8", "FT4", "WSPR", "JT9", "JT65"].includes(b.id)) {
     const p = (SIGID.planFor(o.rf) || []).find(x => x.id === b.id), std = p ? p.lo - (b.id === "WSPR" ? 1350 : 100) : 0;
     const rr = sigRadio(o.radio), decs = rr?.state?.sdr?.decoders || [], sid = b.id.toLowerCase();
-    if (decs.some(d => d.id === sid)) btn(`Vom Empfänger dekodieren lassen (${b.id})`, () => sigProbe({ ...o, ctl: o.ctl || o.radio, keep: true }, [sid], decs, { noPre: true, only: sid }), true);
+    if (/^FT[48]$/.test(b.id)) { }                                                   // liest Wellenwerk selbst (live in der Karte)
+    else if (decs.some(d => d.id === sid)) btn(`Vom Empfänger dekodieren lassen (${b.id})`, () => sigProbe({ ...o, ctl: o.ctl || o.radio, keep: true }, [sid], decs, { noPre: true, only: sid }), true);
     else el.insertAdjacentHTML("beforeend", `<div class="hint">Dekodieren mit WSJT-X – Wellenwerk übernimmt dessen Meldungen (Optionen → WSJT-X).</div>`);
     if (std && Math.abs(std - o.dial) > 10) btn(`Auf ${fmtMHz(std)} MHz (Standard) abstimmen`, async () => { await sigRig(o.ctl || o.radio, "mode", { mode: "USB", passband: 3000 }); await sigRig(o.ctl || o.radio, "freq", { hz: std }); sigCancel(); });
   }
