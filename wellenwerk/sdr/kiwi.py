@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 import websockets
 
 from ..rig import RigError
-from .base import SdrRig
+from .base import SdrRefused, SdrRig
 
 KIWI_MODES = {"USB": "usb", "PKTUSB": "usb", "RTTY": "usb", "LSB": "lsb", "PKTLSB": "lsb", "CW": "cw", "CWR": "cw",
               "AM": "am", "SAM": "sam", "FM": "nbfm"}
@@ -116,13 +116,13 @@ class KiwiRig(SdrRig):
                 self.state["error"] = f"alle {value} Plätze belegt"
                 raise RigError(f"KiwiSDR: alle {value} Empfangsplätze belegt – später erneut oder anderen Empfänger wählen")
             if name == "badp" and value not in ("0", ""):
-                raise RigError("KiwiSDR: Passwort falsch oder freie Plätze nur mit Passwort")
+                raise SdrRefused("KiwiSDR: Passwort falsch oder freie Plätze nur mit Passwort")
             if name == "down":
-                raise RigError("KiwiSDR ist gerade außer Betrieb")
+                raise SdrRefused("KiwiSDR ist gerade außer Betrieb")
             if name in ("inactivity_timeout", "inactivity_timeout_msg"):
                 self.state["error"] = "Zeitlimit bei Inaktivität erreicht"
             if name == "redirect":
-                raise RigError("KiwiSDR leitet auf einen anderen Empfänger um")
+                raise SdrRefused("KiwiSDR leitet auf einen anderen Empfänger um")
             if name == "bandwidth":
                 self.bandwidth = int(float(value))
                 self.state["sdr"]["ranges"] = [[0, self.bandwidth]]

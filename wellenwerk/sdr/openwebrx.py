@@ -12,7 +12,6 @@ from urllib.parse import urlparse
 import websockets
 
 from ..rig import RigError
-from ..bands import band_for
 from .base import SdrRig
 
 OWRX_MODES = {"USB": "usb", "PKTUSB": "usb", "RTTY": "usb", "LSB": "lsb", "PKTLSB": "lsb", "CW": "cw", "CWR": "cw",
@@ -83,6 +82,25 @@ class Adpcm:
         return out
 
 
+def name_spans(name: str, exact: bool = False) -> list:
+    """Frequenzbereiche (Hz) aus einem Profilnamen: „144-146 MHz“, „431-433“, „7 MHz“ und Bandnamen wie „40m“.
+    exact=True: nur ausdrueckliche Bereiche (ohne Bandzuordnung von Einzelzahlen)."""
+    from ..bands import BANDS
+    out = []
+    num = r"(\d+(?:[.,]\d+)?)"
+    for a, b in re.findall(rf"(?<![\w.]){num}\s*[-–]\s*{num}(?:\s*MHz)?(?![\w.])", name, re.I):
+        lo, hi = float(a.replace(",", ".")), float(b.replace(",", "."))
+        if 0 <= lo < hi <= 6000 and hi - lo <= 100:
+            out.append([lo * 1e6, hi * 1e6])
+    if exact:
+        return out
+    for b, lo, hi, _ in BANDS:
+        if re.search(rf"(?<![\d.]){re.escape(b)}\b", name, re.I) or any(lo <= float(x.replace(",", ".")) * 1e6 <= hi
+                                                                          for x in re.findall(rf"{num}\s*MHz", name, re.I)):
+            out.append([lo, hi])
+    return out
+
+
 class OpenWebRXRig(SdrRig):
     kind = "openwebrx"
     MODES = ["USB", "LSB", "CW", "AM", "SAM", "FM", "PKTUSB", "PKTLSB", "RTTY"]
@@ -95,6 +113,7 @@ class OpenWebRXRig(SdrRig):
         self.center = self.rate = 0
         self.fft_comp, self.audio_comp = "adpcm", "adpcm"
         self.profiles, self.profile = [], ""
+        self.seen = {}                                   # Profil-ID -> (Mitte, Breite) der schon besuchten Profile
         self.adpcm, self.fftc = Adpcm(), Adpcm()
         self.out_rate = 12000
         self.cfg_event = asyncio.Event()
@@ -116,6 +135,7 @@ class OpenWebRXRig(SdrRig):
     async def run(self):
         self.say(f"verbinde mit {self.p.get('url')}")
         self.center = self.rate = 0                      # bei Neuverbindung: Ausschnitt kommt neu vom Server
+        self.profile = ""
         self.adpcm.reset()
         self.prof_event.clear()
         try:
@@ -140,12 +160,19 @@ class OpenWebRXRig(SdrRig):
     async def _json(self, j):
         t, v = j.get("type"), j.get("value")
         if t == "config":
-            self.center = v.get("center_freq", self.center)
-            self.rate = v.get("samp_rate", self.rate)
-            self.fft_comp = v.get("fft_compression", self.fft_comp)
-            self.audio_comp = v.get("audio_compression", self.audio_comp)
+            # beim Profilwechsel kommt die Konfiguration in Bruchstuecken (Felder fehlen oder sind null)
+            self.center = v.get("center_freq") or self.center
+            self.rate = v.get("samp_rate") or self.rate
+            self.fft_comp = v.get("fft_compression") or self.fft_comp
+            self.audio_comp = v.get("audio_compression") or self.audio_comp
             if v.get("profile_id") and v.get("sdr_id"):
-                self.profile = f"{v['sdr_id']}|{v['profile_id']}"
+                prof = f"{v['sdr_id']}|{v['profile_id']}"
+                if self.profile and prof != self.profile and self.state["connected"]:
+                    # nach einem Profilwechsel (v. a. auf ein anderes SDR-Geraet) haelt der Server die Tonaufbereitung an
+                    await self._send({"type": "dspcontrol", "action": "start"})
+                self.profile = prof
+            if self.profile and self.center and self.rate and (v.get("center_freq") or v.get("samp_rate")):
+                self.seen[self.profile] = (self.center, self.rate)
             if self.center and self.rate:
                 self._ranges()
                 if not self.state["connected"]:
@@ -233,35 +260,53 @@ class OpenWebRXRig(SdrRig):
             self.say(f"Abstimmen: {e}")
 
     def _ranges(self):
-        """Empfangbare Bereiche: aktueller Ausschnitt plus Baender, die in Profilnamen vorkommen (z. B. „40m“, „7 MHz“)."""
-        from ..bands import BANDS
+        """Empfangbare Bereiche: aktueller Ausschnitt, schon besuchte Profile und Angaben in Profilnamen
+        (Band „40m“, „7 MHz“, Bereich „144-146 MHz“ bzw. „431-433“)."""
         rng = [[self.center - self.rate / 2, self.center + self.rate / 2]] if self.rate else []
+        rng += [[c - r / 2, c + r / 2] for c, r in self.seen.values()]
         for p in self.profiles:
-            name = p.get("name", "")
-            for b, lo, hi, _ in BANDS:
-                if re.search(rf"(?<![\d.]){re.escape(b)}\b", name, re.I) or any(lo <= float(x.replace(",", ".")) * 1e6 <= hi
-                                                                                    for x in re.findall(r"(\d+(?:[.,]\d+)?)\s*MHz", name, re.I)):
-                    rng.append([lo, hi])
+            rng += name_spans(p.get("name", ""))
         self.state["sdr"]["ranges"] = rng
 
     def _covers(self, f) -> bool:
         return bool(self.rate) and abs(f - self.center) < self.rate / 2 * 0.98
 
     async def _switch_profile(self, f):
-        band = band_for(f) or ""
-        mhz = f / 1e6
-        cands = [p for p in self.profiles if band and re.search(rf"\b{re.escape(band)}\b", p.get("name", ""), re.I)]
-        cands += [p for p in self.profiles if p not in cands and re.search(rf"\b{int(mhz)}([.,]\d+)?\s*MHz", p.get("name", ""), re.I)]
-        for p in cands[:4]:
-            self.cfg_event.clear()
-            await self._send({"type": "selectprofile", "params": {"profile": p["id"]}})
+        def hit(p):     # 0 = schon besucht und passt, 1 = Bereich im Namen passt, 2 = nur Band/MHz-Zahl im Namen
+            c = self.seen.get(p["id"])
+            if c and abs(f - c[0]) < c[1] / 2 * 0.98:
+                return 0
+            spans = name_spans(p.get("name", ""), exact=True)
+            if any(lo <= f <= hi for lo, hi in spans):
+                return 1
+            return 2 if any(lo <= f <= hi for lo, hi in name_spans(p.get("name", ""))) else 9
+        if not self.profiles:                            # direkt nach dem Verbinden: Profilliste abwarten
             try:
-                await asyncio.wait_for(self.cfg_event.wait(), 6)
+                await asyncio.wait_for(self.prof_event.wait(), 8)
             except asyncio.TimeoutError:
-                continue
-            if self._covers(f):
-                self.say(f"Profil „{p.get('name')}“ gewählt")
-                return
+                pass
+        cands = sorted((p for p in self.profiles if hit(p) < 9), key=hit)
+        loop = asyncio.get_running_loop()
+        stop = loop.time() + 25                          # insgesamt nicht ewig suchen
+        for p in cands[:4]:
+            if loop.time() > stop:
+                break
+            # der Server geht oft erst auf das Profil, das auf dem Geraet gerade laeuft, und einige Sekunden spaeter auf das gewuenschte
+            await self._send({"type": "selectprofile", "params": {"profile": p["id"]}})
+            end, settled = min(stop, loop.time() + 15), None
+            while loop.time() < end:
+                if self.profile == p["id"] and self._covers(f):
+                    self.say(f"Profil „{p.get('name')}“ gewählt")
+                    return
+                if self.profile == p["id"]:
+                    settled = settled or loop.time()
+                    if loop.time() - settled > 2:       # Profil steht, deckt die Frequenz aber nicht ab
+                        break
+                self.cfg_event.clear()
+                try:
+                    await asyncio.wait_for(self.cfg_event.wait(), 0.5)
+                except asyncio.TimeoutError:
+                    pass
         names = ", ".join(p.get("name", "") for p in self.profiles[:12])
         raise RigError(f"{f / 1e6:.3f} MHz liegt außerhalb der Empfangsbereiche dieses OpenWebRX ({names})")
 

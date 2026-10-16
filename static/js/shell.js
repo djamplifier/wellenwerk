@@ -244,6 +244,8 @@ function runAccel(a) {
 
 // ---------- Programmoptionen (F8) ----------
 function openOptions(tab = "station") {
+  const prev = document.querySelector("dialog[open].ww-opts");          // schon offen (z. B. Ersteinrichtung): nur Reiter wechseln
+  if (prev) { prev.querySelector(`.dtabs [data-t="${tab}"]`)?.click(); return prev; }
   const s = WW.settings, o = store.get("opts", {});
   const d = dialog({ title: "Programmoptionen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Speichern", "save", "primary"]], body: `
     <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["wf", "Wasserfall"], ["plugins", "Erweiterungen"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["support", "Fehler & Updates"], ["theme", "Darstellung"]]
@@ -353,6 +355,7 @@ function openOptions(tab = "station") {
       $("#acc-add", dd).onclick = () => { const combo = $("#acc-combo", dd).value; if (!combo) return; acc.push({ combo, action: $("#acc-act", dd).value, target: $("#acc-target", dd).value.trim(), label: `${$("#acc-act", dd).selectedOptions[0].text} ${$("#acc-target", dd).value}` }); store.set("accel", acc); draw(); };
       $("#acc-rows", dd).onclick = e => { const b = e.target.closest("[data-del]"); if (b) { acc.splice(+b.dataset.del, 1); store.set("accel", acc); draw(); } };
     } });
+  d.classList.add("ww-opts");
   const wkSt = () => { const w = WW.winkey || {}; d.querySelector(".wk-st").textContent = w.connected ? `verbunden an ${w.device}${w.version ? ", Firmware " + w.version : ""}` : (w.error || "nicht verbunden"); };
   api("/api/hamlib/ports").then(ps => { const sel = d.querySelector(".wk-dev"), cur = sel.value; sel.innerHTML = `<option value="">– wählen –</option>` + ps.map(p => `<option value="${esc(p.device)}" ${p.device === cur ? "selected" : ""}>${esc(p.device)}${p.desc ? " – " + esc(p.desc) : ""}</option>`).join("") + (cur && !ps.some(p => p.device === cur) ? `<option selected>${esc(cur)}</option>` : ""); }).catch(() => { });
   pluginOptions(d.querySelector(".pl-opts"));

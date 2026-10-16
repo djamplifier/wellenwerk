@@ -353,7 +353,7 @@ function createNetServer(root) {
   const draw = () => { root.innerHTML = `<table class="grid"><thead><tr><th>Verbindung</th><th>Status</th><th>Details</th></tr></thead><tbody>
     ${WW.radios.map(r => `<tr><td>Funkgerät ${esc(r.name)}</td><td>${r.connected ? "✓ verbunden" : "–"}</td><td>${esc(r.model_name || "")} ${esc(r.device || r.host || "")}</td></tr>`).join("")}
     <tr><td>Rotor</td><td>${WW.rotor.enabled ? (WW.rotor.connected ? "✓" : "✗") : "aus"}</td><td>${esc(WW.rotor.model || "")}</td></tr>
-    <tr><td>DX-Cluster</td><td>${WW.cluster.connected ? "✓" : "✗"}</td><td>${esc(WW.cluster.host || "")} ${esc(WW.cluster.error || "")}</td></tr>
+    <tr><td>DX-Cluster</td><td>${WW.cluster.connected ? "✓" : "✗"}</td><td>${esc(WW.cluster.host || "")} <span>${esc(WW.cluster.error || "")}</span></td></tr>
     <tr><td>WSJT-X/JTDX (UDP ${esc(WW.settings.wsjtx_port)})</td><td>${WW.wsjtx.ident ? "✓" : "–"}</td><td>${esc(WW.wsjtx.ident || "")} ${esc(WW.wsjtx.mode || "")}</td></tr>
     <tr><td>Wellenwerk-Server</td><td>✓</td><td>${esc(location.host)}</td></tr></tbody></table>`; };
   const offs = [WW.on("radios", draw), WW.on("rotor", draw), WW.on("cluster", draw), WW.on("wsjtx", draw)]; draw(); return () => offs.forEach(f => f());

@@ -8,6 +8,10 @@ from urllib.parse import parse_qsl
 
 from ..rig import RigError, LEVELS, FUNCS
 
+
+class SdrRefused(RigError):
+    """Der Server lehnt dauerhaft ab (Passwort, ausser Betrieb, Umleitung) – kein automatischer neuer Versuch."""
+
 log = logging.getLogger("ww.sdr")
 
 AGC_NAMES = {0: "AUS", 2: "FAST", 6: "MITTEL", 3: "SLOW"}
@@ -70,8 +74,14 @@ class SdrRig:
 
     # ---------- gleiche Schnittstelle wie rig.Rig ----------
     async def set_freq(self, hz: int):
+        old = self.state.get("freq")
         self.state["freq"] = int(hz)
-        await self.tune()
+        try:
+            await self.tune()
+        except RigError:                 # nicht empfangbar: Anzeige bleibt auf der alten Frequenz
+            self.state["freq"] = old
+            await self.changed(True)
+            raise
         await self.changed(True)
 
     async def set_mode(self, mode: str, passband: int = 0):
@@ -196,11 +206,12 @@ class SdrProc:
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:
+                        refused = isinstance(e, SdrRefused)
                         ever = ever or bool(self.rig.state.get("connected"))
                         self.rig.state.update(connected=False, error=str(e) or type(e).__name__)
                         self.rig.say(f"getrennt: {e}")
                         await self.rig.changed(True)
-                    if not ever:
+                    if not ever or refused:
                         break
                     if asyncio.get_running_loop().time() - t0 > 120:
                         delay = 3

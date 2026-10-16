@@ -335,6 +335,12 @@ class RadioManager:
             err = rp.rig.state.get("error") or ("keine Antwort nach 15 s – Empfänger überlastet oder nicht erreichbar" if rp.proc.poll() is None else (list(rp.log)[-1] if rp.log else "keine Antwort"))
             await rp.stop()
             raise RuntimeError(f"Empfänger nicht verbunden: {err}")
+        for _ in range(6):                       # manche Server werfen gleich nach der Anmeldung endgueltig hinaus (z. B. Passwort)
+            if rp.proc.poll() is not None:
+                err = rp.rig.state.get("error") or "Verbindung abgelehnt"
+                await rp.stop()
+                raise RuntimeError(f"Empfänger nicht verbunden: {err}")
+            await asyncio.sleep(0.25)
         self.active[pid] = rp
         if prof.get("role") != "second" or not self.current:      # zweiter Empfaenger: Funkgeraet bleibt das aktuelle
             self.current = pid
@@ -363,7 +369,7 @@ class RadioManager:
         out = []
         for p in self.profiles:
             rp = self.active.get(p["id"])
-            out.append(dict(p, connected=bool(rp), current=p["id"] == self.current, cat_port=rp.port if rp else None,
+            out.append(dict(p, connected=bool(rp) and (not rp.proc or rp.proc.poll() is None), current=p["id"] == self.current, cat_port=rp.port if rp else None,
                             scope=bool(rp.scope) if rp else p.get("scope"),
                             state=rp.rig.state if rp and rp.rig else None))
         return out
