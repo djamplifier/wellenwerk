@@ -82,6 +82,7 @@ class SdrRig:
         a = np.asarray(x, np.float32)
         b["buf"].append((time.monotonic(), a))
         b["n"] += len(a)
+        b["total"] = b.get("total", 0) + len(a)                 # fortlaufende Zahl der Abtastwerte (fuer das laufende Dekodieren)
         while len(b["buf"]) > 1 and b["n"] - len(b["buf"][0][1]) >= rate * 6:
             b["n"] -= len(b["buf"].popleft()[1])
 
@@ -107,6 +108,61 @@ class SdrRig:
             import base64
             out["raw"] = base64.b64encode(x.astype("<f4").tobytes()).decode()
         return out
+
+    # ---------- eigenes Dekodieren (dvdec): laufend aus dem Diskriminator-Puffer ----------
+    DV_LOCAL = {"dmr"}
+
+    def dv_decode(self, proto: str) -> str:
+        """Eigenen Dekoder ein-/ausschalten (\"\" = aus). Nur sinnvoll mit sauberem Signal (eigene IQ-Empfaenger)."""
+        proto = (proto or "").lower()
+        if proto and proto not in self.DV_LOCAL:
+            raise RigError(f"Eigener Dekoder für {proto} noch nicht vorhanden")
+        self._dvdec = proto
+        self.state["sdr"]["dv_local"] = proto
+        if proto and not getattr(self, "_dvtask", None):
+            self._dvtask = asyncio.ensure_future(self._dv_loop())
+        return proto
+
+    async def _dv_loop(self):
+        import numpy as np
+        from . import dvdec
+        done, seen = None, {}
+        try:
+            while getattr(self, "_dvdec", ""):
+                await asyncio.sleep(1.0)
+                b = getattr(self, "_dv", None)
+                if not b:
+                    continue
+                rate, total = b["rate"], b.get("total", 0)
+                if done is None:
+                    done = max(0, total - rate)
+                parts, n = [], 0                           # Abtastwerte ab (done - 0,15 s) bis jetzt
+                for _t, a in reversed(b["buf"]):
+                    parts.append(a)
+                    n += len(a)
+                    if total - n <= done - int(rate * 0.15):
+                        break
+                x = np.concatenate(parts[::-1]).astype(np.float64)
+                start = total - len(x)
+                bursts = await asyncio.to_thread(dvdec.dmr_bursts, x, rate)
+                now = asyncio.get_running_loop().time()
+                for e in bursts:
+                    pos = start + int(e["t"] * rate)
+                    if pos < done - int(rate * 0.05):           # schon im letzten Durchgang gemeldet
+                        continue
+                    if "src" not in e:
+                        continue
+                    v = dict(protocol="DMR", slot=e.get("slot"), source=e["src"], target=e["dst"],
+                             type=e.get("type") or ("group" if e.get("csbk") == 0x3D else ""), sync="voice" if e.get("dt") in (1, 2) and e.get("flco") != 0x30 else "data",
+                             cc=e.get("cc"), burst=e.get("dtn"))
+                    key = (v["slot"], v["source"], v["target"], e.get("dt"))
+                    if now - seen.get(key, 0) < 3:
+                        continue
+                    seen[key] = now
+                    self.emit_decode(dict(decoder="dmr", kind="local", freq=self.state.get("freq"), value=v))
+                done = total
+        finally:
+            self._dvtask = None
 
     def emit_decode(self, msg: dict):
         if DECODE["sink"]:

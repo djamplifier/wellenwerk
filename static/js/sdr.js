@@ -245,7 +245,7 @@ function decSummary(d) {
   if (d.decoder === "dmr") {                                                   // Sprecher (DMR-ID -> Rufzeichen/Name) und Talkgroup mit Namen
     if (v.source == null || v.source === "") return "";                       // reine Synchronmeldungen ohne Inhalt nicht anzeigen
     const src = idPerson(idName("dmr", v.source), "ID " + v.source), ta = String(v.talkeralias || "").trim();
-    const tgt = v.type === "direct" || v.type === "private" ? "privat → " + idPerson(idName("dmr", v.target), "ID " + v.target) : idTg(v.target);
+    const tgt = v.type === "direct" || v.type === "private" ? "privat → " + idPerson(idName("dmr", v.target), "ID " + v.target) : v.type === "data" || v.sync === "data" ? "Daten → ID " + v.target : idTg(v.target);
     return j(v.slot != null ? "TS" + (+v.slot + 1) : "", `${src}${ta && !src.startsWith(ta.split(" ")[0]) ? " „" + ta + "“" : ""}`, tgt, pos); }
   if (d.decoder === "ysf") { if (!v.source) return ""; return j(`${call(v.source)} → ${String(v.target || "ALL").trim()}`, v.up && "über " + String(v.up).trim(), pos); }
   if (d.decoder === "m17") { if (!v.source) return ""; return j(`${call(v.source)} → ${String(v.destination || v.target || "ALL").trim()}`, pos); }

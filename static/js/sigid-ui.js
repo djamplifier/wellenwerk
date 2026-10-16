@@ -122,7 +122,7 @@ function sigProbeList(f, decs) {
 const SIG_LOCAL = new Set(["packet"]);                     // dekodiert Wellenwerk selbst – auch ohne Dekoder im Empfaenger
 async function sigProbe(o, list, decs, opt = {}) {
   sigCancel();
-  const R = SIG.run = { o, stop: false, card: sigCard(o) }, c = R.card, body = $(".sig-body", c), name = id => (decs.find(d => d.id === id) || {}).label || id;
+  const R = SIG.run = { o, stop: false, card: sigCard(o) }, c = R.card, body = $(".sig-body", c), name = id => (decs.find(d => d.id === id) || {}).label || DEC_LABEL[id] || id;
   const T0 = Date.now(), fx = SIG_FIXED.includes(list[0]) ? list[0] : "";
   // Digitalfunk: auf die gemessene Signalmitte abstimmen (Klick ist selten genau, DMR/D-STAR brauchen die Mitte auf wenige 100 Hz);
   // liegt sie nahe am Kanalraster (6,25 kHz), aufs Raster. Ohne Signal im Moment: Raster, die Mitte wird nachgefuehrt, sobald gesendet wird
@@ -184,8 +184,10 @@ async function sigProbe(o, list, decs, opt = {}) {
       const hit = (dv?.found || []).find(x => x.score >= 0.6);
       if (hit) {
         const sid = hit.id === "nxdn48" ? "nxdn" : hit.id;
-        if (list.includes(sid)) { opt.only = sid; R.dv = hit; }                 // Server-Dekoder direkt waehlen
-        else return sigDvResult(R, o, f, body, hit, mod, secs());               // eigenes Geraet: Verfahren anzeigen
+        const rr = sigRadio(o.radio), own = rr?.state?.sdr?.hw && ["dmr"].includes(sid);   // eigenes IQ-Geraet: Wellenwerk dekodiert selbst
+        if (own) { try { await api(`/api/radios/${encodeURIComponent(o.radio)}/rig/dvdecode`, { method: "POST", body: { proto: sid } }); opt.only = sid; opt.own = true; R.dv = hit; } catch { return sigDvResult(R, o, f, body, hit, mod, secs()); } }
+        else if (list.includes(sid)) { opt.only = sid; R.dv = hit; }            // Server-Dekoder direkt waehlen
+        else return sigDvResult(R, o, f, body, hit, mod, secs());               // Verfahren anzeigen
       } else if (pre.analog || o.am || !list.length) return showAnalog(pre.analog || o.am || !list.length ? pre : { ...pre, label: "" }, null);
       else if (dv?.idle) return showAnalog({ ...pre, label: "gerade keine Aussendung", score: 0 }, null);
       else if (dv) return showAnalog(pre.rf ? { ...pre, label: "kein bekanntes Digitalverfahren erkannt", score: 0.3, probe: true } : { ...pre, label: "gerade keine Aussendung", score: 0 }, null);
@@ -196,7 +198,8 @@ async function sigProbe(o, list, decs, opt = {}) {
     const narrow = ["dstar", "nxdn"], rank = id => (id === last ? -10 : 0) + (bw && bw < 7000 ? (narrow.includes(id) ? -2 : 0) : (narrow.includes(id) ? 2 : 0));
     const order = opt.only ? [opt.only] : list.map((id, i) => [id, rank(id) + i * 0.01]).sort((a, b) => a[1] - b[1]).map(x => x[0]);
     let waited = 0;
-    if (opt.only) { try { await setDec(opt.only); found = opt.only; } catch (e) { body.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; } }
+    if (opt.only && opt.own) found = opt.only;
+    else if (opt.only) { try { await setDec(opt.only); found = opt.only; } catch (e) { body.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; } }
     for (let i = 0; i < order.length && !R.stop && !found; i++) {
       const id = order[i]; body.innerHTML = `<div class="hint">prüfe ${esc(name(id))} … (${i + 1}/${order.length})</div>`; sigProgress(R, 0.3 + 0.7 * i / order.length);
       try { await setDec(id); } catch { continue; }
@@ -219,7 +222,7 @@ async function sigProbe(o, list, decs, opt = {}) {
   $(".sig-bar", c).classList.add("done"); sigProgress(R, 1);
   body.innerHTML = `<div class="sig-res sure"><span class="sig-name">${esc(name(found))}</span><span class="sig-conf">${o.rep ? "Relais-Datenbank" : fx ? "nach Frequenz" : R.dv ? `Synchronmuster erkannt · ${secs()} s` : "Synchronmuster erkannt"}</span></div>
     ${o.rep ? `<div class="hint"><b>${esc(o.rep.c)}</b> · ${fmkRepFacts(o.rep).map(x => `<span>${esc(x)}</span>`).join(" · ")}</div>` : ""}
-    <div class="hint"><span>Dekoder des Empfängers läuft</span> · <span class="sig-tf">${fmtMHz(f)}</span> MHz · <span>Meldungen auch im Fenster „Datenempfang“</span></div>
+    <div class="hint"><span>${opt.own ? "Wellenwerk dekodiert selbst" : "Dekoder des Empfängers läuft"}</span> · <span class="sig-tf">${fmtMHz(f)}</span> MHz · <span>Meldungen auch im Fenster „Datenempfang“</span></div>
     ${!fx && Math.abs(f - o.rf) >= 500 ? `<div class="hint sig-auto">✓ <span>auf Signalmitte abgestimmt (${f > o.rf ? "+" : "−"}${(Math.abs(f - o.rf) / 1000).toFixed(1)} kHz)</span></div>` : ""}
     <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(name(found))}</b><i class="grow"></i><button type="button" class="sig-live-x">Dekoder aus</button></div><pre translate="no"></pre></div>
     <div class="hint sig-db"></div><div class="sig-act"></div>`;
@@ -234,7 +237,7 @@ async function sigProbe(o, list, decs, opt = {}) {
   R.onTune = nf => { const el = $(".sig-tf", body); if (el) el.textContent = fmtMHz(nf); SIG.tags.forEach(t => { if (t.radio === o.radio && t.label === name(found)) t.rf = nf; }); };
   (async () => { while (!R.stop && R.track && SIG.run === R) { await new Promise(r => setTimeout(r, 1000)); const cur = sigState(o.ctl).freq;
     if (cur && Math.abs(cur - f) > 50 && Date.now() - (R.tuned || 0) > 2500) { R.track = false; break; } await R.retune(); } })();
-  $(".sig-live-x", body).onclick = async () => { await setDec("").catch(() => { }); R.onMsg = null; R.track = false; body.querySelector(".sig-live").classList.add("off"); $(".sig-live-x", body).remove(); };
+  $(".sig-live-x", body).onclick = async () => { if (opt.own) await api(`/api/radios/${encodeURIComponent(o.radio)}/rig/dvdecode`, { method: "POST", body: { proto: "" } }).catch(() => { }); else await setDec("").catch(() => { }); R.onMsg = null; R.track = false; body.querySelector(".sig-live").classList.add("off"); $(".sig-live-x", body).remove(); };
   sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbLink(found) || sigDbHtml(f, { id: found === "packet" ? "PACKET" : "FSK" }, 0, !!bandFor(f)); });
   SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - f) > 3000).concat({ rf: f, label: name(found), until: Date.now() + 60000, radio: o.radio });
 }

@@ -2862,6 +2862,13 @@ async def radio_rig_cmd(pid: str, what: str, body: dict):
             return {"decoder": await r.set_decoder(str(body.get("mode") or ""))}
         except RigError as e:
             raise HTTPException(400, str(e))
+    if what == "dvdecode":                   # eigenen Dekoder ein/aus (DMR; weitere folgen)
+        if not hasattr(r, "dv_decode"):
+            raise HTTPException(400, "Eigenes Dekodieren gibt es nur bei Empfängern")
+        try:
+            return {"proto": r.dv_decode(str(body.get("proto") or ""))}
+        except RigError as e:
+            raise HTTPException(400, str(e))
     if what == "dvdetect":                   # Digitalfunk erkennen (DMR, D-STAR, YSF, P25, NXDN, M17 gleichzeitig) – eigene Auswertung
         if not hasattr(r, "dv_detect"):
             raise HTTPException(400, "Digitalfunk-Erkennung gibt es nur bei Empfängern")
