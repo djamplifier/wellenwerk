@@ -134,9 +134,16 @@ function sdrPicker(root, done) {
     : connect($(".sp-mtype", root).value, $(".sp-url", root).value.trim(), $(".sp-par", root).value || params(), role);
   $(".sp-go", root).onclick = () => go("main");
   $(".sp-go2", root).onclick = () => go("second");
-  const HINT = { kiwisdr: "http://empfaenger.example:8073", openwebrx: "http://empfaenger.example:8073/", rtltcp: "127.0.0.1:1234 (rtl_tcp)", hl2: "leer = automatisch suchen, sonst IP-Adresse" };
+  const HINT = { kiwisdr: "http://empfaenger.example:8073", openwebrx: "http://empfaenger.example:8073/", rtltcp: "127.0.0.1:1234 (rtl_tcp)", hl2: "leer = automatisch suchen, sonst IP-Adresse",
+    rtlusb: "leer lassen – Gerät am USB", hackrf: "leer lassen – Gerät am USB" };
+  // SDR direkt am USB: angeschlossene Geraete zeigen und das erste vorbelegen
+  const usbScan = async kind => { const st = $(".sp-st", root); st.textContent = "suche Geräte am USB …";
+    try { const r = await api("/api/sdr/usb"), ds = r.devices.filter(d => d.kind === kind), lib = kind === "hackrf" ? r.libs.hackrf : r.libs.rtlsdr;
+      st.textContent = !lib ? "Treiberbibliothek fehlt (im Desktop-Programm enthalten)" : ds.length ? "gefunden: " + ds.map(d => `${d.product || d.name}${d.serial ? " (" + d.serial + ")" : ""}`).join(", ")
+        : "kein Gerät gefunden" + (navigator.platform.startsWith("Win") ? " – unter Windows einmalig den WinUSB-Treiber mit Zadig installieren" : "");
+      if (ds.length && ds[0].serial) $(".sp-par", root).value = `serial=${ds[0].serial}; ${params()}`; } catch (e) { st.textContent = e.message; } };
   api("/api/sdr/kinds").then(ks => { const sel = $(".sp-mtype", root); sel.innerHTML = ks.map(k => `<option value="${esc(k.kind)}">${esc(k.label)}</option>`).join("");
-    sel.onchange = () => { $(".sp-url", root).placeholder = HINT[sel.value] || ""; }; sel.onchange(); }).catch(() => { });
+    sel.onchange = () => { $(".sp-url", root).placeholder = HINT[sel.value] || ""; if (sel.value === "rtlusb" || sel.value === "hackrf") usbScan(sel.value); }; sel.onchange(); }).catch(() => { });
   load();
 }
 

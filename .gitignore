@@ -9,3 +9,4 @@ venv/
 desktop/node_modules/
 desktop/dist/
 packaging/codec2/
+packaging/sdrlibs/

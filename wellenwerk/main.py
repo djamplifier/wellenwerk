@@ -2901,6 +2901,14 @@ async def sdr_decodes(limit: int = 300):
     return list(SDR_DECODES)[-max(1, min(limit, 300)):]
 
 
+@app.get("/api/sdr/usb", tags=["Empfänger (SDR)"])
+async def sdr_usb():
+    """Per USB angeschlossene SDRs (RTL-SDR, HackRF One) fuer den direkten Anschluss."""
+    from .sdr import usbsdr
+    return {"devices": await asyncio.get_running_loop().run_in_executor(None, usbsdr.devices),
+            "libs": {b: bool(usbsdr._find(b)) for b in ("rtlsdr", "hackrf")}}
+
+
 @app.get("/api/sdr/kinds", tags=["Empfänger (SDR)"])
 async def sdr_kinds():
     from .sdr import registry

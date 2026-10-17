@@ -1,0 +1,26 @@
+name: SDR-Bibliotheken testen
+# Nur zum Ausprobieren: baut librtlsdr/libhackrf je System und prueft, dass Python sie laden kann.
+on:
+  workflow_dispatch:
+jobs:
+  libs:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, macos-15-intel, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bibliotheken
+        shell: bash
+        run: .github/scripts/sdrlibs.sh
+      - name: Laden pruefen
+        shell: bash
+        run: pip install -q numpy && python -c "from wellenwerk.sdr import usbsdr; print(usbsdr.selftest())"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdrlibs-${{ runner.os }}-${{ runner.arch }}
+          path: packaging/sdrlibs
