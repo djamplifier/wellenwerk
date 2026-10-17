@@ -23,7 +23,8 @@ async function sstvSave(img) {
 }
 
 function createSstv(root) {
-  root.innerHTML = `<div class="pane-tb"><label class="chk"><input type="checkbox" class="ss-on"> Empfang</label>
+  root.addEventListener("click", e => { const b = e.target.closest(".ss-freqs"); if (b) freqMenu(b, "SSTV"); });
+  root.innerHTML = `<div class="pane-tb"><label class="chk"><input type="checkbox" class="ss-on"> Empfang</label><button type="button" class="ss-freqs" title="SSTV-Frequenzen">Frequenzen ▾</button>
     <label class="chk">Modus <select class="ss-mode"><option value="">automatisch (VIS)</option>${Object.keys(SSTV_MODES).map(m => `<option ${m === store.get("sstv.mode", "") ? "selected" : ""}>${m}</option>`).join("")}</select></label>
     <button class="ss-now" title="Bild läuft schon: ab jetzt im gewählten Modus empfangen">Jetzt starten</button>
     <button class="ss-tx primary">Bild senden …</button><button class="ss-save">Speichern</button><span class="hint ss-st"></span></div>

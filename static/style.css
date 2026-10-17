@@ -477,3 +477,7 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 .rot-mapbox { position: relative; height: calc(100% - 34px); }
 canvas.dial { background: #02060d; } .rot-dials { background: radial-gradient(ellipse at center, #071a2c 0%, #02060d 75%); }
 .rot-ctl { background: #02060d; border-top: 1px solid rgba(43,212,255,.25); }
+.rc-ruler .sg { position: absolute; top: 11px; height: 6px; border-radius: 3px; opacity: .85; pointer-events: auto; }
+.rc-bar:not(.cur) .rc-ruler .sg { opacity: .45; }
+.rc-status .chip.plan { color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, transparent); border-color: color-mix(in srgb, var(--pc) 50%, transparent); }
+.fl-tabs { flex-wrap: wrap; gap: 3px; } .fl-tabs button.on { background: var(--accent); color: #fff; } .fl-body { overflow: auto; height: calc(100% - 64px); } .fl-t tr { cursor: pointer; }

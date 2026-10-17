@@ -228,7 +228,8 @@ function renderFace(rc) {
     [`Memory: ${r.mem >= 0 && r.mem != null ? r.mem : "–"}`, r.vfo === "MEM", "plain"], [`CTCSS: ${r.ctcss ? r.ctcss.toFixed(1) : "–"}`, !!f.TSQL || !!f.TONE, "plain"],
     [`RIT ${r.rit ? (r.rit > 0 ? "+" : "") + r.rit : ""}`, !!r.rit || f.RIT], [`XIT ${r.xit ? (r.xit > 0 ? "+" : "") + r.xit : ""}`, !!r.xit || f.XIT],
     ["DSP", !!(f.NR || f.ANF || f.NB)], ["Lock", !!f.LOCK]];
-  $(".rc-status", rc).innerHTML = (r.ptt ? `<span class="chip tx">PWR ${Math.round((m.RFPOWER_METER || 0) * 100)} · SWR ${(m.SWR ?? 1).toFixed(1)} · ALC ${Math.round((m.ALC || 0) * 100)}</span>` : "")
+  const bp = typeof planAt === "function" && r.freq ? planAt(r.freq) : null;
+  $(".rc-status", rc).innerHTML = (bp ? `<span class="chip plan" style="--pc:${bp.spot ? "#d946ef" : bp.kind.c}" title="Bandplan">${esc(bp.label)}</span>` : "") + (r.ptt ? `<span class="chip tx">PWR ${Math.round((m.RFPOWER_METER || 0) * 100)} · SWR ${(m.SWR ?? 1).toFixed(1)} · ALC ${Math.round((m.ALC || 0) * 100)}</span>` : "")
     + st.filter(([, on]) => on).map(([t, , cls]) => `<span class="chip ${cls || ""}">${esc(t.trim())}</span>`).join("")
     + (r.connected ? "" : `<span class="chip warn">${esc(r.error || "nicht verbunden")}</span>`);
   // Tastenzustaende
@@ -381,6 +382,9 @@ function renderBars(rc) {
         html += `<span class="sp st-${s.status || "none"}" style="left:${(s.freq - lo) * px}px" data-f="${s.freq}" data-call="${esc(s.call)}" data-cmt="${esc(s.comment)}" title="${esc(s.call)} ${(s.freq / 1e3).toFixed(1)} ${esc(s.country)}">${esc(s.call)}</span>`; });
       qs.forEach((q, i) => { if (q.f >= lo && q.f <= hi) html += `<span class="qs" style="left:${(q.f - lo) * px}px" data-f="${q.f}" data-m="${esc(q.m || "")}" title="Schnellspeicher ${i + 1}: ${fmtMHz(q.f)} ${esc(q.m || "")}">${i + 1}</span>`; });
     }
+    if (!fine && typeof BANDSEGS !== "undefined") for (const sg of BANDSEGS[planRegion()] || []) {   // Bandplan-Bereiche farbig auf der Skala
+      const a = Math.max(lo, sg[0] * 1000), b = Math.min(hi, sg[1] * 1000); if (b <= a) continue; const k = SEG_KIND[sg[2]];
+      html = `<i class="sg" style="left:${(a - lo) * px}px;width:${Math.max(1, (b - a) * px)}px;background:${k.c}" title="${esc((sg[4] || k.n) + ` · ${sg[0]}–${sg[1]} kHz`)}"></i>` + html; }
     const inR = f >= lo && f <= hi;
     rul.parentElement.classList.toggle("cur", inR && !fine);
     if (inR) html += `<b class="mk" style="left:${(f - lo) * px}px"></b>`;

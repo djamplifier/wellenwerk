@@ -204,6 +204,14 @@ Frequencies between channels are of no use – Wellenwerk therefore tunes in the
 
 Any step from 10 Hz to 100 kHz can also be set by hand. A **click in the waterfall** snaps to the raster (signal identification also puts its measured frequency on the raster, AM broadcast e.g. on 5 kHz), **Page Up/Page Down** move one step, and the mouse wheel on the tuning scale jumps from channel to channel in channel rasters.
 
+### Band plan: mode and filter automatically
+
+Wellenwerk knows the band plan (region 1 after the IARU band plan from 160 m to 23 cm, regions 2 and 3 simplified; choose the region on the band row). The segments are coloured on the band scales: **blue** CW, **violet** narrow band/digimodes, **green** SSB, **teal** all modes, **yellow** beacons, **orange** FM and repeaters, **red** satellites. The current segment is shown as a tag below the display (e.g. “CW”, “SSB”, “Digimodes / APRS” or “FT8 · WSJT-X standard frequency”).
+
+When you move into another segment or tune to a known digital frequency (e.g. FT8 on 7.074 MHz), Wellenwerk sets **mode and filter** accordingly: CW with 500 Hz, SSB with 2.4 kHz (LSB below 10 MHz, USB above), digimodes PKTUSB with 3 kHz, FM. If you change the mode by hand, it stays until you leave the segment. Band buttons with a remembered mode and signal identification are not overridden. Switch it off under **Options → Band plan**.
+
+**Digimode frequency list:** FT8, FT4, JS8, WSPR, MSK144, PSK31, RTTY, Olivia, SSTV, FreeDV and CW QRP with their activity frequencies per band – a click sets frequency, mode and filter (in digital modes also the matching mode there). Found under **Memory → Digimode frequencies** (radio control), **Frequencies** in the digital-modes toolbar and as a drop-down **Frequencies ▾** in the FreeDV and SSTV windows.
+
 ### Markers in the waterfall: typical frequencies, broadcast, repeaters
 
 ![Broadcast stations in the 49 m band, on air now (EiBi)](bilder/26-markierungen.png)

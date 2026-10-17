@@ -283,7 +283,7 @@ APPS.dm = {
   panels: {
     waterfall: { title: "Wasserfall", create: createWaterfall }, rx: { title: "Empfang", create: createDmRx }, tx: { title: "Senden", create: createDmTx },
     macros: { title: "Makros", create: createDmMacros }, qso: { title: "QSO", create: createDmQso }, tags: { title: "Über mich", create: createDmTags },
-    radio: { title: "Gerätestatus", create: createRadioPane }, sweeper: { title: "WWK Sweeper", create: createSweeper }, worldmap: { title: "Weltkarte", create: createDmMap },
+    radio: { title: "Gerätestatus", create: createRadioPane }, freqlist: { title: "Frequenzen", create: (r, p) => createFreqList(r, p), dock: { ref: ["macros", "rx"], dir: "within" } }, sweeper: { title: "WWK Sweeper", create: createSweeper }, worldmap: { title: "Weltkarte", create: createDmMap },
     sstv: { title: "SSTV", create: createSstv, dock: { ref: "rx", dir: "within" } }, sstvgal: { title: "SSTV-Bilder", create: createSstvGallery, dock: { ref: ["sweeper", "rx"], dir: "within" } },
   },
   layout(dv) {
@@ -311,7 +311,8 @@ APPS.dm = {
   toolbar: [   // eigene Gruppierung: Betrieb, dann Ton/Gerät; Programmwechsel ueber die Reiter
     { label: "QSO", icon: "i-edit", act: () => addPanel("dm", "qso") }, { label: "WWK Sweeper", icon: "i-scan", act: () => addPanel("dm", "sweeper") }, { label: "SSTV", icon: "i-cam", act: () => addPanel("dm", "sstv") }, "|",
     { label: "Wasserfall", icon: "i-wave", act: () => addPanel("dm", "waterfall") }, { label: "Soundkarte", icon: "i-mic", act: () => dmStart(store.get("dm.in", "")), on: () => D.running },
-    { label: "Gerätestatus", icon: "i-radio", act: () => addPanel("dm", "radio") }, "->",
+    { label: "Gerätestatus", icon: "i-radio", act: () => addPanel("dm", "radio") },
+    { label: "Frequenzen", icon: "i-list", title: "Frequenzliste der Digimodes", act: () => { const m = D.mode || ""; store.set("fl.mode", /^PSK/.test(m) ? "PSK31" : /^RTTY/.test(m) ? "RTTY" : /^(Olivia|Contestia)/.test(m) ? "Olivia" : m === "CW" ? "CW-QRP" : store.get("fl.mode", "FT8")); addPanel("dm", "freqlist"); } }, "->",
     { html: `<div class="ribbon-box rb-clk"></div>`, init: el => setInterval(() => el.textContent = new Date().toISOString().slice(11, 19) + " UTC", 1000) },
     { label: "Optionen", icon: "i-gear", act: () => openOptions() },
   ],

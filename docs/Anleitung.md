@@ -198,6 +198,14 @@ Frequenzen zwischen den Kanälen bringen nichts – Wellenwerk stimmt deshalb im
 
 Von Hand lässt sich jeder Schritt von 10 Hz bis 100 kHz festlegen. Ein **Klick in den Wasserfall** rastet im Raster ein (die Signalerkennung legt ihre gemessene Frequenz ebenfalls aufs Raster, AM-Rundfunk z. B. auf 5 kHz), **Bild ↑/Bild ↓** gehen einen Schritt weiter, und das Mausrad auf der Abstimmskala springt bei Kanalrastern von Kanal zu Kanal.
 
+### Bandplan: Betriebsart und Filter automatisch
+
+Wellenwerk kennt den Bandplan (Region 1 nach dem IARU-Bandplan von 160 m bis 23 cm, Region 2 und 3 vereinfacht; Region an der Bandleiste wählen). Die Bereiche sind auf den Bandskalen farbig: **blau** CW, **violett** Schmalband/Digimodes, **grün** SSB, **türkis** alle Betriebsarten, **gelb** Baken, **orange** FM und Relais, **rot** Satelliten. Der aktuelle Bereich steht als Kennzeichen unter der Anzeige (z. B. „CW“, „SSB“, „Digimodes / APRS“ oder „FT8 · WSJT-X Standardfrequenz“).
+
+Wechselst du in einen anderen Bereich oder stimmst du auf eine bekannte Digi-Frequenz ab (z. B. FT8 auf 7,074 MHz), stellt Wellenwerk **Betriebsart und Filter** passend ein: CW mit 500 Hz, SSB mit 2,4 kHz (unter 10 MHz LSB, darüber USB), Digimodes PKTUSB mit 3 kHz, FM. Stellst du die Betriebsart von Hand um, bleibt sie, bis du den Bereich verlässt. Bei Bandtasten mit gemerkter Betriebsart und während der Signalerkennung greift die Automatik nicht. Abschalten unter **Optionen → Bandplan**.
+
+**Frequenzliste der Digimodes:** FT8, FT4, JS8, WSPR, MSK144, PSK31, RTTY, Olivia, SSTV, FreeDV und CW-QRP mit ihren Aktivitätsfrequenzen je Band – ein Klick stellt Frequenz, Betriebsart und Filter ein (im Digitalbetrieb auch die passende Betriebsart dort). Zu finden unter **Speicher → Frequenzen der Digimodes** (Gerätesteuerung), **Frequenzen** in der Werkzeugleiste des Digitalbetriebs sowie als Ausklappliste **Frequenzen ▾** im FreeDV- und im SSTV-Fenster.
+
 ### Markierungen im Wasserfall: typische Frequenzen, Rundfunk, Relais
 
 ![Rundfunksender im 49-m-Band, gerade auf Sendung (EiBi)](bilder/26-markierungen.png)

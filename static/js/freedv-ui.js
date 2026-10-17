@@ -9,7 +9,7 @@ function createFreedv(root) {
       <label>Modus<select class="fd-mode">${["700D", "700E", "1600"].map(m => `<option ${m === st.mode ? "selected" : ""}>${m}</option>`).join("")}</select></label><span class="fd-avail hint"></span>
       <label>Empfang von<select class="fd-inp"></select></label><label>Lautsprecher<select class="fd-spk"></select></label>
       <label>Mikrofon<select class="fd-mic"></select></label><label>Senden zum Funkgerät (Soundkarte)<select class="fd-out"></select></label></div>
-    <div class="ctl-row"><button class="fd-run primary">▶ Empfang</button><span class="fd-sync" title="Synchronisation">●</span><span class="fd-snr hint">–</span>
+    <div class="ctl-row"><button class="fd-run primary">▶ Empfang</button><button type="button" class="fd-freqs" title="FreeDV-Frequenzen">Frequenzen ▾</button><span class="fd-sync" title="Synchronisation">●</span><span class="fd-snr hint">–</span>
       <div class="ra-meter" title="Eingangspegel"><i class="fd-lvl"></i></div><label class="chk">Lautstärke <input type="range" class="fd-vol" min="0" max="1.5" step="0.05" value="${st.vol}"></label></div>
     <div class="ctl-row"><button class="fd-ptt" disabled>PTT – Sprechen</button><label class="chk"><input type="checkbox" class="fd-latch" ${st.latch ? "checked" : ""}> PTT rastet ein</label><span class="hint fd-txinfo"></span></div>
     <p class="hint">FreeDV-Signale liegen meist im USB auf eigenen Frequenzen (z. B. 14,236 MHz, 7,177 MHz, 3,625 MHz). Funkgerät auf USB, NF-Pegel so einstellen, dass die Pegelanzeige etwa zur Hälfte ausschlägt.</p></div>`;
@@ -17,6 +17,7 @@ function createFreedv(root) {
     $(".fd-inp", root).innerHTML = o("audioinput", st.inp, `<option value="__sdr" ${st.inp === "__sdr" || !navigator.mediaDevices?.getUserMedia ? "selected" : ""}>Empfänger (WebSDR/KiwiSDR/SDR)</option>`);
     $(".fd-spk", root).innerHTML = o("audiooutput", st.spk); $(".fd-mic", root).innerHTML = o("audioinput", st.mic); $(".fd-out", root).innerHTML = o("audiooutput", st.out); };
   api("/api/freedv").then(r => { $(".fd-avail", root).textContent = r.available ? "" : "codec2 fehlt (macOS: brew install codec2 · Linux: libcodec2-1.2)"; $(".fd-run", root).disabled = !r.available; }).catch(() => { });
+  $(".fd-freqs", root).onclick = e => freqMenu(e.currentTarget, "FreeDV");
   root.addEventListener("change", e => { const c = e.target.classList; const map = { "fd-mode": "mode", "fd-inp": "inp", "fd-spk": "spk", "fd-mic": "mic", "fd-out": "out" };
     for (const k in map) if (c.contains(k)) { st[map[k]] = e.target.value; if (FDV.on && k !== "fd-spk") { stop(); start(); } }
     if (c.contains("fd-latch")) st.latch = e.target.checked; store.set("fdv", st);

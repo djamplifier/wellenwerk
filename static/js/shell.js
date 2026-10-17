@@ -252,7 +252,7 @@ function openOptions(tab = "station") {
   if (prev) { prev.querySelector(`.dtabs [data-t="${tab}"]`)?.click(); return prev; }
   const s = WW.settings, o = store.get("opts", {});
   const d = dialog({ title: "Programmoptionen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Speichern", "save", "primary"]], body: `
-    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Außerband"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["wf", "Wasserfall"], ["plugins", "Erweiterungen"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["support", "Fehler & Updates"], ["theme", "Darstellung"]]
+    <div class="dtabs">${[["station", "Station"], ["cluster", "DX-Cluster"], ["online", "Online-Dienste"], ["wsjtx", "WSJT-X"], ["keys", "Tastenkürzel"], ["comms", "Kommunikation"], ["wheel", "Mausrad"], ["oob", "Bandplan"], ["smeter", "S-Meter"], ["modes", "Betriebsarten"], ["winlink", "Winlink"], ["access", "Zugang & API"], ["wf", "Wasserfall"], ["plugins", "Erweiterungen"], ["cw", "CW / WinKeyer"], ["links", "Programme & Sicherung"], ["support", "Fehler & Updates"], ["theme", "Darstellung"]]
       .map(([k, l]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${l}</button>`).join("")}</div>
     <div class="dtab ${tab === "station" ? "" : "hidden"}" data-t="station"><div class="grid2">
       <label>Rufzeichen<input name="callsign" value="${esc(s.callsign)}"></label><label>Locator<input name="locator" value="${esc(s.locator)}"></label>
@@ -294,6 +294,8 @@ function openOptions(tab = "station") {
       <label>Mausrad-Schritt auf den Abstimmleisten (Hz)<select name="o_wheel" data-local>${[1, 10, 50, 100, 250, 500, 1000, 5000].map(v => `<option ${+(o.wheel || 100) === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       <label class="wide chkrow"><input type="checkbox" name="o_single" ${o.single ? "checked" : ""} data-local> Favoriten-Ordner mit Einfachklick öffnen</label></div></div>
     <div class="dtab ${tab === "oob" ? "" : "hidden"}" data-t="oob"><div class="grid2">
+      <label class="wide chkrow"><input type="checkbox" name="o_plan" ${o.plan !== false ? "checked" : ""} data-local> Betriebsart und Filter nach Bandplan einstellen (beim Wechsel in einen anderen Bereich oder auf eine bekannte Digi-Frequenz)</label>
+      <p class="hint wide">Eine von Hand gewählte Betriebsart bleibt, bis du den Bereich verlässt. Die Region des Bandplans wählst du an der Bandleiste der Gerätesteuerung.</p>
       <label class="wide chkrow"><input type="checkbox" name="o_oob" ${o.oob ? "checked" : ""} data-local> Ton beim Verlassen und Betreten eines Amateurfunkbandes</label></div></div>
     <div class="dtab ${tab === "modes" ? "" : "hidden"}" data-t="modes"><div class="grid2">
       <label class="wide">Betriebsarten und RST-Vorgabe (eine Zeile je Mode: <code>MODE RST</code>)<textarea name="mode_rst" rows="14" spellcheck="false" style="font-family:monospace">${esc(s.mode_rst || MODE_RST_DEFAULT)}</textarea></label>
