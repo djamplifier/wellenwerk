@@ -400,6 +400,8 @@ class OpenWebRXRig(SdrRig):
             except asyncio.TimeoutError:
                 pass
         cands = sorted((p for p in self.profiles if hit(p) < 9), key=hit)
+        if cands and hit(cands[0]) <= 1:                 # passender Bereich bekannt: keine Profile, die nur per Bandname/„VHF“ passen
+            cands = [p for p in cands if hit(p) <= 1]
         if not cands and self._blind:                    # Namen sagen nichts: noch nicht besuchte Profile durchprobieren
             cands = [p for p in self.profiles if p["id"] not in self.seen and p["id"] != self.profile]
         loop = asyncio.get_running_loop()

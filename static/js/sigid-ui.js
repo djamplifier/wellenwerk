@@ -357,16 +357,10 @@ async function sigAprsLive(R, f, label) {
   render(); const offIds = WW.on("ids", () => pre.isConnected ? render() : offIds());
   const stop = why => { try { R.live?.un?.(); } catch { } R.live = null; body.querySelector(".sig-live")?.classList.add("off"); $(".sig-live-x", body)?.remove(); if (why) { const b = $(".sig-live-h b", body); if (b) b.textContent += " – " + why; } };
   $(".sig-live-x", body).onclick = () => stop("angehalten");
-  const vb = $(".sig-voice", body);
-  if (vb) { const sync = () => { const on = !!sigRadio(o.radio)?.state?.sdr?.dv_voice; vb.classList.toggle("on", on); vb.textContent = on ? "🔊 Sprache an" : "🔈 Sprache"; };
-    sync(); vb.onclick = async () => { const on = !sigRadio(o.radio)?.state?.sdr?.dv_voice;
-      if (on && !(await voiceModuleReady())) return;
-      try { await api(`/api/radios/${encodeURIComponent(o.radio)}/rig/dvdecode`, { method: "POST", body: { proto: found, voice: on } }); } catch (e) { toast(e.message, true); }
-      setTimeout(sync, 400); }; }
   sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbLink("packet"); });
   SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - f) > 3000).concat({ rf: f, label: "APRS", until: Date.now() + 60000, radio: o.radio });
   const rx = APRS.Rx(8000, v => { const d = { decoder: "packet", radio: o.radio, freq: f, t: Date.now() / 1000, value: v, local: true };
-    got.push(d); if (got.length > 300) got = got.slice(-200); render(); WW.decodes?.unshift(d); WW.emit("decode", d); });
+    got.push(d); if (got.length > 300) got = got.slice(-200); try { render(); } catch (err) { console.error(err); } WW.decodes?.unshift(d); WW.emit("decode", d); });
   let n = 0;
   try { R.live = { un: await sigTap(o, x => { rx.process(x); if (++n % 40 === 0) { const g = sigState(o.ctl || o.radio).freq; if (g && Math.abs(g - f) > 3000) stop("umgestimmt"); } }) }; }
   catch (e) { stop(e.message); }

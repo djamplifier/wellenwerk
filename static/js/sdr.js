@@ -70,7 +70,7 @@ function rxTo8k(out) {
     for (let i = 0; i < x.length; i++) {
       hist.copyWithin(0, 1); hist[N - 1] = x[i]; let y = 0; for (let k = 0; k < N; k++) y += hist[k] * taps[k];
       while (pos < 1) { const v = prev + (y - prev) * pos; blk[bn++] = v; const a = Math.abs(v); if (a > peak) peak = a;
-        if (bn === 512) { out(blk, peak); blk = new Float32Array(512); bn = 0; peak = 0; } pos += step; }
+        if (bn === 512) { const b = blk, p = peak; blk = new Float32Array(512); bn = 0; peak = 0; try { out(b, p); } catch (err) { console.error(err); } } pos += step; }
       pos -= 1; prev = y;
     }
   };
@@ -224,6 +224,7 @@ function decSummary(d) {
   const v = d.value; if (v == null) return ""; if (typeof v !== "object") return String(v);
   const j = (...a) => a.filter(x => x !== undefined && x !== null && x !== "").join(" · ");
   const pos = v.lat != null && v.lon != null ? `${Math.abs(v.lat).toFixed(4)}°${v.lat >= 0 ? "N" : "S"} ${Math.abs(v.lon).toFixed(4)}°${v.lon >= 0 ? "E" : "W"}` : "";
+  const call = c => { c = String(c || "").trim(); return c ? idPerson(idName("call", c), c) : ""; };
   if (DEC_WSJT.has(d.decoder)) { const msg = v.msg ?? v.message ?? "", c = v.callsign || decWsjtCall(msg), u = c ? idName("call", c) : null;
     return j(v.db != null ? `${v.db} dB` : v.snr != null ? `${v.snr} dB` : "", v.freq != null ? `${Math.round(v.freq)} Hz` : "", msg || j(v.callsign, v.locator, v.dbm != null ? v.dbm + " dBm" : ""), u ? `(${u.n || ""}${u.city ? ", " + u.city : ""})`.replace("(, ", "(") : ""); }
   if (d.decoder === "js8") return j(v.db != null ? `${v.db} dB` : "", v.msg ?? v.message);
@@ -239,7 +240,6 @@ function decSummary(d) {
     return j(v.model, v.id != null ? "ID " + v.id : "", v.channel != null ? "Kanal " + v.channel : "", t != null ? t.toFixed(1) + " °C" : "", v.humidity != null ? v.humidity + " % Feuchte" : "",
       v.wind_avg_km_h != null ? v.wind_avg_km_h + " km/h Wind" : "", v.rain_mm != null ? v.rain_mm + " mm Regen" : "", v.pressure_hPa != null ? v.pressure_hPa + " hPa" : "", v.battery_ok === 0 ? "Batterie schwach" : ""); }
   if (d.decoder === "sonde") return j(v.type || v.model, v.id || v.serial, pos, v.alt != null ? Math.round(v.alt) + " m" : "", v.temp != null ? (+v.temp).toFixed(1) + " °C" : "", v.vel_v != null ? (+v.vel_v).toFixed(1) + " m/s" : "");
-  const call = c => { c = String(c || "").trim(); return c ? idPerson(idName("call", c), c) : ""; };
   if (d.decoder === "dstar") { if (!v.ourcall && !v.message) return "";
     return j(v.ourcall && `${call(v.ourcall)} → ${String(v.yourcall || "CQCQCQ").trim()}`, v.departure && `über ${String(v.departure).trim()}${v.destination ? " / " + String(v.destination).trim() : ""}`, v.message, pos); }
   if (d.decoder === "dmr") {                                                   // Sprecher (DMR-ID -> Rufzeichen/Name) und Talkgroup mit Namen
