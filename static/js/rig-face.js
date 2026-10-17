@@ -110,7 +110,8 @@ function createFace(root) {
   </div>`;
   const rc = $(".rc", root);
   applyScheme(rc);
-  const unfit = fitZoom(root, rc, 0.8, ".rc-mainbars", 60);                      // kleine Bildschirme: Anzeige verkleinern statt scrollen
+  const untier = detailTier(root, rc, (w, h) => w < 760 || h < 330 ? "s" : w >= 1150 && h >= 560 ? "l" : "m", () => buildTuning(rc));   // klein: weniger, gross: zweite Feinskala
+  const unfit = fitZoom(root, rc, 0.85, ".rc-mainbars", 60);                     // nur als letzte Stufe: Anzeige verkleinern statt scrollen
   // Frequenz: Mausrad / Klick oben-unten / Tastatur
   const fr = $(".rc-freq", rc);
   fr.addEventListener("wheel", e => {
@@ -150,7 +151,7 @@ function createFace(root) {
   const ro = new ResizeObserver(() => renderBars(rc)); ro.observe(rc);
   if (!RC.layout) loadRigLayout(); else rebuild();
   renderTabs(rc);
-  return () => { offs.forEach(f => f()); ro.disconnect(); unfit(); };
+  return () => { offs.forEach(f => f()); ro.disconnect(); unfit(); untier(); };
 }
 function renderTabs(rc) {
   const conn = WW.radios.filter(r => r.connected), cur = WW.radios.find(r => r.id === WW.current);
@@ -323,7 +324,8 @@ function buildButtons(rc) {
 // ---------- Abstimmleisten ----------
 function buildTuning(rc) {
   const plan = currentPlan();
-  $(".rc-fine2", rc).classList.toggle("hidden", !store.get("rc.fine2", false));
+  const f2 = store.get("rc.fine2", false) || rc.dataset.det === "l";
+  $(".rc-fine2", rc).classList.toggle("hidden", !f2);
   const bands = plan.bands.map(b => b[0]);
   $(".rc-bandbtns", rc).innerHTML = `<button type="button" data-x="plan" class="rc-plan" title="Bandplan wählen">${esc(RC.bsp ? `${RC.bsp.band} – Zoom` : plan.title)} ▾</button><button type="button" data-x="alt" title="Zweiten VFO abstimmen">VFO B</button><button type="button" data-x="bsp" title="Skala vergrößern (ein Band auf mehrere Zeilen)">Zoom</button>`
     + bands.map(b => `<button type="button" data-band="${b}">${b}</button>`).join("");
@@ -340,7 +342,7 @@ function buildTuning(rc) {
   if (RC.bsp) { const b = plan.bands.find(x => x[0] === RC.bsp.band) || plan.bands[0]; rows = [];
     for (let f = b[1]; f < b[2]; f += RC.bsp.w) rows.push({ n: (f / 1000).toFixed(3), lo: f * 1000, hi: Math.min(b[2], f + RC.bsp.w) * 1000 }); }
   $(".rc-mainbars", rc).innerHTML = rows.map(r => `<div class="rc-bar" data-lo="${r.lo}" data-hi="${r.hi}"><span class="rc-bl">${esc(r.n)}</span><div class="rc-ruler"></div></div>`).join("");
-  rc.querySelectorAll(".rc-fine, .rc-fine2").forEach(el => { el.innerHTML = `<span class="rc-bl">${el.classList.contains("rc-fine2") ? "Fein 2" : (store.get("rc.fine2", false) ? "Fein 1" : "Fein")}</span><div class="rc-ruler"></div>`; });
+  rc.querySelectorAll(".rc-fine, .rc-fine2").forEach(el => { el.innerHTML = `<span class="rc-bl">${el.classList.contains("rc-fine2") ? "Fein 2" : (f2 ? "Fein 1" : "Fein")}</span><div class="rc-ruler"></div>`; });
   rc.querySelectorAll(".rc-ruler").forEach(attachRuler);
   renderBars(rc);
   setTimeout(() => { const cur = rc.querySelector(".rc-bar.cur"); if (cur) cur.scrollIntoView({ block: "nearest" }); }, 50);

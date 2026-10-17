@@ -286,17 +286,19 @@ APPS.dm = {
     radio: { title: "Gerätestatus", create: createRadioPane }, freqlist: { title: "Frequenzen", create: (r, p) => createFreqList(r, p), dock: { ref: ["macros", "rx"], dir: "within" } }, sweeper: { title: "WWK Sweeper", create: createSweeper }, worldmap: { title: "Weltkarte", create: createDmMap },
     sstv: { title: "SSTV", create: createSstv, dock: { ref: "rx", dir: "within" } }, sstvgal: { title: "SSTV-Bilder", create: createSstvGallery, dock: { ref: ["sweeper", "rx"], dir: "within" } },
   },
-  layout(dv) {
+  layout(dv, cls = "m") {   // klein: Makros als Reiter bei Senden; gross: Weltkarte als eigenes Fenster
     const q = dv.addPanel({ id: "qso", component: "qso", title: "QSO" });
     dv.addPanel({ id: "tags", component: "tags", title: "Über mich", position: { referencePanel: "qso", direction: "within" } });
     dv.addPanel({ id: "radio", component: "radio", title: "Gerätestatus", position: { referencePanel: "qso", direction: "within" } }); q.api.setActive();
     const rx = dv.addPanel({ id: "rx", component: "rx", title: "Empfang", position: { referencePanel: "qso", direction: "right" } });
     dv.addPanel({ id: "sweeper", component: "sweeper", title: "WWK Sweeper", position: { referencePanel: "rx", direction: "within" } });
-    dv.addPanel({ id: "worldmap", component: "worldmap", title: "Weltkarte", position: { referencePanel: "rx", direction: "within" } }); rx.api.setActive();
+    dv.addPanel({ id: "worldmap", component: "worldmap", title: "Weltkarte", position: { referencePanel: "rx", direction: cls === "l" ? "right" : "within" } }); rx.api.setActive();
     const wf = dv.addPanel({ id: "waterfall", component: "waterfall", title: "Wasserfall", position: { referencePanel: "rx", direction: "above" } });
     dv.addPanel({ id: "tx", component: "tx", title: "Senden", position: { referencePanel: "rx", direction: "below" } });
-    dv.addPanel({ id: "macros", component: "macros", title: "Makros", position: { referencePanel: "tx", direction: "right" } });
-    setTimeout(() => { try { q.group.api.setSize({ width: 300 }); wf.group.api.setSize({ height: 210 }); dv.getPanel("tx").group.api.setSize({ height: 170 }); dv.getPanel("macros").group.api.setSize({ width: 330 }); } catch { } }, 60);
+    dv.addPanel({ id: "macros", component: "macros", title: "Makros", position: { referencePanel: "tx", direction: cls === "s" ? "within" : "right" } });
+    if (cls === "s") dv.getPanel("tx").api.setActive();
+    setTimeout(() => { try { q.group.api.setSize({ width: cls === "s" ? 250 : cls === "l" ? 360 : 300 }); wf.group.api.setSize({ height: cls === "s" ? 160 : cls === "l" ? 300 : 210 }); dv.getPanel("tx").group.api.setSize({ height: cls === "s" ? 150 : 170 });
+      if (cls !== "s") dv.getPanel("macros").group.api.setSize({ width: cls === "l" ? 400 : 330 }); if (cls === "l") dv.getPanel("worldmap").group.api.setSize({ width: 620 }); } catch { } }, 60);
   },
   menus: [
     { label: "Datei", items: [{ label: "Programmoptionen …", key: "F8", act: () => openOptions() }] },

@@ -370,6 +370,14 @@ function wsSend(m) { if (WW.ws && WW.ws.readyState === 1) WW.ws.send(JSON.string
 // ---------- Anpassung an die Bildschirmgroesse ----------
 // Inhalt eines Fensters verkleinern (CSS-Zoom), wenn er nicht hineinpasst – statt Scrollbalken (z. B. Geraeteanzeige auf dem Laptop)
 // shrink: Bereiche, die selbst scrollen und dafuer schrumpfen duerfen (werden beim Messen auf shrinkPx begrenzt)
+// Detailstufe eines Fensters nach seinem Platz (s/m/l in el.dataset.det): grosse Fenster zeigen mehr, kleine weniger – statt alles zu vergroessern
+function detailTier(box, el, test, cb) {
+  let init = true;
+  const run = () => { const w = box.clientWidth, h = box.clientHeight; if (!w || !h) return; const d = test(w, h);
+    if (el.dataset.det !== d) { el.dataset.det = d; if (!init && cb) cb(d); } };
+  const ro = new ResizeObserver(run); run(); init = false; ro.observe(box);
+  return () => ro.disconnect();
+}
 function fitZoom(box, el, min = 0.6, shrink = "", shrinkPx = 90) {
   let raf = 0, self = false;
   const run = () => { raf = 0; if (!box.isConnected) return; self = true; el.style.zoom = "";
@@ -393,18 +401,23 @@ function fitBar(bar) {
   let raf = 0; const ro = new ResizeObserver(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; run(); }); }); ro.observe(bar); run();
   bar._fitRun = run; return () => ro.disconnect();
 }
-// Groesse der Oberflaeche: automatisch auf sehr grossen Bildschirmen ohne Systemskalierung (2560/4K bei 100 %) vergroessern
+// Groesse der Oberflaeche: nur noch manuell (Programmoptionen). Grosse Bildschirme bekommen mehr Details und Fenster statt groesserer Schrift.
 function wwScale() {
-  let v = (store.get("opts", {}) || {}).uiscale || "auto";
-  if (v === "auto") { const w = Math.max(innerWidth, screen.width || 0); v = devicePixelRatio < 1.5 && w >= 2400 ? Math.max(1, Math.min(2, Math.floor(innerWidth / 1920 / 0.25) * 0.25)) : 1; }
+  let v = (store.get("opts", {}) || {}).uiscale || "1";
+  if (v === "auto") v = 1;
   return Math.max(0.5, Math.min(3, +v || 1));
 }
+// Bildschirmklasse: s = Laptop/klein, m = Full HD, l = 2560 und groesser. Jede Klasse hat eigene Fensteranordnungen.
+function wwScreen(w, h) { return w < 1366 || h < 720 ? "s" : w >= 2200 && h >= 1100 ? "l" : "m"; }
 function wwFit() {
   const de = document.documentElement, sc = wwScale();
   de.style.zoom = sc !== 1 ? String(sc) : "";
-  const h = innerHeight / sc, w = innerWidth / sc;
+  const h = innerHeight / sc, w = innerWidth / sc, cls = wwScreen(w, h), prev = de.dataset.screen;
   de.classList.toggle("ww-compact", h < 900 || w < 1280);
   de.classList.toggle("ww-tight", h < 700);
+  de.classList.toggle("ww-wide", cls === "l");
+  de.dataset.screen = cls;
+  if (prev && prev !== cls) { clearTimeout(wwFit.t); wwFit.t = setTimeout(() => { if (typeof screenChanged === "function") screenChanged(de.dataset.screen); }, 700); }
 }
 addEventListener("resize", () => { cancelAnimationFrame(wwFit.r); wwFit.r = requestAnimationFrame(wwFit); });
 wwFit();

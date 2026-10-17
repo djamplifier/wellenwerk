@@ -5,6 +5,14 @@ const LOG_COLS = [["qso_date", "Datum"], ["time_on", "Beginn"], ["time_off", "En
   ["band", "Band"], ["freq", "Freq"], ["name", "Name"], ["qth", "QTH"], ["gridsquare", "Locator"], ["country", "Land"], ["cont", "Kont."], ["cqz", "CQ"], ["ituz", "ITU"], ["state", "Staat"], ["cnty", "County"],
   ["iota", "IOTA"], ["darc_dok", "DOK"], ["tx_pwr", "Leistung"], ["comment", "Bemerkung"], ["qsl_sent", "QSL ges."], ["qsl_rcvd", "QSL empf."], ["qsl_via", "QSL via"], ["lotw_qsl_sent", "LoTW ges."], ["lotw_qsl_rcvd", "LoTW empf."],
   ["eqsl_qsl_sent", "eQSL ges."], ["eqsl_qsl_rcvd", "eQSL empf."], ["qrzcom_qso_upload_status", "QRZ"], ["clublog_qso_upload_status", "Club Log"], ["contest_id", "Contest"], ["stx_string", "Nr. ges."], ["srx_string", "Nr. empf."], ["operator", "Operator"], ["my_gridsquare", "Mein Loc."], ["pota_ref", "POTA"], ["my_pota_ref", "Mein POTA"], ["sota_ref", "SOTA"], ["my_sota_ref", "Mein SOTA"], ["wwff_ref", "WWFF"], ["my_wwff_ref", "Mein WWFF"], ["sig", "SIG"], ["sig_info", "SIG-Info"]];
+const LOG_LESS = ["submode", "qth", "lotw_qsl_sent", "eqsl_qsl_sent", "qrzcom_qso_upload_status", "clublog_qso_upload_status", "eqsl_qsl_rcvd", "time_off", "cnty", "state"];   // fallen in schmalen Logbuechern weg
+const LOG_MORE = [["freq", "band"], ["gridsquare", "qth"], ["cont", "country"], ["cqz", "cont"], ["comment", null]];                                       // kommen in breiten Logbuechern dazu (nach Spalte)
+function logVisCols(cols, det) {
+  if (det === "s") return cols.filter(k => !LOG_LESS.includes(k));
+  if (det !== "l") return cols;
+  const c = [...cols]; for (const [k, after] of LOG_MORE) { if (c.includes(k)) continue; const i = after ? c.indexOf(after) : -1; i >= 0 ? c.splice(i + 1, 0, k) : c.push(k); }
+  return c;
+}
 const LOG_DEFAULT_COLS = ["qso_date", "time_on", "call", "mode", "submode", "rst_sent", "rst_rcvd", "band", "name", "qth", "country", "lotw_qsl_sent", "lotw_qsl_rcvd", "eqsl_qsl_rcvd", "clublog_qso_upload_status"];
 const LOGB = { sel: new Set(), clip: null, filter: {}, sort: store.get("log.sort", ["qso_date", -1]), contest: false, serial: store.get("log.serial", 1) };
 const fmtCell = (k, v) => k === "qso_date" ? fmtDate(v) : (k === "time_on" || k === "time_off") ? fmtTimeS(v) : v ?? "";
@@ -44,7 +52,7 @@ function createLogbook(root, params) {
     let r; try { r = await api("/api/qso?" + q()); $(".lb-cond", root).classList.remove("bad"); } catch (err) { $(".lb-cond", root).classList.add("bad"); $(".lb-info", root).textContent = err.message; return; }
     $(".lb-info", root).textContent = ""; rows = r.qsos;
     const [sk, sd] = LOGB.sort; rows.sort((a, b) => { const x = sk === "qso_date" ? (a.qso_date + a.time_on) : a[sk] ?? "", y = sk === "qso_date" ? (b.qso_date + b.time_on) : b[sk] ?? ""; return (x > y ? 1 : x < y ? -1 : 0) * sd; });
-    const C = cols(), wid = store.get("log.widths", {});
+    const C = logVisCols(cols(), root.dataset.det), wid = store.get("log.widths", {});
     $("thead", root).innerHTML = `<tr><th class="rh"></th>${C.map(k => `<th data-k="${k}" style="${wid[k] ? `width:${wid[k]}px` : ""}">${esc((LOG_COLS.find(c => c[0] === k) || [k, k])[1])}${sk === k ? (sd > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr>`;
     $("tbody", root).innerHTML = rows.map(x => `<tr data-id="${x.id}" class="${LOGB.sel.has(x.id) ? "sel" : ""}"><td class="rh">${LOGB.sel.has(x.id) ? "›" : ""}</td>${C.map(k => `<td class="c-${k}">${esc(fmtCell(k, x[k]))}</td>`).join("")}</tr>`).join("")
       || `<tr><td colspan="${C.length + 1}" class="hint">Keine QSOs${[...q().values()].slice(3).some(Boolean) ? " für diesen Filter" : ""}.</td></tr>`;
@@ -101,7 +109,8 @@ function createLogbook(root, params) {
     const x0 = e.clientX, w0 = th.offsetWidth, mv = ev => th.style.width = Math.max(30, w0 + ev.clientX - x0) + "px",
       up = () => { const w = store.get("log.widths", {}); w[th.dataset.k] = th.offsetWidth; store.set("log.widths", w); window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
     window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up); });
-  const offs = [WW.on("qso", load), WW.on("reload", load), WW.on("log-cols", load), WW.on("log-views", views)]; load();
+  const offs = [WW.on("qso", load), WW.on("reload", load), WW.on("log-cols", load), WW.on("log-views", views),
+    detailTier(root, root, w => w < 1000 ? "s" : w >= 1500 ? "l" : "m", load)]; load();   // Spalten je nach Breite: schmal weniger, breit mehr
   return () => offs.forEach(f => f());
 }
 async function bulkAct(ids, action, cb) { if (!ids.length) return toast("Erst QSOs auswählen", true); const r = await post("/api/qso/bulk?" + logq(), { ids, action }); toast(`${r.changed} geändert`); cb && cb(); }
@@ -607,20 +616,28 @@ APPS.log = {
     qsl: { title: "QSL & Online", create: (...a) => createQslPanel(...a), dock: { ref: "logbook", dir: "within" } },
     stats: { title: "Statistik", create: (...a) => createStats(...a), dock: { ref: "logbook", dir: "within" } },
   },
-  layout(dv) {   // eigene Anordnung: Logbuch gross, Rufzeichen-Info rechts; unten Cluster | Bandkarte | Graulinie
+  layout(dv, cls = "m") {   // eigene Anordnung: Logbuch gross, Rufzeichen-Info rechts; unten Cluster | Bandkarte | Graulinie (klein: weniger Spalten, gross: Uhr, Rotor, Histogramm)
+    const T = c => APPS.log.panels[c].title, add = (c, ref, dir, extra = {}) => dv.addPanel({ id: c, component: c, title: T(c), position: { referencePanel: ref, direction: dir }, ...extra });
     const lb = dv.addPanel({ id: "logbook:" + WW.logbook, component: "logbook", title: WW.logbook, params: { name: WW.logbook } });
-    const lk = dv.addPanel({ id: "lookup", component: "lookup", title: "Rufzeichen-Info", position: { referencePanel: lb.id, direction: "right" } });
-    dv.addPanel({ id: "favorites", component: "favorites", title: "Favoriten", position: { referencePanel: "lookup", direction: "within" } });
-    dv.addPanel({ id: "radiopane", component: "radiopane", title: "Gerätestatus", position: { referencePanel: "lookup", direction: "within" } });
+    const lk = add("lookup", lb.id, "right");
+    add("favorites", "lookup", "within"); add("radiopane", "lookup", "within");
     lk.api.setActive();
-    const cl = dv.addPanel({ id: "cluster", component: "cluster", title: APPS.log.panels.cluster.title, position: { referencePanel: lb.id, direction: "below" } });
-    ["alert", "programs", "calendar"].forEach(c => dv.addPanel({ id: c, component: c, title: APPS.log.panels[c].title, position: { referencePanel: "cluster", direction: "within" } }));
+    const cl = add("cluster", lb.id, "below");
+    ["alert", "programs", "calendar"].concat(cls === "l" ? ["histogram"] : []).forEach(c => add(c, "cluster", "within"));
+    if (cls === "s") {   // klein: Bandkarte und Graulinie als Reiter beim Cluster, kein drittes Fensterpaar
+      ["bandmap", "greyline", "solar30"].forEach(c => add(c, "cluster", "within"));
+      cl.api.setActive();
+      setTimeout(() => { try { lk.group.api.setSize({ width: 300 }); cl.group.api.setSize({ height: 250 }); } catch { } }, 80);
+      return;
+    }
     cl.api.setActive();
-    const bm = dv.addPanel({ id: "bandmap", component: "bandmap", title: "Bandkarte", position: { referencePanel: "cluster", direction: "right" } });
-    const gl = dv.addPanel({ id: "greyline", component: "greyline", title: "Graulinie", position: { referencePanel: "bandmap", direction: "right" } });
-    ["solar30", "solarcycle"].forEach(c => dv.addPanel({ id: c, component: c, title: APPS.log.panels[c].title, position: { referencePanel: "greyline", direction: "within" } }));
+    const bm = add("bandmap", "cluster", "right");
+    const gl = add("greyline", "bandmap", "right");
+    ["solar30", "solarcycle"].forEach(c => add(c, "greyline", "within"));
     gl.api.setActive();
-    setTimeout(() => { try { lk.group.api.setSize({ width: 340 }); cl.group.api.setSize({ height: 320 }); bm.group.api.setSize({ width: 260 }); gl.group.api.setSize({ width: 340 }); } catch { } }, 80);
+    if (cls === "l") { add("clock", "greyline", "right"); add("rotator", "lookup", "below"); add("recorder", "rotator", "within"); dv.getPanel("rotator").api.setActive(); }
+    setTimeout(() => { try { lk.group.api.setSize({ width: cls === "l" ? 400 : 340 }); cl.group.api.setSize({ height: cls === "l" ? 400 : 320 }); bm.group.api.setSize({ width: cls === "l" ? 300 : 260 }); gl.group.api.setSize({ width: cls === "l" ? 520 : 340 });
+      if (cls === "l") { dv.getPanel("clock").group.api.setSize({ width: 300 }); dv.getPanel("rotator").group.api.setSize({ height: 330 }); } } catch { } }, 80);
   },
   menus: [
     { label: "Datei", items: [{ label: "Logbücher verwalten …", icon: "i-book", act: logbookManager }, { label: "ADIF importieren …", act: () => adifImport(WW.logbook) }, { label: "ADIF exportieren", act: () => location.href = `/api/adif?${logq()}` },

@@ -387,14 +387,14 @@ APPS.sat = {
   panels: { satlist: { title: "Satelliten", create: createSatList }, satinfo: { title: "Position & Frequenzen", create: createSatInfo }, satpolar: { title: "Überflug", create: createSatPolar },
     satmap: { title: "Karte", create: createSatMap }, satpasses: { title: "Überflüge", create: createSatPasses },
     satmutual: { title: "Gemeinsame Sichtbarkeit", create: createSatMutual }, satsched: { title: "Zeitplan", create: createSatSchedule } },
-  layout(dv) { const l = dv.addPanel({ id: "satlist", component: "satlist", title: "Satelliten" });
+  layout(dv, cls = "m") { const l = dv.addPanel({ id: "satlist", component: "satlist", title: "Satelliten" });   // klein: Ueberflug als Reiter bei der Karte
     const m = dv.addPanel({ id: "satmap", component: "satmap", title: "Karte", position: { referencePanel: "satlist", direction: "right" } });
-    dv.addPanel({ id: "satpolar", component: "satpolar", title: "Überflug", position: { referencePanel: "satmap", direction: "left" } });
+    dv.addPanel({ id: "satpolar", component: "satpolar", title: "Überflug", position: { referencePanel: "satmap", direction: cls === "s" ? "within" : "left" }, inactive: cls === "s" });
     dv.addPanel({ id: "satinfo", component: "satinfo", title: "Position & Frequenzen", position: { referencePanel: "satmap", direction: "below" } });
     dv.addPanel({ id: "satpasses", component: "satpasses", title: "Überflüge", position: { referencePanel: "satinfo", direction: "right" } });
     dv.addPanel({ id: "satsched", component: "satsched", title: "Zeitplan", position: { referencePanel: "satpasses", direction: "within" }, inactive: true });
     dv.addPanel({ id: "satmutual", component: "satmutual", title: "Gemeinsame Sichtbarkeit", position: { referencePanel: "satpasses", direction: "within" }, inactive: true });
-    setTimeout(() => { try { l.group.api.setSize({ width: 230 }); dv.getPanel("satpolar").group.api.setSize({ width: 300 }); dv.getPanel("satinfo").group.api.setSize({ height: 280 }); } catch { } }, 60); },
+    setTimeout(() => { try { l.group.api.setSize({ width: cls === "s" ? 200 : 230 }); if (cls !== "s") dv.getPanel("satpolar").group.api.setSize({ width: cls === "l" ? 420 : 300 }); dv.getPanel("satinfo").group.api.setSize({ height: cls === "s" ? 220 : cls === "l" ? 360 : 280 }); } catch { } }, 60); },
   menus: [{ label: "Datei", items: [{ label: "Satelliten auswählen …", act: () => satChooser(() => WW.emit("sat-sel")) }] },
     { label: "Ansicht", items: Object.entries({ satlist: "Satelliten", satinfo: "Position & Frequenzen", satpolar: "Überflug", satmap: "Karte", satpasses: "Überflüge", satsched: "Zeitplan", satmutual: "Gemeinsame Sichtbarkeit" }).map(([k, l]) => ({ label: l, check: () => panelOpen("sat", k), act: () => togglePanel("sat", k) })) },
     MENU_WINDOW("sat"), MENU_HELP],

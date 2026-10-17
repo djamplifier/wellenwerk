@@ -117,16 +117,35 @@ function createWorkspace(appId) {
     },
   });
   SHELL.dv[appId] = dv;
-  const saved = store.get(`layout.${appId}`, null);
-  let ok = false;
-  if (saved) { try { dv.fromJSON(saved); ok = dv.panels.length > 0; fixTitles(appId, dv); } catch (e) { console.warn("Layout", e); } }
-  if (!ok) { dv.clear(); app.layout(dv); }
-  let t; dv.onDidLayoutChange(() => { clearTimeout(t); t = setTimeout(() => { try { store.set(`layout.${appId}`, dv.toJSON()); } catch { } refreshToolbar(); refreshMenuChecks(); }, 400); });
-  dv.onDidRemovePanel(p => { refreshToolbar(); refreshMenuChecks(); if (appId === "rig" && p.id === "waterfall" && typeof wfSideRestore === "function") setTimeout(() => wfSideRestore(dv), 0); });
+  dv._cls = curScreen(); loadScreenLayout(appId, dv);
+  let t; dv.onDidLayoutChange(() => { clearTimeout(t); t = setTimeout(() => { if (!dv._switching) try { store.set(layoutKey(appId, dv._cls), dv.toJSON()); } catch { } refreshToolbar(); refreshMenuChecks(); }, 400); });
+  dv.onDidRemovePanel(p => { refreshToolbar(); refreshMenuChecks(); if (!dv._switching && appId === "rig" && p.id === "waterfall" && typeof wfSideRestore === "function") setTimeout(() => wfSideRestore(dv), 0); });
   return el;
 }
+// Anordnung je Bildschirmklasse (s/m/l): eigene Standardanordnung, die eigene Anordnung wird je Klasse gemerkt
+function curScreen() { return document.documentElement.dataset.screen || "m"; }
+function layoutKey(appId, cls = curScreen()) { return cls === "m" ? `layout.${appId}` : `layout.${appId}.${cls}`; }
+function loadScreenLayout(appId, dv) {
+  const saved = store.get(layoutKey(appId, dv._cls), null);
+  let ok = false;
+  dv._switching = true;
+  if (saved) { try { dv.clear(); dv.fromJSON(saved); ok = dv.panels.length > 0; fixTitles(appId, dv); } catch (e) { console.warn("Layout", e); } }
+  if (!ok) { dv.clear(); APPS[appId].layout(dv, dv._cls); }
+  setTimeout(() => { dv._switching = false; }, 700);
+}
+function screenLayout(appId) {
+  const dv = SHELL.dv[appId], cls = curScreen(); if (!dv || dv._cls === cls) return false;
+  try { store.set(layoutKey(appId, dv._cls), dv.toJSON()); } catch { }
+  dv._cls = cls; loadScreenLayout(appId, dv); return true;
+}
+const SCREEN_NAMES = { s: "Anordnung für kleinen Bildschirm", m: "Anordnung für mittleren Bildschirm", l: "Anordnung für großen Bildschirm" };
+function screenChanged(cls) {
+  if (!SHELL.active || !screenLayout(SHELL.active)) return;
+  refreshToolbar(); refreshMenuChecks(); toast(SCREEN_NAMES[cls] || cls);
+}
 function resetLayout(appId = SHELL.active) {
-  const dv = dvApi(appId); dv.clear(); APPS[appId].layout(dv); store.set(`layout.${appId}`, dv.toJSON()); toast("Standardanordnung wiederhergestellt");
+  const dv = dvApi(appId); dv._switching = true; dv.clear(); APPS[appId].layout(dv, dv._cls); store.set(layoutKey(appId, dv._cls), dv.toJSON());
+  setTimeout(() => { dv._switching = false; }, 700); toast("Standardanordnung wiederhergestellt");
 }
 function panelInfo(p) { return { id: p.id, component: p.api.component || p.id, title: p.title || p.api.title, params: p.params || {} }; }
 function tileLayout(appId = SHELL.active) {   //  „Nebeneinander“: alle Fenster als gleichmaessiges Raster
@@ -160,7 +179,7 @@ function loadLayout(slot, appId = SHELL.active) {
 // ---------- Programme wechseln ----------
 function switchApp(id) {
   if (!APPS[id]) return;
-  if (!SHELL.dv[id]) createWorkspace(id);
+  if (!SHELL.dv[id]) createWorkspace(id); else screenLayout(id);
   SHELL.active = id; store.set("app", id);
   $$(".ws").forEach(w => w.classList.toggle("hidden", w.dataset.app !== id));
   $$("#apptabs button").forEach(b => b.classList.toggle("on", b.dataset.app === id));
@@ -361,7 +380,7 @@ function openOptions(tab = "station") {
       <p class="hint wide">Gleicht die S-Meter-Anzeige an das Gerät an. Angezeigt wird Faktor × Messwert + Versatz.</p></div></div>
     <div class="dtab ${tab === "theme" ? "" : "hidden"}" data-t="theme"><div class="grid2">
       <label>Fensterdesign<select name="o_chrome" data-local>${[["office", "Klassisch (hellblau)"], ["light", "Hell"], ["dark", "Dunkel"], ["night", "Nachtsicht (rot)"]].map(([k, l]) => `<option value="${k}" ${(o.chrome || "office") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-      <label>Größe der Oberfläche<select name="o_uiscale" data-local>${[["auto", "automatisch (große Bildschirme bis 4K vergrößern)"], ["0.8", "80 %"], ["0.9", "90 %"], ["1", "100 %"], ["1.1", "110 %"], ["1.25", "125 %"], ["1.5", "150 %"], ["1.75", "175 %"], ["2", "200 %"]].map(([k, l]) => `<option value="${k}" ${String(o.uiscale || "auto") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label>Größe der Oberfläche<select name="o_uiscale" data-local>${[["0.8", "80 %"], ["0.9", "90 %"], ["1", "100 %"], ["1.1", "110 %"], ["1.25", "125 %"], ["1.5", "150 %"], ["1.75", "175 %"], ["2", "200 %"]].map(([k, l]) => `<option value="${k}" ${String(!o.uiscale || o.uiscale === "auto" ? "1" : o.uiscale) === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label>Sprache / Language<select name="lang" translate="no">${Object.entries(I18N.languages).map(([k, l]) => `<option value="${k}" ${I18N.lang === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <p class="hint wide">Farben der Funkgeräte-Anzeige stellst du unter „Oberfläche bearbeiten“ (Strg+F8) ein.</p></div></div>
     <div class="err"></div>`, onOpen: dd => {

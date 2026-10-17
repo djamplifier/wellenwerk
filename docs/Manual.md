@@ -316,11 +316,16 @@ Audio runs directly between the computers (WebRTC, Opus); outside the home netwo
 
 ## 5. Arranging windows and layouts
 
-**Screen size:** Wellenwerk adapts to the resolution – from laptops (also 4:3, from about 1024 × 660 pixels in the browser) up to 4K:
+**Screen size:** Wellenwerk adapts to the resolution – from laptops (also 4:3, from about 1024 × 660 pixels in the browser) up to 4K. Nothing is simply scaled up: on large screens you see **more details and more windows**, on small ones fewer.
+- **Three screen classes with their own arrangement:** small (laptop, below about 1366 × 720), medium (Full HD) and large (from about 2200 × 1100, e.g. 2560 × 1440 or 4K). Each class has its own default arrangement – large adds Bands & modes, Data reception and a full-width waterfall to Rig control, clock, rotator, audio recorder and DX histogram to the logbook, and shows the world map as its own window in Digital modes. Small puts band map and grey line as tabs next to the DX cluster and the macros next to the Send window. Wellenwerk remembers your changes **per class**: drag the window from the laptop to the big monitor and the arrangement switches, and back again. **Window → Restore default arrangement** restores the arrangement of the current class.
+- **Details by window size:** each window decides by its space. The logbook hides secondary columns in narrow windows (submode, QTH, sent QSL confirmations, Club Log, QRZ …) and adds frequency, locator, continent, CQ zone and comment in wide ones. The radio display shows the second fine scale in large windows.
+
 - On low or narrow screens headers become more compact; toolbars that do not fit in one row show icons only (label on hover).
 - The radio display shrinks when needed instead of showing scroll bars; clicks on scales and digits still hit exactly.
 - When the **waterfall** is opened, the radio display moves to the left side as a narrow column – frequency, S-meter and buttons stacked, as in SDR-Console – and the waterfall gets the width. Closing the waterfall restores the previous arrangement. Can be switched off under **F8 → Waterfall**.
-- On very large screens without system scaling (e.g. 4K at 100 %) Wellenwerk enlarges the interface automatically; the size can also be set under **F8 → Appearance → Interface size** (80–200 %).
+- If you still want larger text, set it under **F8 → Appearance → Interface size** (80–200 %); there is no automatic enlargement any more.
+
+![Large screen class: bands, radio, data reception and full-width waterfall](bilder/30-grosser-bildschirm.png)
 
 Each area is its own window that can be arranged freely:
 

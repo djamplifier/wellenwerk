@@ -310,11 +310,16 @@ Das Audio läuft direkt zwischen den Rechnern (WebRTC, Opus); außerhalb des Hei
 
 ## 5. Fenster anordnen und Layouts
 
-**Bildschirmgröße:** Wellenwerk passt sich der Auflösung an – vom Laptop (auch 4:3, ab etwa 1024 × 660 Bildpunkten im Browser) bis 4K:
+**Bildschirmgröße:** Wellenwerk passt sich der Auflösung an – vom Laptop (auch 4:3, ab etwa 1024 × 660 Bildpunkten im Browser) bis 4K. Dabei wird nichts einfach größer gezogen: Auf großen Bildschirmen siehst du **mehr Details und mehr Fenster**, auf kleinen weniger.
+- **Drei Bildschirmklassen mit eigener Anordnung:** klein (Laptop, unter etwa 1366 × 720), mittel (Full HD) und groß (ab etwa 2200 × 1100, z. B. 2560 × 1440 oder 4K). Jede Klasse hat eine eigene Standardanordnung – groß zeigt in der Gerätesteuerung zusätzlich Bänder & Betriebsarten, Datenempfang und den Wasserfall über die volle Breite, im Logbuch zusätzlich Uhr, Rotor, Audio-Rekorder und DX-Histogramm, im Digitalbetrieb die Weltkarte als eigenes Fenster. Klein legt Bandkarte und Graulinie als Reiter zum DX-Cluster und die Makros zum Senden-Fenster. Wellenwerk merkt sich deine Änderungen **je Klasse**: Ziehst du das Fenster vom Laptop auf den großen Monitor, springt die Anordnung um, und zurück wieder die alte. **Fenster → Standardanordnung wiederherstellen** stellt die Anordnung der aktuellen Klasse wieder her.
+- **Details je Fenstergröße:** Jedes Fenster entscheidet nach seinem Platz. Das Logbuch blendet in schmalen Fenstern Nebenspalten aus (Submode, QTH, gesendete QSL-Bestätigungen, Club Log, QRZ …) und zeigt in breiten zusätzlich Frequenz, Locator, Kontinent, CQ-Zone und Bemerkung. Die Geräteanzeige zeigt in großen Fenstern die zweite Feinskala.
+
 - Auf niedrigen oder schmalen Bildschirmen werden Kopfzeilen kompakter; Werkzeugleisten, die nicht in eine Zeile passen, zeigen nur Symbole (Beschriftung beim Darüberfahren).
 - Die Geräteanzeige verkleinert sich bei Bedarf, statt Scrollbalken zu zeigen; Klicks auf Skalen und Ziffern treffen weiterhin genau.
 - Wird der **Wasserfall** geöffnet, wandert die Geräteanzeige schmal an die linke Seite – Frequenz, S-Meter und Tasten untereinander, wie bei SDR-Console – und der Wasserfall bekommt die Breite. Beim Schließen des Wasserfalls springt die vorherige Anordnung zurück. Abschaltbar unter **F8 → Wasserfall**.
-- Auf sehr großen Bildschirmen ohne Systemskalierung (z. B. 4K bei 100 %) vergrößert Wellenwerk die Oberfläche automatisch; die Größe lässt sich unter **F8 → Darstellung → Größe der Oberfläche** auch fest einstellen (80–200 %).
+- Wer trotzdem größere Schrift möchte, stellt sie unter **F8 → Darstellung → Größe der Oberfläche** ein (80–200 %); eine automatische Vergrößerung gibt es nicht mehr.
+
+![Große Bildschirmklasse: Bänder, Funkgerät, Datenempfang und Wasserfall über die volle Breite](bilder/30-grosser-bildschirm.png)
 
 Jeder Bereich ist ein eigenes Fenster, das sich frei anordnen lässt:
 

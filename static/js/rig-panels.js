@@ -400,7 +400,14 @@ APPS.rig = {
     freqlist: { title: "Frequenzen Digimodes", create: (r, p) => createFreqList(r, p), dock: { ref: ["selection", "sliders", "face"], dir: "within" } },
     memories: { title: "Speicherkanäle", create: createMemories, dock: { ref: ["selection", "sliders", "face"], dir: "within" } },
   },
-  layout(dv) { addPanel("rig", "face"); addPanel("rig", "sliders"); },
+  layout(dv, cls = "m") {   // klein/mittel: Funkgeraet + Regler; gross: Baender | Funkgeraet | Datenempfang, darunter Wasserfall ueber die volle Breite
+    if (cls !== "l") { addPanel("rig", "face"); addPanel("rig", "sliders"); return; }
+    const P = APPS.rig.panels, add = (c, position) => dv.addPanel({ id: c, component: c, title: P[c].title, position });
+    add("face"); add("selection", { referencePanel: "face", direction: "left" }); add("decodes", { referencePanel: "face", direction: "right" });
+    add("waterfall", { direction: "below" }); add("sliders", { direction: "below" });
+    setTimeout(() => { try { dv.getPanel("selection").group.api.setSize({ width: 280 }); dv.getPanel("decodes").group.api.setSize({ width: 620 });
+      dv.getPanel("waterfall").group.api.setSize({ height: Math.round(innerHeight * 0.3) }); dv.getPanel("sliders").group.api.setSize({ height: 150 }); } catch { } }, 80);
+  },
   menus: [],
   toolbar: [],
 };
