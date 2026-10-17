@@ -1883,5 +1883,9 @@
 "AMBE ist patentrechtlich geschützt. Ob du es an deinem Ort nutzen darfst, musst du selbst prüfen – Nutzung auf eigene Verantwortung.": "AMBE is protected by patents. Whether you may use it where you live is for you to check – use at your own risk.",
 "Erneut prüfen": "Check again",
 "Sprachmodul gefunden": "Voice module found",
-"Sprachmodul noch nicht gefunden": "Voice module not found yet"
+"Sprachmodul noch nicht gefunden": "Voice module not found yet",
+"Der Server hat auf „{}“ umgeschaltet (anderer Nutzer oder Zeitplan)": "The server switched to “{}” (another user or schedule)",
+"Empfangsfrequenz {} MHz liegt außerhalb dieses Ausschnitts": "Receive frequency {} MHz is outside this range",
+"anderes Profil": "another profile",
+"Profilwechsel auf „{}“ in {} s …": "Profile change to “{}” in {} s …"
 }

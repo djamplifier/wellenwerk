@@ -63,8 +63,11 @@ function createWfPanel(root) {
     for (const t of SIG.tags) { if (t.until < Date.now() || t.rf < view[0] || t.rf > view[1]) continue; const x = fx(t.rf, W), w = c.measureText(t.label).width + 8;   // erkannte Signale
       c.fillStyle = "rgba(20,30,40,.8)"; c.fillRect(x - w / 2, 14, w, 14); c.fillStyle = "#ffd166"; c.fillText(t.label, x - w / 2 + 4, 25); c.fillRect(x, 28, 1, 6); }
     if (typeof fmkDraw === "function") fmkDraw(c, W, view, srcs().data);           // typische Frequenzen, Rundfunk, Relais
-    const swi = (WW.radios || []).find(x => x.id === srcs().data)?.state?.sdr?.switching;   // Profilwechsel laeuft: Hinweis ueber dem Spektrum
-    if (swi) { const t = `Profilwechsel auf „${swi.to || "neues Profil"}“ in ${Math.max(0, Math.ceil(swi.at - Date.now() / 1000))} s …`; c.font = "bold 12px sans-serif"; const tw = c.measureText(t).width;
+    const sdr0 = (WW.radios || []).find(x => x.id === srcs().data)?.state?.sdr, swi = sdr0?.switching, fo = sdr0?.foreign;   // Profilwechsel laeuft: Hinweis ueber dem Spektrum
+    const msg = swi ? `Profilwechsel auf „${swi.to || "neues Profil"}“ in ${Math.max(0, Math.ceil(swi.at - Date.now() / 1000))} s …`
+      : fo && Date.now() / 1000 - fo.at < 10 ? `Der Server hat auf „${fo.name || "anderes Profil"}“ umgeschaltet (anderer Nutzer oder Zeitplan)`
+      : s.freq && (s.freq < l.low || s.freq > l.high) ? `Empfangsfrequenz ${fmtMHz(s.freq)} MHz liegt außerhalb dieses Ausschnitts` : "";
+    if (msg) { const t = I18N.t(msg); c.font = "bold 12px sans-serif"; const tw = c.measureText(t).width;
       c.fillStyle = "rgba(8,18,28,.85)"; c.fillRect(W / 2 - tw / 2 - 8, H / 2 - 12, tw + 16, 22); c.fillStyle = "#ffd166"; c.fillText(t, W / 2 - tw / 2, H / 2 + 4); c.font = "10px sans-serif"; }
     if (!FH) return; scr.lut = lut; scr.push({ l, L: L0 });
   };

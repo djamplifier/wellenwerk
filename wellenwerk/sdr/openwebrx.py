@@ -139,6 +139,7 @@ class OpenWebRXRig(SdrRig):
         self.fft_comp, self.audio_comp = "adpcm", "adpcm"
         self.profiles, self.profile = [], ""
         self.seen = {}                                   # Profil-ID -> (Mitte, Breite) der schon besuchten Profile
+        self._want_prof, self._foreign = None, False      # eigener Profilwunsch / Wechsel durch den Server bzw. andere Nutzer
         self._prof_t = 0.0                               # Zeit des letzten Profilwechsels (bzw. des Verbindens)
         self._prof_lock = asyncio.Lock()
         self._blind = True                               # unbekannte Profile durchprobieren erlaubt (nicht beim ersten Abstimmen)
@@ -204,6 +205,10 @@ class OpenWebRXRig(SdrRig):
                 if self.profile and prof != self.profile and self.state["connected"]:
                     # nach einem Profilwechsel (v. a. auf ein anderes SDR-Geraet) haelt der Server die Tonaufbereitung an
                     await self._send({"type": "dspcontrol", "action": "start"})
+                    if prof != self._want_prof:          # nicht von uns: anderer Nutzer am selben SDR oder Zeitplan des Servers
+                        self._foreign = True
+                if prof == self._want_prof:
+                    self._want_prof = None
                 self.profile = prof
             if self.profile and self.center and self.rate and (v.get("center_freq") or v.get("samp_rate")):
                 self.seen[self.profile] = (self.center, self.rate)
@@ -214,6 +219,17 @@ class OpenWebRXRig(SdrRig):
                     self.say(f"verbunden, Ausschnitt {(self.center - self.rate / 2) / 1e6:.3f}–{(self.center + self.rate / 2) / 1e6:.3f} MHz")
                     await self._send({"type": "dspcontrol", "params": {"squelch_level": -150}})
                     asyncio.ensure_future(self._first_tune(int(self.center + (v.get("start_offset_freq") or 0))))
+                if self._foreign and (v.get("center_freq") or v.get("samp_rate")) and self.state["connected"]:
+                    self._foreign = False
+                    f = self.state.get("freq") or 0
+                    if not self._covers(f):              # wie die OpenWebRX-Oberflaeche: dem Server folgen, nicht zurueckschalten
+                        nf = int(self.center + (v.get("start_offset_freq") or 0))
+                        name = next((p.get("name", "") for p in self.profiles if p["id"] == self.profile), "")
+                        self.say(f"Der Server hat auf „{name}“ umgeschaltet (anderer Nutzer oder Zeitplan) – "
+                                 f"{f / 1e6:.4f} MHz liegt nicht mehr im Ausschnitt, jetzt {nf / 1e6:.4f} MHz")
+                        self.state["freq"] = nf
+                        self.state["sdr"]["foreign"] = dict(name=name, at=round(time.time(), 1))
+                        asyncio.ensure_future(self.tune())
                 self.cfg_event.set()
                 await self.changed(True)
         elif t == "profiles":
@@ -365,6 +381,7 @@ class OpenWebRXRig(SdrRig):
                     self.state["sdr"].pop("switching", None)
                     await self.changed(True)
             self._prof_t = loop.time()
+            self._want_prof = pid
             await self._send({"type": "selectprofile", "params": {"profile": pid}})
             return True
 
