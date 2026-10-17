@@ -285,13 +285,13 @@ APPS.dm = {
   panels: {
     waterfall: { title: "Wasserfall", create: createWaterfall }, rx: { title: "Empfang", create: createDmRx }, tx: { title: "Senden", create: createDmTx },
     macros: { title: "Makros", create: createDmMacros }, qso: { title: "QSO", create: createDmQso }, tags: { title: "Über mich", create: createDmTags },
-    radio: { title: "Funkgerät", create: createRadioPane }, sweeper: { title: "WWK Sweeper", create: createSweeper }, worldmap: { title: "Weltkarte", create: createDmMap },
+    radio: { title: "Gerätestatus", create: createRadioPane }, sweeper: { title: "WWK Sweeper", create: createSweeper }, worldmap: { title: "Weltkarte", create: createDmMap },
     sstv: { title: "SSTV", create: createSstv, dock: { ref: "rx", dir: "within" } }, sstvgal: { title: "SSTV-Bilder", create: createSstvGallery, dock: { ref: ["sweeper", "rx"], dir: "within" } },
   },
   layout(dv) {
     const q = dv.addPanel({ id: "qso", component: "qso", title: "QSO" });
     dv.addPanel({ id: "tags", component: "tags", title: "Über mich", position: { referencePanel: "qso", direction: "within" } });
-    dv.addPanel({ id: "radio", component: "radio", title: "Funkgerät", position: { referencePanel: "qso", direction: "within" } }); q.api.setActive();
+    dv.addPanel({ id: "radio", component: "radio", title: "Gerätestatus", position: { referencePanel: "qso", direction: "within" } }); q.api.setActive();
     const rx = dv.addPanel({ id: "rx", component: "rx", title: "Empfang", position: { referencePanel: "qso", direction: "right" } });
     dv.addPanel({ id: "sweeper", component: "sweeper", title: "WWK Sweeper", position: { referencePanel: "rx", direction: "within" } });
     dv.addPanel({ id: "worldmap", component: "worldmap", title: "Weltkarte", position: { referencePanel: "rx", direction: "within" } }); rx.api.setActive();
@@ -310,11 +310,11 @@ APPS.dm = {
     { label: "Logbuch", items: [{ label: "Logbuch öffnen", act: () => switchApp("log") }] },
     MENU_WINDOW("dm"), MENU_HELP,
   ],
-  toolbar: [
-    { label: "QSO", icon: "i-edit", act: () => addPanel("dm", "qso") }, { label: "WWK Sweeper", icon: "i-scan", act: () => addPanel("dm", "sweeper") }, { label: "SSTV", icon: "i-cam", act: () => addPanel("dm", "sstv") },
-    { label: "Funkgerät", icon: "i-radio", act: () => addPanel("dm", "radio") }, { label: "Soundkarte", icon: "i-mic", act: () => dmStart(store.get("dm.in", "")), on: () => D.running },
-    { label: "Wasserfall", icon: "i-wave", act: () => addPanel("dm", "waterfall") }, "|", { label: "Gerätesteuerung", icon: "i-radio", act: () => switchApp("rig") }, { label: "Logbuch", icon: "i-book", act: () => switchApp("log") },
-    { label: "Rotor", icon: "i-compass", act: () => switchApp("rot") }, { label: "Optionen", icon: "i-gear", act: () => openOptions() }, { label: "Vollbild", icon: "i-full", act: fullScreen }, "->",
-    { html: `<div class="ribbon-box rb-clk"></div>`, init: el => setInterval(() => el.firstChild.textContent = new Date().toISOString().slice(11, 19), 1000) },
+  toolbar: [   // eigene Gruppierung: Betrieb, dann Ton/Gerät; Programmwechsel ueber die Reiter
+    { label: "QSO", icon: "i-edit", act: () => addPanel("dm", "qso") }, { label: "WWK Sweeper", icon: "i-scan", act: () => addPanel("dm", "sweeper") }, { label: "SSTV", icon: "i-cam", act: () => addPanel("dm", "sstv") }, "|",
+    { label: "Wasserfall", icon: "i-wave", act: () => addPanel("dm", "waterfall") }, { label: "Soundkarte", icon: "i-mic", act: () => dmStart(store.get("dm.in", "")), on: () => D.running },
+    { label: "Gerätestatus", icon: "i-radio", act: () => addPanel("dm", "radio") }, "->",
+    { html: `<div class="ribbon-box rb-clk"></div>`, init: el => setInterval(() => el.textContent = new Date().toISOString().slice(11, 19) + " UTC", 1000) },
+    { label: "Optionen", icon: "i-gear", act: () => openOptions() },
   ],
 };

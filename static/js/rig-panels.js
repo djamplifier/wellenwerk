@@ -1,15 +1,15 @@
 "use strict";
 // Wellenwerk – Gerätesteuerung: Regler, Auswahl/Favoriten, Kurzwellen-Datenbank, Bandübersicht, Scanner, Makros, Sprach-Keyer,
-// Verbinden-Dialog, Layout anpassen sowie Menues und Werkzeugleiste des Programms.
+// Verbinden-Dialog, Oberfläche bearbeiten sowie Menues und Werkzeugleiste des Programms.
 
 // ---------- Schieberegler (unten,) ----------
 function createSliders(root) {
-  root.innerHTML = `<div class="rc rc-sliders-wrap"><div class="rc-sl-head"><select class="rc-sl-layout" title="Regler-Layout"></select></div><div class="rc-sliders"></div></div>`;
+  root.innerHTML = `<div class="rc rc-sliders-wrap"><div class="rc-sl-head"><select class="rc-sl-layout" title="Zusammenstellung der Regler"></select></div><div class="rc-sliders"></div></div>`;
   const wrap = $(".rc", root);
   const build = () => {
     applyScheme(wrap);
     const L = RC.layout?.sliders || { active: 0, layouts: [[]] }, defs = WW.caps.ui_levels || [];
-    $(".rc-sl-layout", root).innerHTML = L.layouts.map((l, i) => `<option value="${i}" ${i === L.active ? "selected" : ""}>Regler-Layout ${i + 1}${l.length ? "" : " (leer)"}</option>`).join("");
+    $(".rc-sl-layout", root).innerHTML = L.layouts.map((l, i) => `<option value="${i}" ${i === L.active ? "selected" : ""}>Satz ${i + 1}${l.length ? "" : " (leer)"}</option>`).join("");
     const names = (L.layouts[L.active] || []).length ? L.layouts[L.active] : defs.map(d => d.name);
     $(".rc-sliders", root).innerHTML = names.map(n => defs.find(d => d.name === n)).filter(Boolean).map(d =>
       `<div class="hslider" data-n="${d.name}" data-min="${d.min}" data-max="${d.max}" data-step="${d.step}" data-type="${d.type}"><i></i><b></b><span></span></div>`).join("")
@@ -17,7 +17,7 @@ function createSliders(root) {
     upd();
   };
   const fmt = (el, v) => { const d = (WW.caps.ui_levels || []).find(x => x.name === el.dataset.n); return `${d?.label || el.dataset.n}: ${d?.type === "f" ? Math.round(v * 100) : Math.round(v)}${d?.type === "f" ? "" : " " + (d?.unit || "")}`; };
-  const setVis = (el, v) => { const lo = +el.dataset.min, hi = +el.dataset.max, p = Math.max(0, Math.min(1, (v - lo) / (hi - lo || 1))); el.querySelector("i").style.width = p * 100 + "%"; el.querySelector("b").style.left = `calc(${p * 100}% - 4px)`; el.querySelector("span").textContent = fmt(el, v); };
+  const setVis = (el, v) => { const lo = +el.dataset.min, hi = +el.dataset.max, p = Math.max(0, Math.min(1, (v - lo) / (hi - lo || 1))); el.querySelector("i").style.width = `calc(${p} * (100% - 24px))`; el.querySelector("b").style.left = `calc(${p} * (100% - 24px))`; el.querySelector("span").textContent = fmt(el, v); };
   const upd = () => $$(".hslider", root).forEach(el => { if (el._hold) return; const v = (WW.rig.levels || {})[el.dataset.n]; if (v != null) setVis(el, v); else el.querySelector("span").textContent = fmt(el, 0); });
   root.addEventListener("mousedown", e => {
     const el = e.target.closest(".hslider"); if (!el) return;
@@ -32,10 +32,10 @@ function createSliders(root) {
   return () => offs.forEach(f => f());
 }
 
-// ---------- Auswahl: Favoriten-Baum, Menues, Advanced ----------
+// ---------- Bänder & Betriebsarten: Favoriten-Baum, Gerätemenüs, alle Einstellungen ----------
 async function favList() { try { return await api("/api/favorites"); } catch { return []; } }
 function createSelection(root) {
-  root.innerHTML = `<div class="selpane"><div class="sel-tabs"><button class="on" data-t="fav">Favoriten</button><button data-t="menus">Menüs</button><button data-t="adv">Advanced</button></div>
+  root.innerHTML = `<div class="selpane"><div class="sel-tabs"><button class="on" data-t="fav">Favoriten</button><button data-t="menus">Gerätemenüs</button><button data-t="adv">Alle Einstellungen</button></div>
     <div class="sel-tb"><button type="button" data-a="add">${icon("i-star")} Favorit</button><button type="button" data-a="folder">${icon("i-plus")} Ordner</button></div><div class="sel-body"></div></div>`;
   let tab = "fav", open = store.get("fav.open", {});
   const body = $(".sel-body", root);
@@ -324,14 +324,14 @@ async function openConnect(editId, tab) {
   if (editId) { const p = WW.radios.find(r => r.id === editId); if (p) fill(p); }
 }
 
-// ---------- Layout anpassen ----------
+// ---------- Oberflaeche bearbeiten ----------
 function openCustomize() {
   if (!RC.layout) return toast("Erst ein Funkgerät verbinden", true);
   const L = JSON.parse(JSON.stringify(RC.layout)), cat = () => { const c = buttonCatalog(); (L.custom || []).forEach(b => c["custom:" + b.id] = { label: b.label, kind: "custom", def: b }); return c; };
   const sch = L.scheme || {}, base = sch.base || store.get("rc.scheme", "Standard"), colors = { ...SCHEMES[base], ...(sch.colors || {}) };
   const COLOR_LABELS = { face: "Hintergrund", digits: "Frequenz-Ziffern", digitsSub: "Sub-VFO", active: "Aktive Ziffer (Balken)", inactive: "Inaktive Ziffer", btn: "Taste", btnText: "Tastenschrift", btnOn: "Taste aktiv", btnOnText: "Schrift aktiv", status: "Status ein", statusOff: "Status aus", warn: "Warnung/TX", bars: "Abstimmleisten", text: "Text", meterLow: "Meter niedrig", meterHigh: "Meter hoch", meterFree: "Meter frei", slider: "Regler", sliderFill: "Regler gefüllt" };
-  const d = dialog({ title: "Layout anpassen", icon: "i-gear", wide: true, buttons: [["Abbrechen", "close"], ["Übernehmen", "apply", "primary"]], body: `
-    <div class="dtabs"><button class="on" data-t="schemes">Schemata</button><button data-t="layout">Tasten-Layout</button><button data-t="colors">Farben &amp; Größe</button><button data-t="sliders">Regler-Layouts</button><button data-t="dial">Abstimmskala</button></div>
+  const d = dialog({ title: "Oberfläche bearbeiten", icon: "i-brush", wide: true, buttons: [["Abbrechen", "close"], ["Übernehmen", "apply", "primary"]], body: `
+    <div class="dtabs"><button class="on" data-t="schemes">Schemata</button><button data-t="layout">Tasten-Layout</button><button data-t="colors">Farben &amp; Größe</button><button data-t="sliders">Regler-Sätze</button><button data-t="dial">Abstimmskala</button></div>
     <div class="dtab" data-t="schemes"><div class="cn-grid"><div><label>Schema<select id="cu-base" size="7">${Object.keys(SCHEMES).map(s => `<option ${s === base ? "selected" : ""}>${esc(s)}</option>`).join("")}${Object.keys(store.get("userschemes", {})).map(s => `<option value="u:${esc(s)}">${esc(s)} (eigen)</option>`).join("")}</select></label></div>
       <div><p class="hint">Ein Schema legt Farben fest. Eigene Schemata speicherst du hier und gibst sie als Datei weiter.</p><div class="ctl-row"><button type="button" id="cu-ssave">Als eigenes Schema speichern …</button><button type="button" id="cu-sdel">Eigenes löschen</button></div>
       <div class="ctl-row"><button type="button" id="cu-exp">Layout als Datei speichern</button><label class="btn">Layout aus Datei laden<input type="file" id="cu-imp" accept=".json" hidden></label><button type="button" id="cu-def">Standard-Tastenbelegung</button></div></div></div></div>
@@ -342,7 +342,7 @@ function openCustomize() {
     <div class="dtab hidden" data-t="colors"><div class="cu-colors">${Object.entries(COLOR_LABELS).map(([k, l]) => `<label>${esc(l)}<input type="color" data-c="${k}" value="${colors[k] || "#000000"}"></label>`).join("")}</div>
       <div class="grid2"><label>Tastengröße<select id="cu-size">${[["small", "klein"], ["medium", "mittel"], ["large", "groß"]].map(([v, l]) => `<option value="${v}" ${(L.size || "small") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label class="chkrow"><input type="checkbox" id="cu-peak" ${L.peak !== false ? "checked" : ""}> Spitzenwert im S-Meter anzeigen</label></div></div>
-    <div class="dtab hidden" data-t="sliders"><p class="hint">Bis zu sechs Regler-Layouts, z. B. eines für SSB und eines für CW. Umschalten unten im Bereich „Regler“.</p>
+    <div class="dtab hidden" data-t="sliders"><p class="hint">Bis zu sechs Regler-Sätze, z. B. eines für SSB und eines für CW. Umschalten unten im Bereich „Regler“.</p>
       <div class="cu-sl">${[0, 1, 2, 3, 4, 5].map(i => `<fieldset><legend>Layout ${i + 1}</legend>${(WW.caps.ui_levels || []).map(lv => `<label class="chkrow"><input type="checkbox" data-sl="${i}" value="${lv.name}" ${(L.sliders.layouts[i] || []).includes(lv.name) ? "checked" : ""}> ${esc(lv.label)}</label>`).join("")}</fieldset>`).join("")}</div></div>
     <div class="dtab hidden" data-t="dial"><div class="grid2"><label class="chkrow"><input type="checkbox" id="cu-f2" ${store.get("rc.fine2", false) ? "checked" : ""}> Zweite Feinabstimmung (Fine II) zeigen</label>
       <label>Bandplan<select id="cu-plan">${PLAN_NAMES.map(p => `<option value="${p[0]}" ${p[0] === currentPlan().key ? "selected" : ""}>${esc(p[1])}</option>`).join("")}</select></label></div></div>` });
@@ -392,8 +392,8 @@ APPS.rig = {
   title: "Gerätesteuerung", icon: "i-radio",
   panels: {
     face: { title: "Funkgerät", create: createFace },
-    sliders: { title: "Regler", create: createSliders, dock: { ref: "face", dir: "below" }, size: { height: 150 } },
-    selection: { title: "Auswahl", create: createSelection, dock: { ref: "face", dir: "left" }, size: { width: 250 } },
+    sliders: { title: "Pegel & Filter", create: createSliders, dock: { ref: "face", dir: "below" }, size: { height: 150 } },
+    selection: { title: "Bänder & Betriebsarten", create: createSelection, dock: { ref: "face", dir: "left" }, size: { width: 250 } },
     swdata: { title: "KW-Datenbank", create: createSwData, dock: { ref: ["sliders", "face"], dir: "below" }, size: { height: 220 } },
     bandscope: { title: "Bandübersicht", create: createBandscope, dock: { ref: ["swdata", "sliders", "face"], dir: "within" } },
     panadapter: { title: "Panadapter", create: createPanadapter, dock: { ref: "face", dir: "below" }, size: { height: 300 } },
@@ -404,49 +404,43 @@ APPS.rig = {
   toolbar: [],
 };
 function rigMenus() {
-  const macros = store.get("macros", []);
+  const macros = store.get("macros", []), qs = store.get("qs." + WW.current, []);
+  const panel = (k, label) => ({ label, check: () => panelOpen("rig", k), act: () => togglePanel("rig", k) });
   APPS.rig.menus = [
     { label: "Datei", items: [{ label: "Verbinden …", icon: "i-plug", act: () => { addPanel("rig", "face"); openConnect(); } }, { label: "Empfänger (WebSDR/KiwiSDR) …", icon: "i-wave", act: () => { addPanel("rig", "receivers"); openConnect(null, "sdr"); } }, { label: "Trennen", act: () => WW.current && act(`/api/radios/${WW.current}/disconnect`) },
       { label: "Verbindung bearbeiten …", act: () => openConnect(WW.current) }, "-", { label: "Programmoptionen …", key: "F8", act: () => openOptions() }] },
     { label: "Bearbeiten", items: [{ label: "Frequenz eingeben …", key: "Enter", act: freqDialog }, { label: "Frequenz kopieren", act: () => navigator.clipboard?.writeText(fmtMHz(WW.rig.freq || 0)) }] },
-    { label: "Ansicht", items: [
-      { label: "Funkgerät", check: () => panelOpen("rig", "face"), act: () => togglePanel("rig", "face") },
-      { label: "Auswahl", check: () => panelOpen("rig", "selection"), act: () => togglePanel("rig", "selection") },
-      { label: "Regler", check: () => panelOpen("rig", "sliders"), act: () => togglePanel("rig", "sliders") },
-      { label: "KW-Datenbank", check: () => panelOpen("rig", "swdata"), act: () => togglePanel("rig", "swdata") },
-      { label: "Bandübersicht", check: () => panelOpen("rig", "bandscope"), act: () => togglePanel("rig", "bandscope") },
-      { label: "Panadapter", check: () => panelOpen("rig", "panadapter"), act: () => togglePanel("rig", "panadapter") },
-      { label: "Speicherkanäle", check: () => panelOpen("rig", "memories"), act: () => togglePanel("rig", "memories") },
-      { label: "Fernbetrieb-Audio", check: () => panelOpen("rig", "remoteaudio"), act: () => togglePanel("rig", "remoteaudio") },
-      { label: "Empfänger (SDR)", check: () => panelOpen("rig", "receivers"), act: () => togglePanel("rig", "receivers") },
-      { label: "Wasserfall (2D/3D)", check: () => panelOpen("rig", "waterfall"), act: () => togglePanel("rig", "waterfall") },
-      { label: "Datenempfang (DMR, D-STAR, APRS, Sensoren)", check: () => panelOpen("rig", "decodes"), act: () => togglePanel("rig", "decodes") }, "-",
-      "Schema", ...Object.keys(SCHEMES).map(s => ({ label: s, act: () => { store.set("rc.scheme", s); if (RC.layout) { RC.layout.scheme = { base: s }; saveRigLayout(); } } })), "-",
+    { label: "Ansicht", items: [panel("face", "Funkgerät"), panel("selection", "Bänder & Betriebsarten"), panel("sliders", "Pegel & Filter"), panel("waterfall", "Wasserfall (2D/3D)"),
+      panel("decodes", "Datenempfang (DMR, D-STAR, APRS, Sensoren)"), panel("receivers", "Empfänger (SDR)"), panel("panadapter", "Panadapter"), panel("memories", "Speicherkanäle"),
+      panel("swdata", "KW-Datenbank"), panel("bandscope", "Bandübersicht"), panel("remoteaudio", "Fernbetrieb-Audio"), "-",
+      "Farbschema", ...Object.keys(SCHEMES).map(s => ({ label: s, act: () => { store.set("rc.scheme", s); if (RC.layout) { RC.layout.scheme = { base: s }; saveRigLayout(); } } })), "-",
       { label: "Vollbild", key: "F11", act: fullScreen }] },
-    { label: "Bänder", items: [...PLAN_NAMES.map(p => ({ label: p[1], act: () => { store.set("rc.plan", p[0]); WW.emit("rc-layout"); } })), "-", { label: "Bandspreizung aus", act: () => { RC.bsp = false; WW.emit("rc-layout"); } }] },
-    { label: "Favoriten", items: [{ label: "Hinzufügen …", icon: "i-star", act: () => addFavoriteDialog() }, { label: "Anzeigen", act: () => addPanel("rig", "selection") }] },
-    { label: "Schnellspeicher", items: [{ label: "Speichern", act: quickSave }, ...store.get("qs." + WW.current, []).map((q, i) => ({ label: `${i + 1}: ${fmtMHz(q.f)} ${q.m || ""}`, act: () => { setFreq(q.f); if (q.m) setMode(q.m); } })), "-", { label: "Alle löschen", act: () => { store.set("qs." + WW.current, []); WW.emit("quicksave"); } }] },
-    { label: "Makros", items: [{ label: "Bearbeiten …", act: openMacros }, ...(macros.length ? ["-"] : []), ...macros.map(m => ({ label: m.name, act: () => runMacro(m.text) }))] },
-    { label: "Logbuch", items: [{ label: "Logbuch öffnen", act: () => switchApp("log") }, { label: "Neuer Eintrag …", act: () => { switchApp("log"); setTimeout(() => openAle(), 100); } }] },
-    { label: "Funkgerät", items: [{ label: "Geräte-Informationen", act: rigInfo }, { label: "Schnappschüsse …", icon: "i-save", act: () => snapshotsDialog() }, { label: "Synchronisieren …", act: () => syncDialog() }, { label: "Speicherkanäle …", act: () => addPanel("rig", "memories") }, { label: "VFO A ⇄ B", act: () => act("/api/rig/op", { op: "XCHG" }) }, { label: "Split ein/aus", act: () => act("/api/rig/split", { on: !WW.rig.split }) }, { label: "PTT ein/aus", act: () => act("/api/rig/ptt", { on: !WW.rig.ptt }) }] },
-    { label: "Scannen", items: [{ label: "Scanner …", icon: "i-scan", act: openScanner }, { label: "Scanner stoppen", act: () => stopScan("gestoppt") }] },
-    { label: "Abstimmen", items: [{ label: "Feinabstimmung 2 zeigen", check: () => store.get("rc.fine2", false), act: () => { store.set("rc.fine2", !store.get("rc.fine2", false)); WW.emit("rc-layout"); } },
-      ...[1, 10, 100, 1000].map(s => ({ label: `Mausrad-Schritt ${s} Hz`, act: () => { const o = store.get("opts", {}); o.wheel = s; store.set("opts", o); } }))] },
-    { label: "Extras", items: [{ label: "Panadapter", icon: "i-wave", act: () => addPanel("rig", "panadapter") }, { label: "Layout anpassen …", key: "Strg+F8", act: openCustomize }, { label: "Programmoptionen …", key: "F8", act: () => openOptions() }, { label: "Sprach-Keyer …", icon: "i-mic", act: openVoiceKeyer }, { label: "Fernbetrieb-Audio", icon: "i-mic", act: () => addPanel("rig", "remoteaudio") }, { label: "CW-Keyer (Digitalbetrieb)", act: () => switchApp("dm") }] },
+    { label: "Gerät", items: [{ label: "Geräte-Informationen", act: rigInfo }, { label: "VFO A ⇄ B", act: () => act("/api/rig/op", { op: "XCHG" }) }, { label: "Split ein/aus", act: () => act("/api/rig/split", { on: !WW.rig.split }) }, { label: "PTT ein/aus", act: () => act("/api/rig/ptt", { on: !WW.rig.ptt }) }, "-",
+      { label: "Scanner …", icon: "i-scan", act: openScanner }, { label: "Scanner stoppen", act: () => stopScan("gestoppt") }, "-",
+      "Bandplan", ...PLAN_NAMES.map(p => ({ label: p[1], act: () => { store.set("rc.plan", p[0]); WW.emit("rc-layout"); } })), { label: "Zoom der Abstimmskala aus", act: () => { RC.bsp = false; WW.emit("rc-layout"); } }, "-",
+      { label: "Zweite Feinskala zeigen", check: () => store.get("rc.fine2", false), act: () => { store.set("rc.fine2", !store.get("rc.fine2", false)); WW.emit("rc-layout"); } },
+      ...[1, 10, 100, 1000].map(s => ({ label: `Mausrad-Schritt ${s} Hz`, act: () => { const o = store.get("opts", {}); o.wheel = s; store.set("opts", o); } })), "-",
+      { label: "Schnappschüsse …", icon: "i-save", act: () => snapshotsDialog() }, { label: "Zwei Geräte koppeln …", act: () => syncDialog() }] },
+    { label: "Speicher", items: [{ label: "Frequenz merken (Schnellspeicher)", icon: "i-save", act: quickSave }, ...qs.map((q, i) => ({ label: `${i + 1}: ${fmtMHz(q.f)} ${q.m || ""}`, act: () => { setFreq(q.f); if (q.m) setMode(q.m); } })),
+      ...(qs.length ? [{ label: "Schnellspeicher leeren", act: () => { store.set("qs." + WW.current, []); WW.emit("quicksave"); } }] : []), "-",
+      { label: "Als Favorit speichern …", icon: "i-star", act: () => addFavoriteDialog() }, { label: "Favoriten zeigen", act: () => addPanel("rig", "selection") }, { label: "Speicherkanäle des Geräts …", act: () => addPanel("rig", "memories") }, "-",
+      { label: "Makros bearbeiten …", act: openMacros }, ...macros.map(m => ({ label: "▸ " + m.name, act: () => runMacro(m.text) }))] },
+    { label: "Werkzeuge", items: [{ label: "Panadapter", icon: "i-wave", act: () => addPanel("rig", "panadapter") }, { label: "Sprach-Keyer …", icon: "i-mic", act: openVoiceKeyer }, { label: "Fernbetrieb-Audio", icon: "i-mic", act: () => addPanel("rig", "remoteaudio") }, { label: "CW-Keyer (Digitalbetrieb)", act: () => switchApp("dm") }, "-",
+      { label: "Neuer Logbuch-Eintrag …", icon: "i-plus", act: () => { switchApp("log"); setTimeout(() => openAle(), 100); } }, "-",
+      { label: "Oberfläche bearbeiten …", icon: "i-brush", key: "Strg+F8", act: openCustomize }, { label: "Programmoptionen …", key: "F8", act: () => openOptions() }] },
     MENU_WINDOW("rig"), MENU_HELP,
   ];
+  // Eigene Gruppierung: Gerät/Bänder/Speicher, dann Anzeigen, dann Oberfläche – Programmwechsel ueber die Reiter
   APPS.rig.toolbar = [
-    { label: "Verbinden", icon: "i-plug", act: () => { addPanel("rig", "face"); openConnect(); } },
-    { label: "Auswahl", icon: "i-list", act: () => togglePanel("rig", "selection"), on: () => panelOpen("rig", "selection") },
-    { label: "Favorit", icon: "i-star", act: () => addFavoriteDialog() },
-    { label: "Schnellspeicher", icon: "i-save", act: quickSave }, "|",
-    { label: "Satelliten", icon: "i-sat", act: () => switchApp("sat") }, { label: "Logbuch", icon: "i-book", act: () => switchApp("log") },
-    { label: "Digital", icon: "i-wave", title: "Digitalbetrieb", act: () => switchApp("dm") }, { label: "Rotor", icon: "i-compass", act: () => switchApp("rot") },
-    { label: "Karten", icon: "i-globe", act: () => switchApp("map") }, "|",
-    { label: "Vollbild", icon: "i-full", act: fullScreen }, { label: "KW-Daten", icon: "i-db", act: () => togglePanel("rig", "swdata"), on: () => panelOpen("rig", "swdata") },
-    { label: "Regler", icon: "i-sliders", act: () => togglePanel("rig", "sliders"), on: () => panelOpen("rig", "sliders") },
-    { label: "Anpassen", icon: "i-brush", act: openCustomize }, { label: "Optionen", icon: "i-gear", act: () => openOptions() }, "->",
+    { label: "Geräte", icon: "i-plug", title: "Funkgerät oder Empfänger verbinden", act: () => { addPanel("rig", "face"); openConnect(); } },
+    { label: "Bänder & Modi", icon: "i-list", title: "Favoriten, Bänder und Betriebsarten", act: () => togglePanel("rig", "selection"), on: () => panelOpen("rig", "selection") },
+    { label: "Merken", icon: "i-star", title: "Frequenz merken", act: () => popupMenu($("#toolbar [data-i='2']") || $("#toolbar"), [{ label: "Schnellspeicher (sofort)", act: quickSave }, { label: "Als Favorit speichern …", act: () => addFavoriteDialog() }]) }, "|",
+    { label: "Wasserfall", icon: "i-wave", act: () => togglePanel("rig", "waterfall"), on: () => panelOpen("rig", "waterfall") },
+    { label: "Datenempfang", icon: "i-db", title: "Meldungen der Dekoder (DMR, D-STAR, APRS …)", act: () => togglePanel("rig", "decodes"), on: () => panelOpen("rig", "decodes") },
+    { label: "Pegel & Filter", icon: "i-sliders", act: () => togglePanel("rig", "sliders"), on: () => panelOpen("rig", "sliders") }, "|",
+    { label: "Oberfläche", icon: "i-brush", title: "Tasten, Farben und Skalen bearbeiten (Strg+F8)", act: openCustomize }, "->",
     { label: "Eintrag", icon: "i-plus", title: "Logbuch-Eintrag hinzufügen", act: () => { switchApp("log"); setTimeout(() => openAle(), 100); } },
+    { label: "Optionen", icon: "i-gear", act: () => openOptions() },
   ];
 }
 // ---------- Speicherkanaele des Funkgeraets ----------

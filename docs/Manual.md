@@ -53,7 +53,7 @@ On the first start the **program options** open. Enter at least your **callsign*
 
 ![Program options](bilder/01-optionen.png)
 
-The options can be opened at any time with **F8** or via **Options** in the toolbar. Important tabs:
+The options can be opened at any time with **F8** or via **Options** (gear icon on the right of the toolbar). Important tabs:
 
 - **Station:** callsign, locator, name/QTH for macros, **DMR ID** (for digital voice; Wellenwerk checks in the RadioID list that it belongs to your callsign)
 - **DX cluster:** server (e.g. `dxc.ve7cc.net`, port 23) and login commands
@@ -67,7 +67,7 @@ A **demo radio** is preset for trying things out – everything can be operated 
 
 ## 3. Connecting a radio
 
-**Radio control → Connect** (or the plug icon in the toolbar).
+**File → Connect …** (or **Devices**, the plug icon on the far left of the toolbar).
 
 ![Connect dialog](bilder/02-verbinden.png)
 
@@ -103,18 +103,21 @@ More settings:
 - **Frequency display:** the mouse wheel over a digit changes exactly that digit. Clicking a digit makes it “active” (bar); then **↑/↓** or **+/−** to change, **←/→** to move, number keys to type. **Enter** opens frequency entry.
 - **Mode:** button above the frequency.
 - **Left:** VFO A/B, TX A/B, A>B, A⇄B, Main/Sub, memory, channel ±. **Right:** function buttons (NB, NR, notch, ATU, tune …) and selection lists (filter, AGC, preamp, attenuator …). Which buttons appear depends on what the radio can do.
-- **Fine tuning:** the bar below the display; drag or use the mouse wheel (Shift = double, Ctrl = five times).
-- **Band buttons:** a click jumps to the last used frequency and mode of the band. **ALT** tunes the second VFO, **Spread** shows a band over several bars.
-- **Tuning bars:** one bar per band across the whole band; click or drag to tune. Cluster spots appear as markers.
-- **Controls** (bottom): up to six control layouts, e.g. one for SSB and one for CW.
-- **Favourites** (toolbar **Selection**): store frequencies with mode in folders, a click tunes.
-- **Quick memory:** remembers the current frequency as a marker on the tuning bar.
+- **State:** below the display small tags show only what is currently active (e.g. Busy, Split, RIT, Lock); when transmitting power, SWR and ALC.
+- **Fine scale** (“Fine”): the scale below the display; drag or use the mouse wheel (Shift = double, Ctrl = five times). The needle shows the tuned frequency.
+- **Band row:** on the left the **band plan** (region 1/2/3), **VFO B** tunes the second VFO, **Zoom** spreads one band over several rows, the band buttons jump to the last used frequency and mode of the band.
+- **Band scales:** one scale per band across the whole band; click or drag to tune. Cluster spots and quick memories appear as markers.
+- **Levels & filters** (bottom): the radio's controls as cards; up to six **sets**, e.g. one for SSB and one for CW.
+- **Bands & modes** (toolbar): favourites in folders (a click tunes), the radio's menus and all settings.
+- **Remember** (toolbar): save the current frequency as a quick memory (marker on the scale) or as a favourite. Everything about storing is also in the **Memory** menu.
+
+The toolbar is grouped by task: **Devices · Bands & modes · Remember**, then **Waterfall · Data reception · Levels & filters**, then **Interface**; on the right **Entry** (new QSO) and **Options**. Switch to the logbook, digital modes etc. with the tabs below. The menus: **Device** (VFO, split, scanner, band plan, mouse-wheel step, snapshots), **Memory** (quick memory, favourites, memory channels, macros), **Tools** (panadapter, voice keyer, remote audio, edit interface).
 
 A closed **Radio** window comes back via **View → Radio** (**File → Connect …** reopens it as well). More windows via **View** or **Tools**: shortwave database (broadcast stations by frequency and time), band scope (sweeps a band and plots the S-meter), scanner, macros, voice keyer, **Panadapter**, **Memory channels**.
 
-**Customize layout** (**Ctrl+F8**): move buttons between left and right, create your own buttons (mode, frequency, CAT command, macro), colours, size, control layouts and band plan (region 1/2/3). **Save layout as file / Load layout from file** transfers the layout to other computers.
+**Edit interface** (**Ctrl+F8**, toolbar **Interface**): move buttons between left and right, create your own buttons (mode, frequency, CAT command, macro), colour scheme (default is the blue Wellenwerk scheme; also Dark, LCD, Plastic blue, LCD green, Night vision), colours, size, slider sets and band plan. **Save layout as file / Load layout from file** transfers everything to other computers.
 
-![Customize layout](bilder/05-anpassen.png)
+![Edit interface](bilder/05-anpassen.png)
 
 ### Panadapter and memory channels
 
@@ -127,9 +130,9 @@ A closed **Radio** window comes back via **View → Radio** (**File → Connect 
 
 ![Snapshots](bilder/19-schnappschuesse.png)
 
-**Radio → Snapshots …** saves the complete radio state under a name – frequency, mode and bandwidth, split with transmit frequency, RIT and all controls and switches the radio can set – and restores it with **Recall** (e.g. “40 m FT8”, “Contest SSB”). One-shot actions like starting the tuner or a tone burst are never triggered.
+**Device → Snapshots …** saves the complete radio state under a name – frequency, mode and bandwidth, split with transmit frequency, RIT and all controls and switches the radio can set – and restores it with **Recall** (e.g. “40 m FT8”, “Contest SSB”). One-shot actions like starting the tuner or a tone burst are never triggered.
 
-**Radio → Synchronize …**: a second connected radio follows the first – frequency plus an adjustable **offset** and optionally the mode (second receiver, SDR as panadapter, transverter IF).
+**Device → Couple two devices …**: a second connected radio follows the first – frequency plus an adjustable **offset** and optionally the mode (second receiver, SDR as panadapter, transverter IF).
 
 ### Receivers without a radio of your own (KiwiSDR, OpenWebRX, WebSDR)
 
@@ -315,7 +318,7 @@ Each area is its own window that can be arranged freely:
 
 - **Move:** drag by the tab (title) and drop at an edge or in the middle of another window (then as a tab).
 - **Size:** drag the dividers.
-- **Detach:** button ⇱ on the right of the window header – the window floats freely (in the picture above: “Selection”).
+- **Detach:** button ⇱ on the right of the window header – the window floats freely (in the picture above: “Bands & modes”).
 - **To a second screen:** button ⧉ – the window becomes its own program window.
 - **Maximize:** button □.
 - **Window menu:** tile windows, dock all windows, restore default arrangement, save and load **Layout A/B**, full screen (**F11**).
@@ -333,10 +336,10 @@ A selection:
 | Right-click on … | Commands |
 |---|---|
 | Frequency display | enter/copy/paste frequency, as favourite, quick memory, mode, tuning step, VFO commands, split |
-| Function button | trigger, move, hide, customize layout |
-| Band button | choose band, forget stored frequency, spread, band plan |
-| Tuning bar | tune here, favourite, delete quick-memory markers; on a spot: all callsign commands |
-| Control | minimum / centre / maximum, control layout |
+| Function button | trigger, move, hide, edit interface |
+| Band button | choose band, forget stored frequency, zoom, band plan |
+| Band scale | tune here, favourite, delete quick-memory markers; on a spot: all callsign commands |
+| Slider (levels & filters) | minimum / centre / maximum, slider set |
 | Favourite / folder | tune, rename, move, delete |
 | Logbook row | edit, delete, copy, ADIF, QSL, upload, tune to QSO frequency, filter, turn antenna, send spot |
 | Logbook column header | sort, show/hide columns |
@@ -355,10 +358,12 @@ A selection:
 
 ![Logbook](bilder/07-logbuch.png)
 
-- **Centre:** the logbook with toolbar (new, contest, delete, view, cut/copy/paste, refresh, columns, change selection, search, filter, QSL, LoTW, backup …). Widen columns by dragging the header, a click on the header sorts.
-- **Left:** callsign info (callbook with photo, name, address; “worked/confirmed” matrix per band and mode for callsign and country), favourites, radio pane.
-- **Right:** band map with spots, grey line, clock, rotator.
-- **Bottom:** solar data, solar cycle, audio monitor, DX cluster, alert (FT8), DX histogram, calendar (contests and DXpeditions), audio recorder, network.
+- **Top:** the logbook with its own bar: **New · Edit · Delete**, **Search · Filter · Columns · Change selection**, **QSL · Upload LoTW · Fetch LoTW**, **Contest · Awards · More …** (including cut/copy/paste into another logbook, reload, column widths, QRZ.com, backup, ADIF, Cabrillo, printing). Widen columns by dragging the header, a click on the header sorts.
+- **Right:** callsign info (callbook with photo, name, address; “worked/confirmed” matrix per band and mode for callsign and country), favourites, device status.
+- **Bottom:** DX cluster (with spot alarm (FT8), POTA / SOTA / WWFF and calendar as tabs), band map with spots, grey line (with solar data and solar cycle).
+- **Via View** in addition: clock, rotator, audio monitor, DX histogram, audio recorder, network, statistics.
+
+The logbook toolbar: **Logbooks · New entry**, **DX cluster · Spot alarm · QSL & Online · Awards**, **Settings**; on the right a box with callsign, locator, frequency (click: tune VFO A) and UTC. Menus: **QSO & QSL** (logbooks, QSL matching, awards, statistics) and **Tools** (settings, station profiles, POTA/SOTA/WWFF, cluster alarms, calendar); tune VFO A/B under **Edit**.
 
 **Logging a QSO:** **New** (or **Entry** in the toolbar). Type the callsign – country, distance, direction, previous QSOs and callbook data appear immediately. Frequency, band and mode come from the radio. **Enter** saves, **Esc** clears.
 
@@ -390,7 +395,7 @@ A selection:
 ## 8. DX cluster, alerts and WSJT-X
 
 - **DX cluster:** enter the server in the options. Spots are marked: **red = new country**, **orange = new band**, grey = already worked. A click tunes radio and mode. **Alerts** reports new countries/bands or particular callsigns (with sound). **Spot** sends your own spot.
-- **WSJT-X / JTDX:** in WSJT-X under *Settings → Reporting* set “UDP Server” to `127.0.0.1` and port `2237`, tick “Accept UDP requests”. Logged QSOs go into the logbook automatically. The **Alert (FT8)** window shows all decodes with country and status; a **double-click** calls the station in WSJT-X, **TX stop** ends transmitting.
+- **WSJT-X / JTDX:** in WSJT-X under *Settings → Reporting* set “UDP Server” to `127.0.0.1` and port `2237`, tick “Accept UDP requests”. Logged QSOs go into the logbook automatically. The **Spot alarm (FT8)** window shows all decodes with country and status; a **double-click** calls the station in WSJT-X, **TX stop** ends transmitting.
 
 ## 9. Online services
 
@@ -488,7 +493,7 @@ With ARDOP and VARA Wellenwerk keys the radio as soon as the modem wants to tran
 
 ![Satellites](bilder/13-satelliten.png)
 
-Orbital data and transmitters are loaded automatically. On the left the list with current elevation (green above the horizon), **Selection …** chooses up to 100 satellites. Next to it the pass polar diagram, the map with ground track and footprint, position and frequencies, and the next passes.
+Orbital data and transmitters are loaded automatically. On the left the list with current elevation (green above the horizon), **Choose satellites** (toolbar) chooses up to 100 satellites. Next to it the pass polar diagram, the map with ground track and footprint, position and frequencies, and the next passes.
 
 - Choose the satellite's **transmitter** – downlink/uplink are shown.
 - **Track radio (Doppler):** keeps adjusting the receive frequency; **Uplink via split** also sets the transmit frequency.
@@ -517,7 +522,7 @@ World map with grey line (day/night), your station and spots, plus the **bearing
 | Key | Effect |
 |---|---|
 | F8 | Program options |
-| Ctrl+F8 | Customize layout |
+| Ctrl+F8 | Edit interface |
 | F11 | Full screen |
 | Mouse wheel over a digit | change this digit (on the bars: Shift ×2, Ctrl ×5) |
 | ← / → | change active digit |
@@ -538,7 +543,7 @@ All data (logbooks, settings, favourites, SSTV pictures) is stored in the user f
 - macOS: `~/Library/Application Support/Wellenwerk`
 - Linux: `~/.local/share/wellenwerk`
 
-**Backing up:** **Backup** (logbook toolbar) makes a copy of the current logbook; **More … → Backups** restores. To move to another computer copy the whole folder or export the logbook as ADIF and import it on the new computer. The radio-control layout is transferred with **Customize layout → Save layout as file / Load layout from file**.
+**Backing up:** **More … → Back up now** (logbook bar) makes a copy of the current logbook; **More … → Backups** restores. To move to another computer copy the whole folder or export the logbook as ADIF and import it on the new computer. The radio-control layout is transferred with **Edit interface → Save layout as file / Load layout from file**.
 
 ## 18. Access, API and AI assistants
 

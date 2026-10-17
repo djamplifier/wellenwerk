@@ -1,5 +1,5 @@
 "use strict";
-// Wellenwerk – Logbuch im klassischen Aufbau: Lookup/Favoriten/Funkgerät-Feld links, Logbuch oben, Cluster & Co. unten,
+// Wellenwerk – Logbuch: Logbuch oben mit Rufzeichen-Info rechts, darunter Cluster, Bandkarte und Graulinie,
 // Bandkarte, Graulinie, Uhr und Rotor rechts. Eingabe ueber "Neuer Eintrag".
 const LOG_COLS = [["qso_date", "Datum"], ["time_on", "Beginn"], ["time_off", "Ende"], ["call", "Rufzeichen"], ["mode", "Mode"], ["submode", "Submode"], ["rst_sent", "Ges."], ["rst_rcvd", "Empf."],
   ["band", "Band"], ["freq", "Freq"], ["name", "Name"], ["qth", "QTH"], ["gridsquare", "Locator"], ["country", "Land"], ["cont", "Kont."], ["cqz", "CQ"], ["ituz", "ITU"], ["state", "Staat"], ["cnty", "County"],
@@ -13,15 +13,11 @@ const fmtCell = (k, v) => k === "qso_date" ? fmtDate(v) : (k === "time_on" || k 
 function createLogbook(root, params) {
   const name = params.name || WW.logbook;
   root.innerHTML = `<div class="lb-tb">
-    <button data-a="add" title="Neuer Eintrag">${icon("i-plus")}<span>Neu</span></button><button data-a="contest" title="Contest-Modus: laufende Nummer">${icon("i-trophy")}<span>Contest</span></button>
-    <button data-a="delete">${icon("i-x")}<span>Löschen</span></button><button data-a="edit">${icon("i-edit")}<span>Ansehen</span></button><i class="sep"></i>
-    <button data-a="cut">${icon("i-cut")}<span>Ausschneiden</span></button><button data-a="copy">${icon("i-copy")}<span>Kopieren</span></button><button data-a="paste">${icon("i-paste")}<span>Einfügen</span></button><i class="sep"></i>
-    <button data-a="refresh">${icon("i-refresh")}<span>Aktualisieren</span></button><button data-a="width">${icon("i-width")}<span>Breite</span></button><button data-a="cols">${icon("i-list")}<span>Spalten</span></button>
-    <button data-a="bulk">${icon("i-edit")}<span>Auswahl ändern</span></button><button data-a="find">${icon("i-search")}<span>Suchen</span></button><i class="sep"></i>
-    <button data-a="qrz">${icon("i-globe")}<span>QRZ.com</span></button><button data-a="backup">${icon("i-save")}<span>Sicherung</span></button><button data-a="awards">${icon("i-award")}<span>Diplome</span></button>
-    <button data-a="more">${icon("i-more")}<span>Mehr …</span></button><i class="sep"></i>
-    <button data-a="filter">${icon("i-filter")}<span>Filter</span></button><button data-a="qsl">${icon("i-cloud")}<span>QSL</span></button>
-    <button data-a="lotwup">${icon("i-upload")}<span>LoTW hoch</span></button><button data-a="lotwdown">${icon("i-download")}<span>LoTW holen</span></button></div>
+    <button data-a="add" title="Neuer Eintrag">${icon("i-plus")}<span>Neu</span></button><button data-a="edit">${icon("i-edit")}<span>Bearbeiten</span></button><button data-a="delete">${icon("i-x")}<span>Löschen</span></button><i class="sep"></i>
+    <button data-a="find">${icon("i-search")}<span>Suchen</span></button><button data-a="filter">${icon("i-filter")}<span>Filter</span></button><button data-a="cols">${icon("i-list")}<span>Spalten</span></button><button data-a="bulk">${icon("i-edit")}<span>Auswahl ändern</span></button><i class="sep"></i>
+    <button data-a="qsl">${icon("i-cloud")}<span>QSL</span></button><button data-a="lotwup">${icon("i-upload")}<span>LoTW hoch</span></button><button data-a="lotwdown">${icon("i-download")}<span>LoTW holen</span></button><i class="sep"></i>
+    <button data-a="contest" title="Contest-Modus: laufende Nummer">${icon("i-trophy")}<span>Contest</span></button><button data-a="awards">${icon("i-award")}<span>Diplome</span></button><button data-a="more">${icon("i-more")}<span>Mehr …</span></button>
+    <span class="hidden"><button data-a="cut"></button><button data-a="copy"></button><button data-a="paste"></button><button data-a="refresh"></button><button data-a="width"></button><button data-a="qrz"></button><button data-a="backup"></button></span></div>
     <div class="lb-find hidden"><input class="lb-q" placeholder="Suchen: Rufzeichen, Land, Name, Locator, DOK …"><button class="lb-clear" title="Filter zurücksetzen">×</button><select class="lb-band"><option value="">Band</option>${WW.bands.map(b => `<option>${b.name}</option>`).join("")}</select>
       <select class="lb-mode"><option value="">Mode</option>${Object.keys(modeTable()).map(m => `<option>${esc(m)}</option>`).join("")}</select>
       <select class="lb-qsl"><option value="">alle QSOs</option><option value="confirmed">bestätigt</option><option value="unconfirmed">unbestätigt</option><option value="lotw">LoTW bestätigt</option><option value="eqsl">eQSL bestätigt</option><option value="paper">Papier-QSL erhalten</option><option value="queued">QSL vorgemerkt</option><option value="to_send">QSL nicht gesendet</option><option value="no_qrz">nicht bei QRZ</option><option value="no_lotw">nicht bei LoTW</option><option value="no_eqsl">nicht bei eQSL</option><option value="no_clublog">nicht bei Club Log</option></select>
@@ -82,7 +78,8 @@ function createLogbook(root, params) {
     else if (a === "backup") { const r = await post("/api/logbooks/backup", { name }); toast(`Gesichert: ${r.file}`); }
     else if (a === "awards") addPanel("log", "awards");
     else if (a === "qsl") addPanel("log", "qsl");
-    else if (a === "more") popupMenu(b, [{ label: "ADIF importieren …", act: () => adifImport(name) }, { label: "ADIF exportieren (Filter)", act: () => location.href = `/api/adif?log=${encodeURIComponent(name)}` },
+    else if (a === "more") { const run = k => $(`.lb-tb [data-a="${k}"]`, root).click(); popupMenu(b, [{ label: "Ausschneiden (in anderes Logbuch)", act: () => run("cut") }, { label: "Kopieren (in anderes Logbuch)", act: () => run("copy") }, { label: "Einfügen", act: () => run("paste") },
+      { label: "Neu laden", act: () => run("refresh") }, { label: "Spaltenbreiten an Inhalt anpassen", act: () => run("width") }, { label: "Auf QRZ.com ansehen", act: () => run("qrz") }, { label: "Sicherung jetzt", act: () => run("backup") }, { label: "ADIF importieren …", act: () => adifImport(name) }, { label: "ADIF exportieren (Filter)", act: () => location.href = `/api/adif?log=${encodeURIComponent(name)}` },
       { label: "Cabrillo-Export …", act: cabrilloDialog }, { label: "Logbuch drucken (Filter)", act: () => window.open(`/print/log?${q()}`, "_blank") },
       { label: "QSL-Etiketten drucken (Auswahl)", act: () => { if (!ids.length) return toast("Erst QSOs auswählen", true); const sk = prompt("Wie viele Etiketten oben auf dem Bogen sind schon verbraucht?", "0"); if (sk !== null) window.open(`/print/labels?log=${encodeURIComponent(name)}&ids=${ids.join(",")}&skip=${+sk || 0}`, "_blank"); } },
       { label: "QSL gesendet markieren (Auswahl)", act: () => bulkAct(ids, "qsl_sent", load) }, { label: "QSL vormerken (Auswahl)", act: () => bulkAct(ids, "qsl_queue", load) }, { label: "QSL erhalten (Auswahl)", act: () => bulkAct(ids, "qsl_rcvd", load) },
@@ -91,7 +88,7 @@ function createLogbook(root, params) {
       { label: "Adressetiketten drucken (Auswahl)", act: () => { if (!ids.length) return toast("Erst QSOs auswählen", true); window.open(`/print/address?log=${encodeURIComponent(name)}&ids=${ids.join(",")}`, "_blank"); } },
       { label: "Google-Earth-Datei (KML) exportieren", act: () => location.href = `/api/kml?log=${encodeURIComponent(name)}${ids.length ? "&ids=" + ids.join(",") : ""}` },
       { label: "Datenbank prüfen und optimieren", act: async () => { try { const r = await post("/api/logbooks/check", { name }); toast(r.ok ? "Datenbank in Ordnung (geprüft und optimiert)" : "Datenbank-Fehler: " + r.result.join("; "), !r.ok); } catch (err) { toast(err.message, true); } } },
-      { label: "Logbuch-Verwaltung …", act: logbookManager }, { label: "Sicherungen …", act: backupsDialog }, { label: "Statistik", act: () => addPanel("log", "stats") }]);
+      { label: "Logbuch-Verwaltung …", act: logbookManager }, { label: "Sicherungen …", act: backupsDialog }, { label: "Statistik", act: () => addPanel("log", "stats") }]); }
     else if (a === "lotwup") upload("lotw", ids);
     else if (a === "lotwdown") { toast("LoTW-Abgleich läuft …"); try { const r = await post("/api/sync/confirmations?" + logq(), { service: "lotw" }); toast(`LoTW: ${r.received} empfangen, ${r.matched} zugeordnet`); load(); } catch (err) { toast(err.message, true); } }
   });
@@ -317,7 +314,7 @@ function spotDialog(call = "") {
   d.querySelector('[value="ok"]').onclick = async e => { e.preventDefault(); try { await post("/api/cluster/send", { cmd: `DX ${$("#sp-f", d).value} ${$("#sp-c", d).value.toUpperCase()} ${$("#sp-k", d).value}` }); toast("Spot gesendet"); d.close(); } catch (err) { toast(err.message, true); } };
 }
 
-// ---------- Funkgerät-Feld (kleine Gerätesteuerung) ----------
+// ---------- Gerätestatus (kleine Gerätesteuerung) ----------
 function createRadioPane(root) {
   root.innerHTML = `<div class="pane-tb"><button data-a="conn">${icon("i-plug")} Verbinden</button><button data-a="rc">${icon("i-radio")} Gerätesteuerung</button></div><div class="rp"></div>`;
   const draw = () => { const r = WW.rig, cur = WW.radios.find(x => x.id === WW.current);
@@ -587,14 +584,14 @@ APPS.log = {
     logbook: { title: "Mein Logbuch", create: createLogbook },
     lookup: { title: "Rufzeichen-Info", create: createLookup, dock: { ref: "logbook", dir: "left" }, size: { width: 330 } },
     favorites: { title: "Favoriten", create: createSelection, dock: { ref: "lookup", dir: "within" } },
-    radiopane: { title: "Funkgerät-Feld", create: createRadioPane, dock: { ref: "lookup", dir: "within" } },
+    radiopane: { title: "Gerätestatus", create: createRadioPane, dock: { ref: "lookup", dir: "within" } },
     recorder: { title: "Audio-Rekorder", create: createRecorder, dock: { ref: "lookup", dir: "below" } },
     netserver: { title: "Netzwerk", create: createNetServer, dock: { ref: "recorder", dir: "within" } },
     solar30: { title: "30-Tage-Sonnendaten", create: createSolar30, dock: { ref: "logbook", dir: "below" } },
     solarcycle: { title: "Sonnenzyklus", create: createSolarCycle, dock: { ref: "solar30", dir: "within" } },
     audiomon: { title: "Audio-Monitor", create: createAudioMon, dock: { ref: "solar30", dir: "within" } },
     cluster: { title: "DX-Cluster", create: createCluster, dock: { ref: ["solar30", "logbook"], dir: "within" } },
-    alert: { title: "Alert (FT8)", create: createAlert, dock: { ref: ["cluster", "solar30"], dir: "within" } },
+    alert: { title: "Spot-Alarm (FT8)", create: createAlert, dock: { ref: ["cluster", "solar30"], dir: "within" } },
     histogram: { title: "DX-Histogramm", create: createHistogram, dock: { ref: ["cluster", "solar30"], dir: "within" } },
     bandmap: { title: "Bandkarte", create: createBandMap, dock: { ref: "logbook", dir: "right" }, size: { width: 240 } },
     greyline: { title: "Graulinie", create: createGreyline, dock: { ref: "logbook", dir: "right" } },
@@ -607,53 +604,50 @@ APPS.log = {
     qsl: { title: "QSL & Online", create: (...a) => createQslPanel(...a), dock: { ref: "logbook", dir: "within" } },
     stats: { title: "Statistik", create: (...a) => createStats(...a), dock: { ref: "logbook", dir: "within" } },
   },
-  layout(dv) {
+  layout(dv) {   // eigene Anordnung: Logbuch gross, Rufzeichen-Info rechts; unten Cluster | Bandkarte | Graulinie
     const lb = dv.addPanel({ id: "logbook:" + WW.logbook, component: "logbook", title: WW.logbook, params: { name: WW.logbook } });
-    const lk = dv.addPanel({ id: "lookup", component: "lookup", title: "Rufzeichen-Info", position: { referencePanel: lb.id, direction: "left" } });
+    const lk = dv.addPanel({ id: "lookup", component: "lookup", title: "Rufzeichen-Info", position: { referencePanel: lb.id, direction: "right" } });
     dv.addPanel({ id: "favorites", component: "favorites", title: "Favoriten", position: { referencePanel: "lookup", direction: "within" } });
-    dv.addPanel({ id: "radiopane", component: "radiopane", title: "Funkgerät-Feld", position: { referencePanel: "lookup", direction: "within" } });
+    dv.addPanel({ id: "radiopane", component: "radiopane", title: "Gerätestatus", position: { referencePanel: "lookup", direction: "within" } });
     lk.api.setActive();
-    dv.addPanel({ id: "recorder", component: "recorder", title: "Audio-Rekorder", position: { referencePanel: "lookup", direction: "below" } });
-    dv.addPanel({ id: "netserver", component: "netserver", title: "Netzwerk", position: { referencePanel: "recorder", direction: "within" } });
-    const bm = dv.addPanel({ id: "bandmap", component: "bandmap", title: "Bandkarte", position: { referencePanel: lb.id, direction: "right" } });
-    dv.addPanel({ id: "solar30", component: "solar30", title: "30-Tage-Sonnendaten", position: { referencePanel: lb.id, direction: "below" } });
-    ["solarcycle", "audiomon", "cluster", "alert", "programs", "histogram"].forEach(c => dv.addPanel({ id: c, component: c, title: APPS.log.panels[c].title, position: { referencePanel: "solar30", direction: "within" } }));
-    dv.getPanel("cluster").api.setActive();
-    const gl = dv.addPanel({ id: "greyline", component: "greyline", title: "Graulinie", position: { referencePanel: "cluster", direction: "right" } });
-    dv.addPanel({ id: "clock", component: "clock", title: "Uhr", position: { referencePanel: "greyline", direction: "right" } });
-    dv.addPanel({ id: "rotator", component: "rotator", title: "Rotor", position: { referencePanel: "bandmap", direction: "below" } });
-    setTimeout(() => { try { lk.group.api.setSize({ width: 330 }); bm.group.api.setSize({ width: 250 }); dv.getPanel("cluster").group.api.setSize({ height: 300 });
-      dv.getPanel("rotator").group.api.setSize({ height: 270 }); dv.getPanel("lookup").group.api.setSize({ height: 520 });
-      dv.getPanel("greyline").group.api.setSize({ width: 270 }); dv.getPanel("clock").group.api.setSize({ width: 200 }); } catch { } }, 80);
+    const cl = dv.addPanel({ id: "cluster", component: "cluster", title: APPS.log.panels.cluster.title, position: { referencePanel: lb.id, direction: "below" } });
+    ["alert", "programs", "calendar"].forEach(c => dv.addPanel({ id: c, component: c, title: APPS.log.panels[c].title, position: { referencePanel: "cluster", direction: "within" } }));
+    cl.api.setActive();
+    const bm = dv.addPanel({ id: "bandmap", component: "bandmap", title: "Bandkarte", position: { referencePanel: "cluster", direction: "right" } });
+    const gl = dv.addPanel({ id: "greyline", component: "greyline", title: "Graulinie", position: { referencePanel: "bandmap", direction: "right" } });
+    ["solar30", "solarcycle"].forEach(c => dv.addPanel({ id: c, component: c, title: APPS.log.panels[c].title, position: { referencePanel: "greyline", direction: "within" } }));
+    gl.api.setActive();
+    setTimeout(() => { try { lk.group.api.setSize({ width: 340 }); cl.group.api.setSize({ height: 320 }); bm.group.api.setSize({ width: 260 }); gl.group.api.setSize({ width: 340 }); } catch { } }, 80);
   },
   menus: [
     { label: "Datei", items: [{ label: "Logbücher verwalten …", icon: "i-book", act: logbookManager }, { label: "ADIF importieren …", act: () => adifImport(WW.logbook) }, { label: "ADIF exportieren", act: () => location.href = `/api/adif?${logq()}` },
       { label: "Cabrillo-Export …", act: cabrilloDialog }, "-", { label: "Sicherung jetzt", act: async () => toast("Gesichert: " + (await post("/api/logbooks/backup", { name: WW.logbook })).file) }, { label: "Sicherungen …", act: backupsDialog }, "-",
       { label: "Logbuch drucken", act: () => window.open(`/print/log?${logq()}`, "_blank") }, { label: "QSL-Etiketten drucken (vorgemerkt/ungesendet)", act: () => window.open(`/print/labels?${logq("qsl=to_send")}`, "_blank") }] },
-    { label: "Bearbeiten", items: [{ label: "Neuer Eintrag …", key: "Strg+N", act: () => openAle() }, { label: "Spot senden …", act: () => spotDialog() }] },
-    { label: "Ansicht", items: Object.entries({ lookup: "Rufzeichen-Info", favorites: "Favoriten", radiopane: "Funkgerät-Feld", recorder: "Audio-Rekorder", netserver: "Netzwerk", solar30: "30-Tage-Sonnendaten", solarcycle: "Sonnenzyklus", audiomon: "Audio-Monitor", cluster: "DX-Cluster", alert: "Alert (FT8)", histogram: "DX-Histogramm", bandmap: "Bandkarte", greyline: "Graulinie", clock: "Uhr", rotator: "Rotor", calendar: "Kalender", programs: "POTA / SOTA / WWFF", awards: "Diplome", qsl: "QSL & Online", stats: "Statistik" })
+    { label: "Bearbeiten", items: [{ label: "Neuer Eintrag …", key: "Strg+N", act: () => openAle() }, { label: "Spot senden …", act: () => spotDialog() }, "-", { label: "VFO A abstimmen …", icon: "i-tune", act: () => tunePopup("VFOA") }, { label: "VFO B abstimmen …", icon: "i-tune", act: () => tunePopup("VFOB") }] },
+    { label: "Ansicht", items: Object.entries({ lookup: "Rufzeichen-Info", favorites: "Favoriten", radiopane: "Gerätestatus", recorder: "Audio-Rekorder", netserver: "Netzwerk", solar30: "30-Tage-Sonnendaten", solarcycle: "Sonnenzyklus", audiomon: "Audio-Monitor", cluster: "DX-Cluster", alert: "Spot-Alarm (FT8)", histogram: "DX-Histogramm", bandmap: "Bandkarte", greyline: "Graulinie", clock: "Uhr", rotator: "Rotor", calendar: "Kalender", programs: "POTA / SOTA / WWFF", awards: "Diplome", qsl: "QSL & Online", stats: "Statistik" })
       .map(([k, l]) => ({ label: l, check: () => panelOpen("log", k), act: () => togglePanel("log", k) })) },
-    { label: "Kalender", items: [{ label: "Kalender-Fenster (Contests, DXpeditionen)", act: () => addPanel("log", "calendar") }, "-", { label: "Contest-Kalender (WA7BNM) öffnen", act: () => window.open("https://www.contestcalendar.com/weeklycont.php", "_blank") }, { label: "DX-Kalender (NG3K) öffnen", act: () => window.open("https://www.ng3k.com/Misc/adxo.html", "_blank") }] },
-    { label: "Länder", items: [{ label: "Diplome / DXCC-Matrix", act: () => addPanel("log", "awards") }, { label: "Länderliste aktualisieren", act: () => toast("Die Länderliste (cty) wird alle 14 Tage automatisch aktualisiert") }] },
-    { label: "Logbuch", items: [{ label: "Logbuch öffnen …", act: logbookManager }, { label: "QSL & Online-Dienste", act: () => addPanel("log", "qsl") }, { label: "LoTW abgleichen", act: async () => { try { const r = await post("/api/sync/confirmations?" + logq(), { service: "lotw" }); toast(`LoTW: ${r.matched} zugeordnet`); } catch (e) { toast(e.message, true); } } },
-      { label: "eQSL abgleichen", act: async () => { try { const r = await post("/api/sync/confirmations?" + logq(), { service: "eqsl" }); toast(`eQSL: ${r.matched} zugeordnet`); } catch (e) { toast(e.message, true); } } }, { label: "Statistik", act: () => addPanel("log", "stats") }] },
-    { label: "Extras", items: [{ label: "Konfigurieren …", icon: "i-gear", key: "F8", act: () => openOptions() }, { label: "Stationsprofile …", icon: "i-radio", act: () => stationsDialog() },
-      { label: "POTA / SOTA / WWFF", icon: "i-tower", act: () => addPanel("log", "programs") }, { label: "Cluster-Alarme …", act: alarmsDialog }, { label: "Rotor verbinden …", act: () => openRotorConnect() }] },
+    { label: "QSO & QSL", items: [{ label: "Logbücher verwalten …", icon: "i-book", act: logbookManager }, { label: "QSL & Online-Dienste", act: () => addPanel("log", "qsl") }, { label: "LoTW abgleichen", act: async () => { try { const r = await post("/api/sync/confirmations?" + logq(), { service: "lotw" }); toast(`LoTW: ${r.matched} zugeordnet`); } catch (e) { toast(e.message, true); } } },
+      { label: "eQSL abgleichen", act: async () => { try { const r = await post("/api/sync/confirmations?" + logq(), { service: "eqsl" }); toast(`eQSL: ${r.matched} zugeordnet`); } catch (e) { toast(e.message, true); } } }, "-", { label: "Diplome / DXCC-Matrix", act: () => addPanel("log", "awards") }, { label: "Statistik", act: () => addPanel("log", "stats") }, { label: "Länderliste aktualisieren", act: () => toast("Die Länderliste (cty) wird alle 14 Tage automatisch aktualisiert") }] },
+    { label: "Werkzeuge", items: [{ label: "Einstellungen …", icon: "i-gear", key: "F8", act: () => openOptions() }, { label: "Stationsprofile …", icon: "i-radio", act: () => stationsDialog() },
+      { label: "POTA / SOTA / WWFF", icon: "i-tower", act: () => addPanel("log", "programs") }, { label: "Cluster-Alarme …", act: alarmsDialog }, { label: "Rotor verbinden …", act: () => openRotorConnect() }, "-",
+      { label: "Kalender (Contests, DXpeditionen)", act: () => addPanel("log", "calendar") }, { label: "Contest-Kalender (WA7BNM) öffnen", act: () => window.open("https://www.contestcalendar.com/weeklycont.php", "_blank") }, { label: "DX-Kalender (NG3K) öffnen", act: () => window.open("https://www.ng3k.com/Misc/adxo.html", "_blank") }] },
     MENU_WINDOW("log"), MENU_HELP,
   ],
   toolbar: [
-    { label: "Öffnen", icon: "i-book", act: logbookManager }, { label: "Layout A", icon: "i-layout", act: () => loadLayout("A", "log") }, { label: "Layout B", icon: "i-layout", act: () => loadLayout("B", "log") }, "|",
-    { label: "Satelliten", icon: "i-sat", act: () => switchApp("sat") }, { label: "Gerätesteuerung", icon: "i-radio", act: () => switchApp("rig") }, { label: "Digitalbetrieb", icon: "i-wave", act: () => switchApp("dm") }, { label: "Rotor", icon: "i-compass", act: () => switchApp("rot") }, "|",
-    { label: "VFO A abstimmen", icon: "i-tune", act: () => tunePopup("VFOA") }, { label: "VFO B abstimmen", icon: "i-tune", act: () => tunePopup("VFOB") }, "|",
-    { label: "Alert", icon: "i-bell", act: () => togglePanel("log", "alert"), on: () => panelOpen("log", "alert") }, { label: "Etikett drucken", icon: "i-print", act: () => window.open(`/print/labels?${logq("qsl=queued")}`, "_blank") },
-    { label: "Konfigurieren", icon: "i-gear", act: () => openOptions() }, { label: "Vollbild", icon: "i-full", act: fullScreen }, "->",
-    { html: `<div class="ribbon-box rb-call"><b class="rb-c"></b><small class="rb-h"></small></div>`, init: el => { const u = () => { el.querySelector(".rb-c").textContent = WW.settings.callsign || "—"; el.querySelector(".rb-h").textContent = "Home " + (WW.settings.locator || ""); }; u(); WW.on("settings", u); WW.on("state", u); } },
-    { html: `<div class="ribbon-box rb-clk"></div>`, init: el => setInterval(() => el.firstChild ? el.firstChild.textContent = new Date().toISOString().slice(11, 19) : el.textContent = new Date().toISOString().slice(11, 19), 1000) },
-    { html: `<div class="ribbon-box rb-vfo" title="VFO A"></div><div class="ribbon-box rb-vfo b" title="VFO B"></div>`, init: el => { const u = () => { const b = el.querySelectorAll(".rb-vfo"); b[0].textContent = WW.rig.freq ? fmtDots(WW.rig.freq) : "—"; b[1].textContent = WW.rig.vfob_freq ? fmtDots(WW.rig.vfob_freq) : "—"; }; u(); WW.on("rig", u); } },
+    { label: "Logbücher", icon: "i-book", act: logbookManager }, { label: "Neuer Eintrag", icon: "i-plus", title: "Neues QSO (Strg+N)", act: () => openAle() }, "|",
+    { label: "DX-Cluster", icon: "i-globe", act: () => togglePanel("log", "cluster"), on: () => panelOpen("log", "cluster") },
+    { label: "Spot-Alarm", icon: "i-bell", act: () => togglePanel("log", "alert"), on: () => panelOpen("log", "alert") },
+    { label: "QSL & Online", icon: "i-cloud", act: () => togglePanel("log", "qsl"), on: () => panelOpen("log", "qsl") },
+    { label: "Diplome", icon: "i-award", act: () => togglePanel("log", "awards"), on: () => panelOpen("log", "awards") }, "|",
+    { label: "Einstellungen", icon: "i-gear", act: () => openOptions() }, "->",
+    { html: `<div class="ribbon-box rb-stat" title="Klick auf die Frequenz: VFO A abstimmen"><b class="rb-c"></b><span class="rb-f"></span><span class="rb-t"></span></div>`, init: el => {
+      const u = () => { el.querySelector(".rb-c").textContent = [WW.settings.callsign || "—", WW.settings.locator].filter(Boolean).join(" · "); el.querySelector(".rb-f").textContent = WW.rig.freq ? `${fmtDots(WW.rig.freq)} ${WW.rig.mode || ""}` : ""; };
+      u(); WW.on("settings", u); WW.on("state", u); WW.on("rig", u); el.querySelector(".rb-f").onclick = () => tunePopup("VFOA");
+      setInterval(() => { const t = el.querySelector(".rb-t"); if (t) t.textContent = new Date().toISOString().slice(11, 16) + " UTC"; }, 1000); } },
   ],
 };
 function tunePopup(vfo) {
-  const d = dialog({ title: vfo === "VFOA" ? "VFO A abstimmen" : "VFO B abstimmen", icon: "i-tune", buttons: [["Schließen", "close"]], body: `<div class="rc tune-pop"><div class="rc-fine" data-span="20000"><span class="rc-bl">±10 kHz</span><div class="rc-ruler"></div><span class="rc-bl"></span></div><div class="rc-fine" data-span="2400"><span class="rc-bl">Fine</span><div class="rc-ruler"></div><span class="rc-bl"></span></div></div>`,
+  const d = dialog({ title: vfo === "VFOA" ? "VFO A abstimmen" : "VFO B abstimmen", icon: "i-tune", buttons: [["Schließen", "close"]], body: `<div class="rc tune-pop"><div class="rc-fine" data-span="20000"><span class="rc-bl">±10 kHz</span><div class="rc-ruler"></div></div><div class="rc-fine" data-span="2400"><span class="rc-bl">Fein</span><div class="rc-ruler"></div></div></div>`,
     onOpen: dd => { if (vfo === "VFOB") act("/api/rig/vfo", { vfo: "VFOB" }); const rc = $(".rc", dd); applyScheme(rc); rc.querySelectorAll(".rc-ruler").forEach(attachRuler); const r = () => renderBars(rc); r(); const off = WW.on("rig", r);
       dd.addEventListener("close", () => { off(); if (vfo === "VFOB") act("/api/rig/vfo", { vfo: "VFOA" }); }); } });
 }

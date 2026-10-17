@@ -155,8 +155,7 @@ APPS.rot = {
   menus: [{ label: "Datei", items: [{ label: "Verbinden …", icon: "i-plug", act: openRotorConnect }, { label: "Trennen", act: () => api("/api/settings", { method: "PUT", body: { rot_enabled: false } }) }] },
     { label: "Ansicht", items: [{ label: "Rotor", check: () => panelOpen("rot", "dials"), act: () => togglePanel("rot", "dials") }, { label: "Karte", check: () => panelOpen("rot", "rmap"), act: () => togglePanel("rot", "rmap") }] },
     MENU_WINDOW("rot"), MENU_HELP],
-  toolbar: [{ label: "Verbinden", icon: "i-plug", act: openRotorConnect }, { label: "Stopp", icon: "i-x", act: () => act("/api/rotor/stop", {}) }, { label: "Parken", icon: "i-compass", act: () => act("/api/rotor/park", {}) }, "|",
-    { label: "Gerätesteuerung", icon: "i-radio", act: () => switchApp("rig") }, { label: "Logbuch", icon: "i-book", act: () => switchApp("log") }, { label: "Satelliten", icon: "i-sat", act: () => switchApp("sat") }, { label: "Optionen", icon: "i-gear", act: () => openOptions() }],
+  toolbar: [{ label: "Verbinden", icon: "i-plug", act: openRotorConnect }, { label: "Stopp", icon: "i-x", act: () => act("/api/rotor/stop", {}) }, { label: "Parken", icon: "i-compass", act: () => act("/api/rotor/park", {}) }, "->", { label: "Optionen", icon: "i-gear", act: () => openOptions() }],
 };
 
 // ---------- Karten ----------
@@ -202,7 +201,7 @@ APPS.map = {
   panels: { world: { title: "Weltkarte", create: createWorldMap }, beam: { title: "Peilkarte (Großkreis)", create: createBeamMap, dock: { ref: "world", dir: "right" } } },
   layout(dv) { dv.addPanel({ id: "world", component: "world", title: "Weltkarte" }); dv.addPanel({ id: "beam", component: "beam", title: "Peilkarte (Großkreis)", position: { referencePanel: "world", direction: "right" } }); },
   menus: [{ label: "Ansicht", items: [{ label: "Weltkarte", check: () => panelOpen("map", "world"), act: () => togglePanel("map", "world") }, { label: "Peilkarte", check: () => panelOpen("map", "beam"), act: () => togglePanel("map", "beam") }] }, MENU_WINDOW("map"), MENU_HELP],
-  toolbar: [{ label: "Gerätesteuerung", icon: "i-radio", act: () => switchApp("rig") }, { label: "Logbuch", icon: "i-book", act: () => switchApp("log") }, { label: "Rotor", icon: "i-compass", act: () => switchApp("rot") }, { label: "Vollbild", icon: "i-full", act: fullScreen }],
+  toolbar: [],
 };
 
 // ---------- Satelliten ----------
@@ -374,7 +373,7 @@ APPS.sat = {
   menus: [{ label: "Datei", items: [{ label: "Satelliten auswählen …", act: () => satChooser(() => WW.emit("sat-sel")) }] },
     { label: "Ansicht", items: Object.entries({ satlist: "Satelliten", satinfo: "Position & Frequenzen", satpolar: "Überflug", satmap: "Karte", satpasses: "Überflüge", satsched: "Zeitplan", satmutual: "Gemeinsame Sichtbarkeit" }).map(([k, l]) => ({ label: l, check: () => panelOpen("sat", k), act: () => togglePanel("sat", k) })) },
     MENU_WINDOW("sat"), MENU_HELP],
-  toolbar: [{ label: "Auswahl", icon: "i-list", act: () => satChooser(() => WW.emit("sat-sel")) }, "|", { label: "Gerätesteuerung", icon: "i-radio", act: () => switchApp("rig") }, { label: "Rotor", icon: "i-compass", act: () => switchApp("rot") }, { label: "Logbuch", icon: "i-book", act: () => switchApp("log") }, { label: "Vollbild", icon: "i-full", act: fullScreen }],
+  toolbar: [{ label: "Satelliten wählen", icon: "i-list", act: () => satChooser(() => WW.emit("sat-sel")) }],
 };
 
 // ---------- Programmstart ----------

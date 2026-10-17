@@ -361,7 +361,7 @@ function openOptions(tab = "station") {
       <label>Fensterdesign<select name="o_chrome" data-local>${[["office", "Klassisch (hellblau)"], ["light", "Hell"], ["dark", "Dunkel"], ["night", "Nachtsicht (rot)"]].map(([k, l]) => `<option value="${k}" ${(o.chrome || "office") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label>Größe der Oberfläche<select name="o_uiscale" data-local>${[["auto", "automatisch (große Bildschirme bis 4K vergrößern)"], ["0.8", "80 %"], ["0.9", "90 %"], ["1", "100 %"], ["1.1", "110 %"], ["1.25", "125 %"], ["1.5", "150 %"], ["1.75", "175 %"], ["2", "200 %"]].map(([k, l]) => `<option value="${k}" ${String(o.uiscale || "auto") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label>Sprache / Language<select name="lang" translate="no">${Object.entries(I18N.languages).map(([k, l]) => `<option value="${k}" ${I18N.lang === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-      <p class="hint wide">Farben der Funkgeräte-Anzeige stellst du unter „Layout anpassen“ (Strg+F8) ein.</p></div></div>
+      <p class="hint wide">Farben der Funkgeräte-Anzeige stellst du unter „Oberfläche bearbeiten“ (Strg+F8) ein.</p></div></div>
     <div class="err"></div>`, onOpen: dd => {
       tabsIn(dd);
       const acc = store.get("accel", []);

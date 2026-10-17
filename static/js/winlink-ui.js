@@ -153,5 +153,5 @@ APPS.wl = {
   menus: [{ label: "Datei", items: [{ label: "Neue Nachricht …", icon: "i-plus", act: () => wlCompose() }, { label: "Winlink-Einstellungen …", icon: "i-gear", act: () => openOptions("winlink") }] },
     { label: "Ansicht", items: Object.entries({ wlfolders: "Ordner", wllist: "Nachrichten", wlread: "Lesen", wlconn: "Verbindung", wlchat: "Chat (Tastatur-QSO)" }).map(([k, l]) => ({ label: l, check: () => panelOpen("wl", k), act: () => togglePanel("wl", k) })) },
     MENU_WINDOW("wl"), MENU_HELP],
-  toolbar: [{ label: "Neu", icon: "i-plus", act: () => wlCompose() }, { label: "Einstellungen", icon: "i-gear", act: () => openOptions("winlink") }, "|", { label: "Gerätesteuerung", icon: "i-radio", act: () => switchApp("rig") }, { label: "Logbuch", icon: "i-book", act: () => switchApp("log") }, { label: "Vollbild", icon: "i-full", act: fullScreen }],
+  toolbar: [{ label: "Neu", icon: "i-plus", act: () => wlCompose() }, { label: "Einstellungen", icon: "i-gear", act: () => openOptions("winlink") }],
 };

@@ -26,7 +26,8 @@ function rxRanges() { const r = WW.rig || {}; return r.receiver && r.sdr && Arra
 
 // ---------- Schemata (Farben der Geraeteanzeige) ----------
 const SCHEMES = {
-  "Standard": { face: "#101214", panel: "#16191c", digits: "#f4f6f8", digitsSub: "#d7dde3", active: "#f4f6f8", inactive: "#3a3f45", btn: "#2a2e33", btnText: "#d9dee4", btnOn: "#3b78c4", btnOnText: "#ffffff", status: "#2ec95c", statusOff: "#5d6670", warn: "#ff4a3a", bars: "#e08a16", barsBg: "#2a2e33", text: "#c9d1d9", meterLow: "#3ccf5a", meterHigh: "#ff4a3a", meterFree: "#2c3136", slider: "#3a3f45", sliderFill: "#5b6570" },
+  "Standard": { face: "#0b1622", panel: "#102030", digits: "#e8f6ff", digitsSub: "#9ccbe8", active: "#4fd1ff", inactive: "#1c3346", btn: "#16293b", btnText: "#cfe6f7", btnOn: "#1f8fd6", btnOnText: "#ffffff", status: "#3ee08f", statusOff: "#4d6577", warn: "#ff6b5e", bars: "#3aa9e0", barsBg: "#16293b", text: "#a9c7dc", meterLow: "#3ee08f", meterHigh: "#ff6b5e", meterFree: "#1a2c3c", slider: "#1c3346", sliderFill: "#2f86c0" },
+  "Dunkel": { face: "#101214", panel: "#16191c", digits: "#f4f6f8", digitsSub: "#d7dde3", active: "#f4f6f8", inactive: "#3a3f45", btn: "#2a2e33", btnText: "#d9dee4", btnOn: "#3b78c4", btnOnText: "#ffffff", status: "#2ec95c", statusOff: "#5d6670", warn: "#ff4a3a", bars: "#6f8aa6", barsBg: "#2a2e33", text: "#c9d1d9", meterLow: "#3ccf5a", meterHigh: "#ff4a3a", meterFree: "#2c3136", slider: "#3a3f45", sliderFill: "#5b6570" },
   "LCD": { face: "#ffffff", panel: "#f3f4f6", digits: "#000000", digitsSub: "#202020", active: "#000000", inactive: "#e5e7eb", btn: "#e5e7eb", btnText: "#111827", btnOn: "#6b7280", btnOnText: "#ffffff", status: "#16a34a", statusOff: "#9ca3af", warn: "#dc2626", bars: "#9ca3af", barsBg: "#e5e7eb", text: "#1f2937", meterLow: "#a3a382", meterHigh: "#dc2626", meterFree: "#ececec", slider: "#4b5563", sliderFill: "#6b7280" },
   "Plastik blau": { face: "#0d2a50", panel: "#123762", digits: "#eaf3ff", digitsSub: "#bcd6f5", active: "#ffd34d", inactive: "#1d4c86", btn: "#1d4c86", btnText: "#eaf3ff", btnOn: "#f6b73c", btnOnText: "#1a1000", status: "#7cf08a", statusOff: "#5f7fa8", warn: "#ff6b5e", bars: "#9cc3ef", barsBg: "#1d4c86", text: "#cfe0f5", meterLow: "#47e06a", meterHigh: "#ff5a4a", meterFree: "#1d3f6b", slider: "#1d4c86", sliderFill: "#3b82c4" },
   "LCD grün": { face: "#b9c99a", panel: "#a9be7f", digits: "#1b260b", digitsSub: "#24330e", active: "#1b260b", inactive: "#9fb27a", btn: "#cfd8b6", btnText: "#1b260b", btnOn: "#3f5220", btnOnText: "#e6efd0", status: "#1b260b", statusOff: "#7d8f5c", warn: "#7a1a0a", bars: "#3f5220", barsBg: "#9fb27a", text: "#1b260b", meterLow: "#24330e", meterHigh: "#7a1a0a", meterFree: "#9fb27a", slider: "#7d8f5c", sliderFill: "#3f5220" },
@@ -59,7 +60,7 @@ function buttonCatalog() {
   return cat;
 }
 const DROP_CATALOG = () => {
-  const c = WW.caps || {}, d = { mode: "Mode", filter: "Filter", raster: "Raster", quickmem: "Quick Mem", offset: "Ablage", tone: "CTCSS" };
+  const c = WW.caps || {}, d = { mode: "Mode", filter: "Filter", raster: "Raster", quickmem: "Schnellspeicher", offset: "Ablage", tone: "CTCSS" };
   (c.ui_choices || []).forEach(ch => d["lvl:" + ch.name] = ch.label);
   return d;
 };
@@ -100,8 +101,6 @@ function createFace(root) {
       <div class="rc-btns rc-right"></div>
       <div class="rc-drops"></div>
     </div>
-    <div class="rc-dateline"><button type="button" class="rc-scroll" data-d="-1" title="Bänder nach oben blättern">▲</button><button type="button" class="rc-scroll" data-d="1" title="Bänder nach unten blättern">▼</button>
-      <span class="rc-date"></span><button type="button" class="rc-plan" title="Bandplan wählen"></button><span class="rc-time"></span></div>
     <div class="rc-tuning">
       <div class="rc-fine" data-span="2400"></div>
       <div class="rc-fine2 hidden" data-span="800"></div>
@@ -140,8 +139,6 @@ function createFace(root) {
   });
   $(".rc-mode", rc).addEventListener("click", e => popupMenu(e.currentTarget, modeList().map(m => ({ label: m, on: m === WW.rig.mode, act: () => setMode(m) }))));
   $(".rc-sub", rc).addEventListener("dblclick", () => (WW.caps.vfo_ops || []).includes("XCHG") ? act("/api/rig/op", { op: "XCHG" }) : toast("A/B-Tausch nicht unterstützt", true));
-  $(".rc-plan", rc).addEventListener("click", e => popupMenu(e.currentTarget, PLAN_NAMES.map(p => ({ label: p[1], on: p[0] === currentPlan().key, act: () => { store.set("rc.plan", p[0]); RC.bsp = false; buildTuning(rc); } }))));
-  rc.querySelectorAll(".rc-scroll").forEach(b => b.addEventListener("click", () => { $(".rc-mainbars", rc).scrollBy({ top: +b.dataset.d * 60, behavior: "smooth" }); }));
   rc.addEventListener("click", e => { const b = e.target.closest(".rc-btn"); if (b) pressButton(b.dataset.k, b); });
   rc.addEventListener("click", e => { const t = e.target.closest(".rc-tab"); if (!t) return;
     if (e.target.closest(".x")) { act(`/api/radios/${t.dataset.id}/disconnect`); return; }
@@ -150,12 +147,10 @@ function createFace(root) {
   let rkey = JSON.stringify(rxRanges());
   const offs = [WW.on("rig", () => { const k = JSON.stringify(rxRanges()); if (k !== rkey) { rkey = k; RC.bsp = false; buildTuning(rc); renderTabs(rc); } renderFace(rc); }), WW.on("rig-local", () => renderFace(rc)), WW.on("raster", () => renderFace(rc)), WW.on("rc-layout", rebuild), WW.on("caps", () => loadRigLayout()),
     WW.on("radios", () => renderTabs(rc)), WW.on("spots", () => renderBars(rc)), WW.on("spot", () => renderBars(rc)), WW.on("quicksave", () => renderBars(rc))];
-  const clk = setInterval(() => { const n = new Date(); $(".rc-date", rc).textContent = n.toLocaleDateString(I18N.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    $(".rc-time", rc).textContent = n.toLocaleTimeString(I18N.locale) + "  ·  " + n.toISOString().slice(11, 19) + " UTC"; }, 1000);
   const ro = new ResizeObserver(() => renderBars(rc)); ro.observe(rc);
   if (!RC.layout) loadRigLayout(); else rebuild();
   renderTabs(rc);
-  return () => { offs.forEach(f => f()); clearInterval(clk); ro.disconnect(); unfit(); };
+  return () => { offs.forEach(f => f()); ro.disconnect(); unfit(); };
 }
 function renderTabs(rc) {
   const conn = WW.radios.filter(r => r.connected), cur = WW.radios.find(r => r.id === WW.current);
@@ -233,9 +228,9 @@ function renderFace(rc) {
     [`Memory: ${r.mem >= 0 && r.mem != null ? r.mem : "–"}`, r.vfo === "MEM", "plain"], [`CTCSS: ${r.ctcss ? r.ctcss.toFixed(1) : "–"}`, !!f.TSQL || !!f.TONE, "plain"],
     [`RIT ${r.rit ? (r.rit > 0 ? "+" : "") + r.rit : ""}`, !!r.rit || f.RIT], [`XIT ${r.xit ? (r.xit > 0 ? "+" : "") + r.xit : ""}`, !!r.xit || f.XIT],
     ["DSP", !!(f.NR || f.ANF || f.NB)], ["Lock", !!f.LOCK]];
-  $(".rc-status", rc).innerHTML = `<div class="rc-meters">${r.ptt ? `ALC ${Math.round((m.ALC || 0) * 100)}<br>SWR ${(m.SWR ?? 1).toFixed(1)}<br>PWR ${Math.round((m.RFPOWER_METER || 0) * 100)}` : "ALC<br>SWR<br>PWR"}</div>`
-    + st.map(([t, on, cls]) => `<div class="${on ? "on" : ""} ${cls || ""}">${esc(t.trim())}</div>`).join("")
-    + (r.connected ? "" : `<div class="warn on">${esc(r.error || "nicht verbunden")}</div>`);
+  $(".rc-status", rc).innerHTML = (r.ptt ? `<span class="chip tx">PWR ${Math.round((m.RFPOWER_METER || 0) * 100)} · SWR ${(m.SWR ?? 1).toFixed(1)} · ALC ${Math.round((m.ALC || 0) * 100)}</span>` : "")
+    + st.filter(([, on]) => on).map(([t, , cls]) => `<span class="chip ${cls || ""}">${esc(t.trim())}</span>`).join("")
+    + (r.connected ? "" : `<span class="chip warn">${esc(r.error || "nicht verbunden")}</span>`);
   // Tastenzustaende
   $$(".rc-btn", rc).forEach(b => b.classList.toggle("on", btnState(b.dataset.k)));
   $$(".rc-drop", rc).forEach(b => { const v = dropValue(b.dataset.k); b.querySelector("span").textContent = v; });
@@ -278,7 +273,7 @@ function dropValue(k) {
   if (k === "mode") return `Mode: ${r.mode || "–"}`;
   if (k === "filter") return `Filter: ${r.passband ? (r.passband / 1000).toLocaleString(I18N.locale) + " kHz" : "–"}`;
   if (k === "raster") { const t = tuneRaster(); return `Raster: ${fmtStep(t.step)}${t.auto ? " (auto)" : ""}`; }
-  if (k === "quickmem") return `Quick Mem: ${(store.get("qs." + WW.current, [])).length}`;
+  if (k === "quickmem") return `Schnellspeicher: ${(store.get("qs." + WW.current, [])).length}`;
   if (k === "offset") return `Ablage: ${r.rptr_shift && r.rptr_shift !== "None" ? r.rptr_shift + " " + (r.rptr_offs / 1e3) + " kHz" : "Simplex"}`;
   if (k === "tone") return `CTCSS: ${r.ctcss ? r.ctcss.toFixed(1) : "aus"}`;
   if (k.startsWith("lvl:")) { const n = k.slice(4), ch = (WW.caps.ui_choices || []).find(x => x.name === n); const o = ch?.options.find(x => x.value == Math.round(lv[n] ?? -99)); return `${ch?.label || n}: ${o ? o.label : "–"}`; }
@@ -327,24 +322,24 @@ function buildButtons(rc) {
 // ---------- Abstimmleisten ----------
 function buildTuning(rc) {
   const plan = currentPlan();
-  $(".rc-plan", rc).textContent = RC.bsp ? `${RC.bsp.band} – Bandspreizung` : plan.title;
   $(".rc-fine2", rc).classList.toggle("hidden", !store.get("rc.fine2", false));
   const bands = plan.bands.map(b => b[0]);
-  $(".rc-bandbtns", rc).innerHTML = `<button type="button" data-x="alt" title="Zweiten VFO abstimmen">ALT</button><button type="button" data-x="bsp" title="Bandspreizung">Spreizung</button>`
+  $(".rc-bandbtns", rc).innerHTML = `<button type="button" data-x="plan" class="rc-plan" title="Bandplan wählen">${esc(RC.bsp ? `${RC.bsp.band} – Zoom` : plan.title)} ▾</button><button type="button" data-x="alt" title="Zweiten VFO abstimmen">VFO B</button><button type="button" data-x="bsp" title="Skala vergrößern (ein Band auf mehrere Zeilen)">Zoom</button>`
     + bands.map(b => `<button type="button" data-band="${b}">${b}</button>`).join("");
   $(".rc-bandbtns", rc).onclick = e => {
     const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.x === "plan") return popupMenu(b, PLAN_NAMES.map(p => ({ label: p[1], on: p[0] === currentPlan().key, act: () => { store.set("rc.plan", p[0]); RC.bsp = false; buildTuning(rc); } })));
     if (b.dataset.x === "alt") return act("/api/rig/vfo", { vfo: WW.rig.vfo === "VFOB" ? "VFOA" : "VFOB" });
     if (b.dataset.x === "bsp") return popupMenu(b, [{ label: "Aus", on: !RC.bsp, act: () => { RC.bsp = false; buildTuning(rc); } },
-      ...[25, 50, 100].map(w => ({ label: `${w} kHz je Leiste`, on: RC.bsp?.w === w, act: () => { RC.bsp = { band: bandFor(WW.rig.freq) || "20m", w }; buildTuning(rc); } }))]);
+      ...[25, 50, 100].map(w => ({ label: `Zoom: ${w} kHz je Zeile`, on: RC.bsp?.w === w, act: () => { RC.bsp = { band: bandFor(WW.rig.freq) || "20m", w }; buildTuning(rc); } }))]);
     const band = plan.bands.find(x => x[0] === b.dataset.band), mem = store.get("bandmem", {})[b.dataset.band];
     setFreq(mem?.f || Math.round((band[1] + Math.min(70, (band[2] - band[1]) / 4)) * 1000)); if (mem?.m) setMode(mem.m);
   };
   let rows = plan.bands.map(([n, lo, hi]) => ({ n, lo: lo * 1000, hi: hi * 1000 }));
   if (RC.bsp) { const b = plan.bands.find(x => x[0] === RC.bsp.band) || plan.bands[0]; rows = [];
     for (let f = b[1]; f < b[2]; f += RC.bsp.w) rows.push({ n: (f / 1000).toFixed(3), lo: f * 1000, hi: Math.min(b[2], f + RC.bsp.w) * 1000 }); }
-  $(".rc-mainbars", rc).innerHTML = rows.map(r => `<div class="rc-bar" data-lo="${r.lo}" data-hi="${r.hi}"><span class="rc-bl">${esc(r.n)}</span><div class="rc-ruler"></div><span class="rc-bl">${esc(r.n)}</span></div>`).join("");
-  rc.querySelectorAll(".rc-fine, .rc-fine2").forEach(el => { el.innerHTML = `<span class="rc-bl">${el.classList.contains("rc-fine2") ? "Feinabstimmung 2" : (store.get("rc.fine2", false) ? "Feinabstimmung 1" : "Feinabstimmung")}</span><div class="rc-ruler"></div><span class="rc-bl"></span>`; });
+  $(".rc-mainbars", rc).innerHTML = rows.map(r => `<div class="rc-bar" data-lo="${r.lo}" data-hi="${r.hi}"><span class="rc-bl">${esc(r.n)}</span><div class="rc-ruler"></div></div>`).join("");
+  rc.querySelectorAll(".rc-fine, .rc-fine2").forEach(el => { el.innerHTML = `<span class="rc-bl">${el.classList.contains("rc-fine2") ? "Fein 2" : (store.get("rc.fine2", false) ? "Fein 1" : "Fein")}</span><div class="rc-ruler"></div>`; });
   rc.querySelectorAll(".rc-ruler").forEach(attachRuler);
   renderBars(rc);
   setTimeout(() => { const cur = rc.querySelector(".rc-bar.cur"); if (cur) cur.scrollIntoView({ block: "nearest" }); }, 50);

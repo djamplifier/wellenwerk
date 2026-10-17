@@ -47,7 +47,7 @@ Beim ersten Start öffnen sich die **Programmoptionen**. Tragen Sie mindestens *
 
 ![Programmoptionen](bilder/01-optionen.png)
 
-Die Optionen erreichen Sie jederzeit mit **F8** oder über **Optionen** in der Werkzeugleiste. Wichtige Registerkarten:
+Die Optionen erreichen Sie jederzeit mit **F8** oder über **Optionen** (Zahnrad rechts in der Werkzeugleiste). Wichtige Registerkarten:
 
 - **Station:** Rufzeichen, Locator, Name/QTH für Makros, **DMR-ID** (für Digitalfunk; Wellenwerk prüft in der RadioID-Liste, ob sie zum Rufzeichen gehört)
 - **DX-Cluster:** Server (z. B. `dxc.ve7cc.net`, Port 23) und Anmeldebefehle
@@ -61,7 +61,7 @@ Zum Ausprobieren ist ein **Demo-Funkgerät** voreingestellt – damit lässt sic
 
 ## 3. Funkgerät verbinden
 
-**Gerätesteuerung → Verbinden** (oder das Stecker-Symbol in der Werkzeugleiste).
+**Datei → Verbinden …** (oder **Geräte**, das Stecker-Symbol ganz links in der Werkzeugleiste).
 
 ![Verbinden-Dialog](bilder/02-verbinden.png)
 
@@ -97,18 +97,21 @@ Weitere Einstellungen:
 - **Frequenzanzeige:** Mausrad über einer Ziffer verstellt genau diese Stelle. Klick auf eine Ziffer macht sie „aktiv“ (Balken), dann **↑/↓** oder **+/−** zum Verstellen, **←/→** zum Wechseln, Zifferntasten zum Eintippen. **Enter** öffnet die Frequenzeingabe.
 - **Betriebsart:** Schaltfläche über der Frequenz.
 - **Links:** VFO A/B, TX-A/B, A>B, A⇄B, Main/Sub, Speicher, Kanal ±. **Rechts:** Funktionstasten (NB, NR, Notch, ATU, Tune …) und Auswahllisten (Filter, AGC, Vorverstärker, Abschwächer …). Welche Tasten erscheinen, hängt davon ab, was das Gerät kann.
-- **Feinabstimmung:** die Leiste unter der Anzeige; ziehen oder Mausrad (Shift = doppelt, Strg = fünffach).
-- **Bandtasten:** Klick springt auf die zuletzt benutzte Frequenz und Betriebsart des Bandes. **ALT** stimmt den zweiten VFO ab, **Spreizung** zeigt ein Band über mehrere Leisten.
-- **Abstimmleisten:** je Band eine Leiste über den ganzen Bandbereich; Klick oder Ziehen stimmt ab. Cluster-Spots erscheinen als Marken.
-- **Regler** (unten): bis zu sechs Regler-Layouts, z. B. eines für SSB und eines für CW.
-- **Favoriten** (Werkzeugleiste **Auswahl**): Frequenzen mit Betriebsart in Ordnern speichern, Klick stimmt ab.
-- **Schnellspeicher:** merkt die aktuelle Frequenz als Marke auf der Abstimmleiste.
+- **Zustand:** Unter der Anzeige erscheinen als kleine Kennzeichen nur die Dinge, die gerade aktiv sind (z. B. Busy, Split, RIT, Lock); beim Senden Leistung, SWR und ALC.
+- **Feinskala** („Fein“): die Skala unter der Anzeige; ziehen oder Mausrad (Shift = doppelt, Strg = fünffach). Die Nadel zeigt die eingestellte Frequenz.
+- **Bandleiste:** links der **Bandplan** (Region 1/2/3), **VFO B** stimmt den zweiten VFO ab, **Zoom** verteilt ein Band auf mehrere Zeilen, die Bandknöpfe springen auf die zuletzt benutzte Frequenz und Betriebsart des Bandes.
+- **Bandskalen:** je Band eine Skala über den ganzen Bandbereich; Klick oder Ziehen stimmt ab. Cluster-Spots und Schnellspeicher erscheinen als Marken.
+- **Pegel & Filter** (unten): die Regler des Geräts als Kärtchen; bis zu sechs **Sätze**, z. B. einer für SSB und einer für CW.
+- **Bänder & Betriebsarten** (Werkzeugleiste): Favoriten in Ordnern (Klick stimmt ab), die Menüs des Geräts und alle Einstellungen.
+- **Merken** (Werkzeugleiste): die aktuelle Frequenz als Schnellspeicher (Marke auf der Skala) oder als Favorit sichern. Alles zum Speichern steht auch im Menü **Speicher**.
 
-Ein geschlossenes Fenster **Funkgerät** holt **Ansicht → Funkgerät** zurück (auch **Datei → Verbinden …** öffnet es wieder). Weitere Fenster über **Ansicht** bzw. **Extras**: Kurzwellen-Datenbank (Rundfunksender nach Frequenz und Zeit), Bandübersicht (fährt ein Band ab und zeichnet das S-Meter), Scanner, Makros, Sprachspeicher, **Panadapter**, **Speicherkanäle**.
+Die Werkzeugleiste ist nach Aufgaben gegliedert: **Geräte · Bänder & Modi · Merken**, dann **Wasserfall · Datenempfang · Pegel & Filter**, dann **Oberfläche**; rechts **Eintrag** (neues QSO) und **Optionen**. Zu Logbuch, Digitalbetrieb usw. wechselst du über die Reiter darunter. Die Menüs: **Gerät** (VFO, Split, Scanner, Bandplan, Mausrad-Schritt, Schnappschüsse), **Speicher** (Schnellspeicher, Favoriten, Speicherkanäle, Makros), **Werkzeuge** (Panadapter, Sprach-Keyer, Fernbetrieb-Audio, Oberfläche bearbeiten).
 
-**Layout anpassen** (**Strg+F8**): Tasten zwischen links und rechts verschieben, eigene Tasten anlegen (Betriebsart, Frequenz, CAT-Befehl, Makro), Farben, Größe, Regler-Layouts und Bandplan (Region 1/2/3). Mit **Layout als Datei speichern / laden** lässt sich das Layout auf andere Rechner übertragen.
+Ein geschlossenes Fenster **Funkgerät** holt **Ansicht → Funkgerät** zurück (auch **Datei → Verbinden …** öffnet es wieder). Weitere Fenster über **Ansicht** bzw. **Werkzeuge**: Kurzwellen-Datenbank (Rundfunksender nach Frequenz und Zeit), Bandübersicht (fährt ein Band ab und zeichnet das S-Meter), Scanner, Makros, Sprachspeicher, **Panadapter**, **Speicherkanäle**.
 
-![Layout anpassen](bilder/05-anpassen.png)
+**Oberfläche bearbeiten** (**Strg+F8**, Werkzeugleiste **Oberfläche**): Tasten zwischen links und rechts verschieben, eigene Tasten anlegen (Betriebsart, Frequenz, CAT-Befehl, Makro), Farbschema (Standard ist das blaue Wellenwerk-Schema; außerdem Dunkel, LCD, Plastik blau, LCD grün, Nachtsicht), Farben, Größe, Regler-Sätze und Bandplan. Mit **Layout als Datei speichern / laden** lässt sich alles auf andere Rechner übertragen.
+
+![Oberfläche bearbeiten](bilder/05-anpassen.png)
 
 ### Panadapter und Speicherkanäle
 
@@ -121,7 +124,7 @@ Ein geschlossenes Fenster **Funkgerät** holt **Ansicht → Funkgerät** zurück
 
 ![Schnappschüsse](bilder/19-schnappschuesse.png)
 
-**Funkgerät → Schnappschüsse …** speichert den kompletten Gerätezustand unter einem Namen – Frequenz, Betriebsart und Bandbreite, Split mit Sendefrequenz, RIT und alle Regler und Schalter, die das Gerät setzen kann – und stellt ihn mit **Abrufen** wieder her (z. B. „40 m FT8“, „Contest SSB“). Einmal-Aktionen wie Tuner-Start oder Tonruf werden dabei nie ausgelöst.
+**Gerät → Schnappschüsse …** speichert den kompletten Gerätezustand unter einem Namen – Frequenz, Betriebsart und Bandbreite, Split mit Sendefrequenz, RIT und alle Regler und Schalter, die das Gerät setzen kann – und stellt ihn mit **Abrufen** wieder her (z. B. „40 m FT8“, „Contest SSB“). Einmal-Aktionen wie Tuner-Start oder Tonruf werden dabei nie ausgelöst.
 
 **Funkgerät → Synchronisieren …**: Ein zweites verbundenes Gerät folgt dem ersten – Frequenz plus einstellbarer **Versatz** und auf Wunsch die Betriebsart (Zweitempfänger, SDR als Panadapter, Transverter-ZF).
 
@@ -309,7 +312,7 @@ Jeder Bereich ist ein eigenes Fenster, das sich frei anordnen lässt:
 
 - **Verschieben:** am Reiter (Titel) ziehen und an einer Kante oder in der Mitte eines anderen Fensters ablegen (dann als Reiter).
 - **Größe:** an den Trennlinien ziehen.
-- **Lösen:** Taste ⇱ rechts im Fensterkopf – das Fenster schwebt frei (im Bild oben: „Auswahl“).
+- **Lösen:** Taste ⇱ rechts im Fensterkopf – das Fenster schwebt frei (im Bild oben: „Bänder & Betriebsarten“).
 - **Auf einen zweiten Bildschirm:** Taste ⧉ – das Fenster wird zu einem eigenen Programmfenster.
 - **Maximieren:** Taste □.
 - **Fenster-Menü:** Nebeneinander anordnen, Alle Fenster andocken, Standardanordnung wiederherstellen, **Layout A/B** speichern und laden, Vollbild (**F11**).
@@ -327,10 +330,10 @@ Eine Auswahl:
 | Rechtsklick auf … | Befehle |
 |---|---|
 | Frequenzanzeige | Frequenz eingeben/kopieren/einfügen, als Favorit, Schnellspeicher, Betriebsart, Abstimmschritt, VFO-Befehle, Split |
-| Funktionstaste | Auslösen, verschieben, ausblenden, Layout anpassen |
-| Bandtaste | Band wählen, gemerkte Frequenz vergessen, Spreizung, Bandplan |
-| Abstimmleiste | Hier abstimmen, Favorit, Schnellspeicher-Marken löschen; auf einem Spot: alle Rufzeichen-Befehle |
-| Regler | Minimum / Mitte / Maximum, Regler-Layout |
+| Funktionstaste | Auslösen, verschieben, ausblenden, Oberfläche bearbeiten |
+| Bandknopf | Band wählen, gemerkte Frequenz vergessen, Zoom, Bandplan |
+| Bandskala | Hier abstimmen, Favorit, Schnellspeicher-Marken löschen; auf einem Spot: alle Rufzeichen-Befehle |
+| Regler (Pegel & Filter) | Minimum / Mitte / Maximum, Regler-Satz |
 | Favorit / Ordner | Abstimmen, umbenennen, verschieben, löschen |
 | Logbuch-Zeile | Bearbeiten, löschen, kopieren, ADIF, QSL, Hochladen, auf QSO-Frequenz abstimmen, Filtern, Antenne drehen, Spot senden |
 | Logbuch-Spaltenkopf | Sortieren, Spalten ein-/ausblenden |
@@ -349,10 +352,12 @@ Eine Auswahl:
 
 ![Logbuch](bilder/07-logbuch.png)
 
-- **Mitte:** das Logbuch mit Werkzeugleiste (Neu, Contest, Löschen, Ansehen, Ausschneiden/Kopieren/Einfügen, Aktualisieren, Spalten, Auswahl ändern, Suchen, Filter, QSL, LoTW, Sicherung …). Spalten per Ziehen am Kopf verbreitern, Klick auf den Kopf sortiert.
-- **Links:** Rufzeichen-Info (Callbook mit Foto, Name, Adresse; Matrix „gearbeitet/bestätigt“ je Band und Betriebsart für Rufzeichen und Land), Favoriten, Funkgerät-Feld.
-- **Rechts:** Bandkarte mit Spots, Graulinie, Uhr, Rotor.
-- **Unten:** Sonnendaten, Sonnenzyklus, Audio-Monitor, DX-Cluster, Alert (FT8), DX-Histogramm, Kalender (Contests und DXpeditionen), Audio-Rekorder, Netzwerk.
+- **Oben:** das Logbuch mit eigener Leiste: **Neu · Bearbeiten · Löschen**, **Suchen · Filter · Spalten · Auswahl ändern**, **QSL · LoTW hoch · LoTW holen**, **Contest · Diplome · Mehr …** (dort u. a. Ausschneiden/Kopieren/Einfügen in ein anderes Logbuch, Neu laden, Spaltenbreiten, QRZ.com, Sicherung, ADIF, Cabrillo, Drucken). Spalten per Ziehen am Kopf verbreitern, Klick auf den Kopf sortiert.
+- **Rechts:** Rufzeichen-Info (Callbook mit Foto, Name, Adresse; Matrix „gearbeitet/bestätigt“ je Band und Betriebsart für Rufzeichen und Land), Favoriten, Gerätestatus.
+- **Unten:** DX-Cluster (mit Spot-Alarm (FT8), POTA / SOTA / WWFF und Kalender als Reiter), Bandkarte mit Spots, Graulinie (mit Sonnendaten und Sonnenzyklus).
+- **Über Ansicht** zusätzlich: Uhr, Rotor, Audio-Monitor, DX-Histogramm, Audio-Rekorder, Netzwerk, Statistik.
+
+Die Werkzeugleiste des Logbuchs: **Logbücher · Neuer Eintrag**, **DX-Cluster · Spot-Alarm · QSL & Online · Diplome**, **Einstellungen**; rechts ein Kästchen mit Rufzeichen, Locator, Frequenz (Klick: VFO A abstimmen) und UTC. Menüs: **QSO & QSL** (Logbücher, QSL-Abgleich, Diplome, Statistik) und **Werkzeuge** (Einstellungen, Stationsprofile, POTA/SOTA/WWFF, Cluster-Alarme, Kalender); VFO A/B abstimmen unter **Bearbeiten**.
 
 **QSO eintragen:** **Neu** (oder **Eintrag** in der Werkzeugleiste). Rufzeichen eintippen – Land, Entfernung, Richtung, frühere QSOs und Callbook-Daten erscheinen sofort. Frequenz, Band und Betriebsart kommen vom Funkgerät. **Enter** speichert, **Esc** leert.
 
@@ -372,7 +377,7 @@ Eine Auswahl:
 
 **Betriebsarten und RST:** **F8 → Betriebsarten** – eine Zeile je Mode mit RST-Vorgabe (z. B. `FT8 -10`, `CW 599`). Die Liste erscheint im Feld Mode des Eintrags, beim Wechsel der Betriebsart werden die RST-Felder vorbelegt.
 
-**POTA, SOTA und WWFF:** Fenster **POTA / SOTA / WWFF** im Logbuch (Menü **Extras**) zeigt aktuelle Spots (Klick stimmt ab, Doppelklick öffnet den Eintrag mit Referenz), im Eintrag gibt es eine Referenzsuche. Für eigene Aktivierungen **Stationsprofile** anlegen (Rufzeichen, Locator, eigene Park-/Gipfel-Referenz) – der Zähler zeigt die QSOs des Tages, **Selbst-Spot** meldet die Aktivierung, **Export** erzeugt die Logdatei fürs Portal.
+**POTA, SOTA und WWFF:** Fenster **POTA / SOTA / WWFF** im Logbuch (Menü **Werkzeuge**) zeigt aktuelle Spots (Klick stimmt ab, Doppelklick öffnet den Eintrag mit Referenz), im Eintrag gibt es eine Referenzsuche. Für eigene Aktivierungen **Stationsprofile** anlegen (Rufzeichen, Locator, eigene Park-/Gipfel-Referenz) – der Zähler zeigt die QSOs des Tages, **Selbst-Spot** meldet die Aktivierung, **Export** erzeugt die Logdatei fürs Portal.
 
 **Andere Programme anbinden** (**F8 → Programme & Sicherung**):
 - **QSOs weiterleiten** an andere Programme (UDP; ADIF, WSJT-X „Logged ADIF“ für GridTracker/Log4OM oder N1MM-Format).
@@ -384,7 +389,7 @@ Eine Auswahl:
 ## 8. DX-Cluster, Alarme und WSJT-X
 
 - **DX-Cluster:** Server in den Optionen eintragen. Spots werden markiert: **rot = neues Land**, **orange = neues Band**, grau = schon gearbeitet. Klick stimmt Funkgerät und Betriebsart ab. **Alarme** meldet neue Länder/Bänder oder bestimmte Rufzeichen (mit Ton). **Spot** sendet einen eigenen Spot.
-- **WSJT-X / JTDX:** In WSJT-X unter *Einstellungen → Berichte* „UDP-Server“ auf `127.0.0.1` und Port `2237` stellen, Haken bei „Akzeptiere UDP-Anfragen“. Geloggte QSOs landen automatisch im Logbuch. Das Fenster **Alert (FT8)** zeigt alle Decodes mit Land und Status; **Doppelklick** ruft die Station in WSJT-X an, **TX stopp** beendet das Senden.
+- **WSJT-X / JTDX:** In WSJT-X unter *Einstellungen → Berichte* „UDP-Server“ auf `127.0.0.1` und Port `2237` stellen, Haken bei „Akzeptiere UDP-Anfragen“. Geloggte QSOs landen automatisch im Logbuch. Das Fenster **Spot-Alarm (FT8)** zeigt alle Decodes mit Land und Status; **Doppelklick** ruft die Station in WSJT-X an, **TX stopp** beendet das Senden.
 
 ## 9. Online-Dienste
 
@@ -482,7 +487,7 @@ Bei ARDOP und VARA tastet Wellenwerk das Funkgerät, sobald das Modem senden wil
 
 ![Satelliten](bilder/13-satelliten.png)
 
-Bahndaten und Sender werden automatisch geladen. Links die Liste mit aktueller Elevation (über dem Horizont grün), **Auswahl …** legt bis zu 100 Satelliten fest. Daneben das Überflug-Polardiagramm, die Karte mit Bodenspur und Sichtbereich, Position und Frequenzen sowie die nächsten Überflüge.
+Bahndaten und Sender werden automatisch geladen. Links die Liste mit aktueller Elevation (über dem Horizont grün), **Satelliten wählen** (Werkzeugleiste) legt bis zu 100 Satelliten fest. Daneben das Überflug-Polardiagramm, die Karte mit Bodenspur und Sichtbereich, Position und Frequenzen sowie die nächsten Überflüge.
 
 - **Sender** des Satelliten wählen – Downlink/Uplink werden angezeigt.
 - **Funkgerät nachführen (Doppler):** stellt die Empfangsfrequenz laufend nach; **Uplink per Split** stellt die Sendefrequenz mit ein.
@@ -511,7 +516,7 @@ Weltkarte mit Graulinie (Tag/Nacht), eigener Station und Spots, dazu die **Peilk
 | Taste | Wirkung |
 |---|---|
 | F8 | Programmoptionen |
-| Strg+F8 | Layout anpassen |
+| Strg+F8 | Oberfläche bearbeiten |
 | F11 | Vollbild |
 | Mausrad über einer Ziffer | diese Stelle verstellen (auf den Leisten: Shift ×2, Strg ×5) |
 | ← / → | aktive Ziffer wechseln |
@@ -532,7 +537,7 @@ Alle Daten (Logbücher, Einstellungen, Favoriten, SSTV-Bilder) liegen im Benutze
 - macOS: `~/Library/Application Support/Wellenwerk`
 - Linux: `~/.local/share/wellenwerk`
 
-**Sichern:** **Sicherung** (Werkzeugleiste des Logbuchs) legt eine Kopie des aktuellen Logbuchs an; **Mehr … → Sicherungen** stellt wieder her. Für einen Rechnerwechsel den ganzen Ordner kopieren oder das Logbuch als ADIF exportieren und auf dem neuen Rechner importieren. Das Layout der Gerätesteuerung überträgt **Layout anpassen → Layout als Datei speichern / laden**.
+**Sichern:** **Mehr … → Sicherung jetzt** (Logbuch-Leiste) legt eine Kopie des aktuellen Logbuchs an; **Mehr … → Sicherungen** stellt wieder her. Für einen Rechnerwechsel den ganzen Ordner kopieren oder das Logbuch als ADIF exportieren und auf dem neuen Rechner importieren. Das Layout der Gerätesteuerung überträgt **Oberfläche bearbeiten → Layout als Datei speichern / laden**.
 
 ## 18. Zugang, API und KI-Assistenten
 

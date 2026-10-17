@@ -57,9 +57,9 @@ ctxRegister(".rc-btn", el => { const k = el.dataset.k, side = RC.layout?.left.in
   return [{ label: "Auslösen", act: () => pressButton(k, el) }, "-",
     { label: "Taste nach links / rechts verschieben", act: () => { const L = RC.layout; L[side] = L[side].filter(x => x !== k); L[side === "left" ? "right" : "left"].push(k); saveRigLayout(); } },
     { label: "Taste ausblenden", act: () => { const L = RC.layout; L[side] = L[side].filter(x => x !== k); saveRigLayout(); toast("Ausgeblendet – über „Layout anpassen“ wieder einblenden"); } },
-    { label: "Layout anpassen …", key: "Strg+F8", icon: "i-brush", act: openCustomize }]; });
+    { label: "Oberfläche bearbeiten …", key: "Strg+F8", icon: "i-brush", act: openCustomize }]; });
 ctxRegister(".rc-drop", el => [{ label: "Auswahl öffnen", act: () => dropMenu(el.dataset.k, el) }, { label: "Auswahlliste ausblenden", act: () => { RC.layout.drops = RC.layout.drops.filter(x => x !== el.dataset.k); saveRigLayout(); } },
-  { label: "Layout anpassen …", icon: "i-brush", act: openCustomize }]);
+  { label: "Oberfläche bearbeiten …", icon: "i-brush", act: openCustomize }]);
 ctxRegister(".rc-bandbtns [data-band]", el => { const b = el.dataset.band, mem = store.get("bandmem", {})[b];
   return [{ label: `${b} wählen`, act: () => el.click() }, { label: mem ? `Letzte Frequenz ${fmtMHz(mem.f)} ${mem.m || ""} vergessen` : "Keine gespeicherte Frequenz", disabled: !mem,
     act: () => { const m = store.get("bandmem", {}); delete m[b]; store.set("bandmem", m); } }, { label: "Bandspreizung für dieses Band", act: () => { RC.bsp = { band: b, w: 50 }; WW.emit("rc-layout"); } },
@@ -79,7 +79,7 @@ ctxRegister(".rc-tab", el => { const id = el.dataset.id, p = WW.radios.find(r =>
 ctxRegister(".hslider", el => { const n = el.dataset.n, mn = +el.dataset.min, mx = +el.dataset.max;
   const setL = v => act("/api/rig/level", { name: n, value: v });
   return [{ label: "Minimum", act: () => setL(mn) }, { label: "Mitte", act: () => setL((mn + mx) / 2) }, { label: "Maximum", act: () => setL(mx) }, "-",
-    { label: "Regler-Layout", sub: [0, 1, 2, 3, 4, 5].map(i => ({ label: `Layout ${i + 1}`, check: RC.layout?.sliders?.active === i, act: () => { RC.layout.sliders.active = i; saveRigLayout(); } })) },
+    { label: "Regler-Satz", sub: [0, 1, 2, 3, 4, 5].map(i => ({ label: `Satz ${i + 1}`, check: RC.layout?.sliders?.active === i, act: () => { RC.layout.sliders.active = i; saveRigLayout(); } })) },
     { label: "Regler anpassen …", icon: "i-brush", act: () => openCustomize("sliders") }]; });
 // Favoriten-Baum
 ctxRegister(".tr-row.item", el => { const id = +el.dataset.id || el.dataset.id, fav = (el.closest(".sel-body")?._favs || []).find(f => String(f.id) === String(id)); if (!fav) return [];
