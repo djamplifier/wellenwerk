@@ -166,7 +166,7 @@ class Updater:
                     t.add(self.base / p, arcname=p, filter=lambda ti: None if "__pycache__" in ti.name else ti)
         for old in sorted(self.dir.glob("vorher-*.tgz"), key=lambda p: p.stat().st_mtime)[:-3]:
             old.unlink(missing_ok=True)
-        old_req = (self.base / "requirements.txt").read_text() if (self.base / "requirements.txt").exists() else ""
+        old_req = (self.base / "requirements.txt").read_text(encoding="utf-8") if (self.base / "requirements.txt").exists() else ""
         # Austauschen: alte Ordner beiseite, neue an ihren Platz – bei Fehler zurueck
         self._step("Tausche Programmdateien …", progress)
         aside = self.dir / f"alt-{self.version}"
@@ -180,7 +180,7 @@ class Updater:
                 if (self.base / p).exists():
                     shutil.move(str(self.base / p), str(aside / p))
                 shutil.move(str(src), str(self.base / p))
-            new_req = (self.base / "requirements.txt").read_text() if (self.base / "requirements.txt").exists() else ""
+            new_req = (self.base / "requirements.txt").read_text(encoding="utf-8") if (self.base / "requirements.txt").exists() else ""
             if new_req != old_req:
                 self._step("Installiere Python-Pakete …", progress)
                 r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(self.base / "requirements.txt")],

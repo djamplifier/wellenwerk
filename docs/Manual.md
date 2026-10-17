@@ -110,7 +110,7 @@ More settings:
 - **Favourites** (toolbar **Selection**): store frequencies with mode in folders, a click tunes.
 - **Quick memory:** remembers the current frequency as a marker on the tuning bar.
 
-More windows via **View** or **Tools**: shortwave database (broadcast stations by frequency and time), band scope (sweeps a band and plots the S-meter), scanner, macros, voice keyer, **Panadapter**, **Memory channels**.
+A closed **Radio** window comes back via **View → Radio** (**File → Connect …** reopens it as well). More windows via **View** or **Tools**: shortwave database (broadcast stations by frequency and time), band scope (sweeps a band and plots the S-meter), scanner, macros, voice keyer, **Panadapter**, **Memory channels**.
 
 **Customize layout** (**Ctrl+F8**): move buttons between left and right, create your own buttons (mode, frequency, CAT command, macro), colours, size, control layouts and band plan (region 1/2/3). **Save layout as file / Load layout from file** transfers the layout to other computers.
 

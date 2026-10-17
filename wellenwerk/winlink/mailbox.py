@@ -25,12 +25,12 @@ class Mailbox:
 
     def _unread(self) -> set:
         try:
-            return set(json.loads(self._readf.read_text()))
+            return set(json.loads(self._readf.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             return set()
 
     def _set_unread(self, s: set):
-        self._readf.write_text(json.dumps(sorted(s)))
+        self._readf.write_text(json.dumps(sorted(s)), encoding="utf-8")
 
     def list(self, folder: str) -> list[dict]:
         out, unread = [], self._unread()

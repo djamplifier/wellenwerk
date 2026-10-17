@@ -21,14 +21,14 @@ class Presence:
 
     def ident(self) -> str:
         try:
-            v = self.path.read_text().strip()
+            v = self.path.read_text(encoding="utf-8").strip()
             if len(v) == 32 and all(c in "0123456789abcdef" for c in v):
                 return v
         except OSError:
             pass
         v = secrets.token_hex(16)
         try:
-            self.path.write_text(v)
+            self.path.write_text(v, encoding="utf-8")
         except OSError:
             pass
         return v

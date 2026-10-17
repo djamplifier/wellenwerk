@@ -22,12 +22,12 @@ class Access:
         self.cfg = cfg
         kf = data / "secret.key"
         if not kf.exists():
-            kf.write_text(secrets.token_hex(32))
+            kf.write_text(secrets.token_hex(32), encoding="utf-8")
             try:
                 kf.chmod(0o600)
             except OSError:
                 pass
-        self.key = kf.read_text().strip().encode()
+        self.key = kf.read_text(encoding="utf-8").strip().encode()
 
     def session_value(self) -> str:
         pw = self.cfg.get("access_password") or ""

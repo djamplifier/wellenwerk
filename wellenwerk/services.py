@@ -265,7 +265,7 @@ def lotw_upload(cfg: dict, recs: list[dict]) -> str:
     text = adif.export([{k: v for k, v in r.items() if k not in ("id", "created") and v not in (None, "")} for r in recs])
     with tempfile.TemporaryDirectory() as d:
         f = Path(d) / "upload.adi"
-        f.write_text(text)
+        f.write_text(text, encoding="utf-8")
         extra = ["-p", cfg["lotw_cert_pass"]] if cfg.get("lotw_cert_pass") else []
         try:
             p = _run_tqsl(cmd + ["-x", "-d", "-q", "-u", "-a", "compliant", "-l", cfg["lotw_location"]] + extra + [str(f)], 300)

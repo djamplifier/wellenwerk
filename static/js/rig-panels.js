@@ -406,10 +406,11 @@ APPS.rig = {
 function rigMenus() {
   const macros = store.get("macros", []);
   APPS.rig.menus = [
-    { label: "Datei", items: [{ label: "Verbinden …", icon: "i-plug", act: () => openConnect() }, { label: "Empfänger (WebSDR/KiwiSDR) …", icon: "i-wave", act: () => { addPanel("rig", "receivers"); openConnect(null, "sdr"); } }, { label: "Trennen", act: () => WW.current && act(`/api/radios/${WW.current}/disconnect`) },
+    { label: "Datei", items: [{ label: "Verbinden …", icon: "i-plug", act: () => { addPanel("rig", "face"); openConnect(); } }, { label: "Empfänger (WebSDR/KiwiSDR) …", icon: "i-wave", act: () => { addPanel("rig", "receivers"); openConnect(null, "sdr"); } }, { label: "Trennen", act: () => WW.current && act(`/api/radios/${WW.current}/disconnect`) },
       { label: "Verbindung bearbeiten …", act: () => openConnect(WW.current) }, "-", { label: "Programmoptionen …", key: "F8", act: () => openOptions() }] },
     { label: "Bearbeiten", items: [{ label: "Frequenz eingeben …", key: "Enter", act: freqDialog }, { label: "Frequenz kopieren", act: () => navigator.clipboard?.writeText(fmtMHz(WW.rig.freq || 0)) }] },
     { label: "Ansicht", items: [
+      { label: "Funkgerät", check: () => panelOpen("rig", "face"), act: () => togglePanel("rig", "face") },
       { label: "Auswahl", check: () => panelOpen("rig", "selection"), act: () => togglePanel("rig", "selection") },
       { label: "Regler", check: () => panelOpen("rig", "sliders"), act: () => togglePanel("rig", "sliders") },
       { label: "KW-Datenbank", check: () => panelOpen("rig", "swdata"), act: () => togglePanel("rig", "swdata") },
@@ -435,7 +436,7 @@ function rigMenus() {
     MENU_WINDOW("rig"), MENU_HELP,
   ];
   APPS.rig.toolbar = [
-    { label: "Verbinden", icon: "i-plug", act: () => openConnect() },
+    { label: "Verbinden", icon: "i-plug", act: () => { addPanel("rig", "face"); openConnect(); } },
     { label: "Auswahl", icon: "i-list", act: () => togglePanel("rig", "selection"), on: () => panelOpen("rig", "selection") },
     { label: "Favorit", icon: "i-star", act: () => addFavoriteDialog() },
     { label: "Schnellspeicher", icon: "i-save", act: quickSave }, "|",

@@ -83,7 +83,7 @@ log = logging.getLogger("ww")
 
 def load_cfg() -> dict:
     try:
-        return {**DEFAULTS, **json.loads(CFG_PATH.read_text())}
+        return {**DEFAULTS, **json.loads(CFG_PATH.read_text(encoding="utf-8"))}
     except Exception:
         return dict(DEFAULTS)
 
@@ -255,7 +255,11 @@ STATIONS_PATH = DATA / "stations.json"
 
 def load_stations() -> dict:
     try:
-        return json.loads(STATIONS_PATH.read_text())
+        raw = STATIONS_PATH.read_bytes()
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except UnicodeDecodeError:                        # aeltere Windows-Fassungen schrieben im Systemzeichensatz
+            return json.loads(raw.decode("cp1252"))
     except Exception:
         return {"active": "", "list": []}
 
@@ -535,7 +539,7 @@ RECONNECT = DATA / "wieder-verbinden.json"
 async def reconnect_previous():
     """Vor dem letzten Beenden verbundene Geraete/Empfaenger wieder verbinden (z. B. nach Neustart oder Aktualisierung)."""
     try:
-        st = json.loads(RECONNECT.read_text())
+        st = json.loads(RECONNECT.read_text(encoding="utf-8"))
         RECONNECT.unlink()
     except (OSError, ValueError):
         return
@@ -561,7 +565,7 @@ async def stop_children():
     Welche Geraete verbunden waren, wird gemerkt und beim naechsten Start wieder verbunden."""
     try:
         tune = {pid: {k: (rp.rig.state or {}).get(k) for k in ("freq", "mode")} for pid, rp in radios.active.items() if getattr(rp, "rig", None)}
-        RECONNECT.write_text(json.dumps(dict(ids=list(radios.active), current=radios.current, tune=tune)))
+        RECONNECT.write_text(json.dumps(dict(ids=list(radios.active), current=radios.current, tune=tune)), encoding="utf-8")
     except Exception:
         pass
     try:
@@ -673,7 +677,7 @@ async def new_api_token():
     """Erzeugt einen neuen API-Schluessel (der alte wird ungueltig) und zeigt ihn einmal an."""
     import secrets as _s
     cfg["api_token"] = _s.token_urlsafe(24)
-    CFG_PATH.write_text(json.dumps(cfg, indent=2))
+    CFG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     return {"api_token": cfg["api_token"]}
 
 
@@ -723,7 +727,7 @@ async def put_settings(new: dict):
             new.pop(k)
     cfg.update(new)
     cfg["callsign"] = cfg["callsign"].upper().strip()
-    CFG_PATH.write_text(json.dumps(cfg, indent=2))
+    CFG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     apply_poll()
     apply_links()
     apply_rotor_opts()
@@ -906,7 +910,7 @@ async def rotor_spawn():
         cmd += ["-s", str(cfg["rot_speed"])]
     ROTCTLD["proc"] = await asyncio.to_thread(subprocess.Popen, cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=radmod.hamlib_env())
     cfg["rot_host"], cfg["rot_port"] = "127.0.0.1", rport
-    CFG_PATH.write_text(json.dumps(cfg, indent=2))
+    CFG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     await asyncio.sleep(0.8)
     rotor.reconfigure(cfg["rot_host"], int(cfg["rot_port"]), bool(cfg["rot_enabled"]))
 
@@ -1115,7 +1119,7 @@ async def docs(name: str):
         p = BASE / Path(name).name
     if not p.exists():
         raise HTTPException(404, "nicht gefunden")
-    return Response(p.read_text(), media_type="text/plain; charset=utf-8")
+    return Response(p.read_text(encoding="utf-8"), media_type="text/plain; charset=utf-8")
 
 
 @app.get("/docs/bilder/{name}")
@@ -1154,7 +1158,7 @@ FAV_PATH = DATA / "favorites.json"
 
 def _favs() -> list:
     try:
-        return json.loads(FAV_PATH.read_text())
+        return json.loads(FAV_PATH.read_text(encoding="utf-8"))
     except Exception:
         return []
 
@@ -1175,7 +1179,7 @@ async def fav_add(body: dict):
                group=str(body.get("group") or band_for(hz) or "Sonstige").strip()[:30], freq=hz,
                mode=str(body.get("mode") or "").upper(), passband=int(body.get("passband") or 0))
     favs.append(fav)
-    FAV_PATH.write_text(json.dumps(favs, indent=1))
+    FAV_PATH.write_text(json.dumps(favs, indent=1), encoding="utf-8")
     await broadcast({"type": "favorites"})
     return fav
 
@@ -1189,7 +1193,7 @@ async def fav_update(fid: int, body: dict):
     for k in ("name", "group", "freq", "mode"):
         if k in body:
             fav[k] = int(body[k]) if k == "freq" else str(body[k]).strip()
-    FAV_PATH.write_text(json.dumps(favs, indent=1))
+    FAV_PATH.write_text(json.dumps(favs, indent=1), encoding="utf-8")
     await broadcast({"type": "favorites"})
     return fav
 
@@ -1197,7 +1201,7 @@ async def fav_update(fid: int, body: dict):
 @app.delete("/api/favorites/{fid}")
 async def fav_del(fid: int):
     favs = [f for f in _favs() if f["id"] != fid]
-    FAV_PATH.write_text(json.dumps(favs, indent=1))
+    FAV_PATH.write_text(json.dumps(favs, indent=1), encoding="utf-8")
     await broadcast({"type": "favorites"})
     return {"ok": True}
 
@@ -1339,13 +1343,13 @@ SYNC_PATH = DATA / "sync.json"
 
 def _sync_state() -> dict:
     try:
-        return json.loads(SYNC_PATH.read_text())
+        return json.loads(SYNC_PATH.read_text(encoding="utf-8"))
     except Exception:
         return {}
 
 
 def _sync_save(**kw):
-    st = _sync_state(); st.update(kw); SYNC_PATH.write_text(json.dumps(st, indent=1))
+    st = _sync_state(); st.update(kw); SYNC_PATH.write_text(json.dumps(st, indent=1), encoding="utf-8")
 
 
 @app.get("/api/callbook/{call:path}")
@@ -1484,7 +1488,7 @@ async def lotw_location():
     await asyncio.to_thread(services.tqsl_ensure_location, name, cfg["callsign"], e["dxcc"], cfg.get("locator", ""),
                             e.get("cqz"), e.get("ituz"))
     if not cfg.get("lotw_location"):
-        cfg["lotw_location"] = name; CFG_PATH.write_text(json.dumps(cfg, indent=2))
+        cfg["lotw_location"] = name; CFG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     return {"ok": True, "location": name, "locations": services.tqsl_locations()}
 
 
@@ -1725,7 +1729,7 @@ async def logbooks_select(body: dict):
     n = body.get("name")
     if n not in logbooks.names():
         raise HTTPException(404, "Logbuch nicht gefunden")
-    cfg["logbook"] = n; CFG_PATH.write_text(json.dumps(cfg, indent=2))
+    cfg["logbook"] = n; CFG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     await broadcast({"type": "logbooks"}); await broadcast({"type": "reload"})
     return {"current": n}
 
@@ -1737,7 +1741,7 @@ async def logbooks_rename(body: dict):
     except (ValueError, KeyError, FileNotFoundError) as e:
         raise HTTPException(400, str(e))
     if cfg.get("logbook") == body["old"]:
-        cfg["logbook"] = n; CFG_PATH.write_text(json.dumps(cfg, indent=2))
+        cfg["logbook"] = n; CFG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     await broadcast({"type": "logbooks"})
     return {"name": n}
 
@@ -2067,7 +2071,7 @@ async def stations_put(body: dict):
     if active and not any(x["id"] == active for x in lst):
         active = ""
     data = {"active": active, "list": lst}
-    STATIONS_PATH.write_text(json.dumps(data, indent=1, ensure_ascii=False))
+    STATIONS_PATH.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
     await broadcast({"type": "stations", "stations": data})
     await identity_changed()
     return data
@@ -2316,7 +2320,7 @@ async def plugins_put(pid: str, body: dict):
         plugin_host.set_state(pid, body.get("enabled"), body.get("settings"))
     except PluginError as e:
         raise HTTPException(400, str(e))
-    CFG_PATH.write_text(json.dumps(cfg, indent=2))
+    CFG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     restart = False
     if body.get("enabled") is True:
         plugin_host.load_backends(app)
@@ -2365,7 +2369,7 @@ async def plugins_delete(pid: str):
         plugin_host.remove(pid)
     except PluginError as e:
         raise HTTPException(400, str(e))
-    CFG_PATH.write_text(json.dumps(cfg, indent=2))
+    CFG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     await broadcast({"type": "plugins"})
     return {"ok": True}
 
@@ -2411,7 +2415,7 @@ SNAP_SKIP_FUNCS = {"TUNER", "TBURST", "SEND_MORSE", "SEND_VOICE_MEM", "RESUME", 
 
 def _snaps() -> list:
     try:
-        return json.loads(SNAP_PATH.read_text())
+        return json.loads(SNAP_PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
 
@@ -2435,7 +2439,7 @@ async def snapshot_take(body: dict):
                            levels={k: v for k, v in (st.get("levels") or {}).items() if k in keep_l},
                            funcs={k: v for k, v in (st.get("funcs") or {}).items() if k in set(caps.get("funcs_set", [])) - SNAP_SKIP_FUNCS}))
     lst = _snaps() + [snap]
-    SNAP_PATH.write_text(json.dumps(lst, indent=1))
+    SNAP_PATH.write_text(json.dumps(lst, indent=1), encoding="utf-8")
     return snap
 
 
@@ -2480,7 +2484,7 @@ async def snapshot_apply(sid: str):
 
 @app.delete("/api/snapshots/{sid}")
 async def snapshot_delete(sid: str):
-    SNAP_PATH.write_text(json.dumps([x for x in _snaps() if x["id"] != sid], indent=1))
+    SNAP_PATH.write_text(json.dumps([x for x in _snaps() if x["id"] != sid], indent=1), encoding="utf-8")
     return {"ok": True}
 
 
@@ -2674,13 +2678,13 @@ async def recording_get(file: str):
 @app.get("/api/store/{key}")
 async def store_get(key: str):
     p = extras.store_path(DATA, key)
-    return json.loads(p.read_text()) if p.exists() else None
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
 
 @app.put("/api/store/{key}")
 async def store_put(key: str, request: Request):
     body = await request.json()
-    extras.store_path(DATA, key).write_text(json.dumps(body))
+    extras.store_path(DATA, key).write_text(json.dumps(body), encoding="utf-8")
     return {"ok": True}
 
 
@@ -2970,7 +2974,7 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 async def index():
     # Versionsnummer an CSS/JS haengen, damit Browser nach Updates nicht alte Dateien nutzen
     stamp = int(max(p.stat().st_mtime for p in [STATIC / "style.css", *(STATIC / "js").glob("*.js")]))
-    html = (STATIC / "index.html").read_text().replace("__V__", f"{VERSION}-{stamp}")
+    html = (STATIC / "index.html").read_text(encoding="utf-8").replace("__V__", f"{VERSION}-{stamp}")
     return Response(html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
 

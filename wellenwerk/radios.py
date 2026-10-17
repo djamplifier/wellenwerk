@@ -273,12 +273,12 @@ class RadioManager:
 
     def _load(self) -> list[dict]:
         try:
-            return json.loads(self.path.read_text())
+            return json.loads(self.path.read_text(encoding="utf-8"))
         except Exception:
             return []
 
     def save(self):
-        self.path.write_text(json.dumps(self.profiles, indent=1))
+        self.path.write_text(json.dumps(self.profiles, indent=1), encoding="utf-8")
 
     def profile(self, pid: str) -> dict | None:
         return next((p for p in self.profiles if p["id"] == pid), None)

@@ -104,7 +104,7 @@ Weitere Einstellungen:
 - **Favoriten** (Werkzeugleiste **Auswahl**): Frequenzen mit Betriebsart in Ordnern speichern, Klick stimmt ab.
 - **Schnellspeicher:** merkt die aktuelle Frequenz als Marke auf der Abstimmleiste.
 
-Weitere Fenster über **Ansicht** bzw. **Extras**: Kurzwellen-Datenbank (Rundfunksender nach Frequenz und Zeit), Bandübersicht (fährt ein Band ab und zeichnet das S-Meter), Scanner, Makros, Sprachspeicher, **Panadapter**, **Speicherkanäle**.
+Ein geschlossenes Fenster **Funkgerät** holt **Ansicht → Funkgerät** zurück (auch **Datei → Verbinden …** öffnet es wieder). Weitere Fenster über **Ansicht** bzw. **Extras**: Kurzwellen-Datenbank (Rundfunksender nach Frequenz und Zeit), Bandübersicht (fährt ein Band ab und zeichnet das S-Meter), Scanner, Makros, Sprachspeicher, **Panadapter**, **Speicherkanäle**.
 
 **Layout anpassen** (**Strg+F8**): Tasten zwischen links und rechts verschieben, eigene Tasten anlegen (Betriebsart, Frequenz, CAT-Befehl, Makro), Farben, Größe, Regler-Layouts und Bandplan (Region 1/2/3). Mit **Layout als Datei speichern / laden** lässt sich das Layout auf andere Rechner übertragen.
 
