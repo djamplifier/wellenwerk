@@ -150,7 +150,7 @@ function createWfPanel(root) {
     const M = new Float32Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += P[k * 4 + j] * R[i * 4 + k]; M[i * 4 + j] = s; } return M; }
   // ---------- Daten ----------
   let skip = 0;
-  let reqSpan = null, vkey = "", zoomed = false; const recent = [];   // letzte Spektrumzeilen (AM-Pruefung der Signalerkennung)
+  let reqSpan = null, vkey = "", zoomed = false, lastF = 0; const recent = [];   // letzte Spektrumzeilen (AM-Pruefung der Signalerkennung)
   const onLine = l => { const S = srcs(); if (l.radio !== S.data) return; if (++skip % Math.max(1, o.speed) !== 0) return;
     if (reqSpan !== `${S.data}:${st.span}`) applySpan();
     const full = l.high - l.low, want = Math.min(full, st.span > 0 ? st.span : full), s = radioState();
@@ -158,7 +158,8 @@ function createWfPanel(root) {
     if (st._spanSet) { zoomed = false; st._spanSet = false; }
     if (!zoomed && Math.abs((view[1] - view[0]) - want) > 1) {                                       // eingestellte Breite, um die Empfangsfrequenz
       const pb = s.freq ? wfPass(s) : [0, 0], c = s.freq ? s.freq + (pb[0] + pb[1]) / 2 : (l.low + l.high) / 2; view = [c - want / 2, c + want / 2]; }
-    if (s.freq && view[1] - view[0] < full * 0.98 && (s.freq < view[0] + (view[1] - view[0]) * 0.1 || s.freq > view[1] - (view[1] - view[0]) * 0.1)) {   // Abstimmen aus dem Bild: nachziehen
+    const tuned = s.freq !== lastF; lastF = s.freq;                                  // nur beim Abstimmen nachziehen, nicht wenn der Ausschnitt von Hand verschoben wurde
+    if (tuned && s.freq && view[1] - view[0] < full * 0.98 && (s.freq < view[0] + (view[1] - view[0]) * 0.1 || s.freq > view[1] - (view[1] - view[0]) * 0.1)) {   // Abstimmen aus dem Bild: nachziehen
       const pb = wfPass(s), c = s.freq + (pb[0] + pb[1]) / 2, w = view[1] - view[0]; view = [c - w / 2, c + w / 2]; }
     if (view[0] < l.low) view = [l.low, l.low + (view[1] - view[0])]; if (view[1] > l.high) view = [Math.max(l.low, l.high - (view[1] - view[0])), l.high];
     if (vkey !== view.join()) { vkey = view.join(); scr.invalidate(); root.dataset.view = vkey; }   // data-view: Ausschnitt (auch fuer Tests)
@@ -173,7 +174,7 @@ function createWfPanel(root) {
       api(`/api/radios/${S.data}/rig/level`, { method: "POST", body: { name: "SPECTRUM_SPAN", value: v } }).catch(() => { }); } };
   // Gezoomt: Empfaenger mit eigener Spektrumberechnung (IQ-Geraete, KiwiSDR) liefern den Ausschnitt feiner – passende Breite anfordern
   const zoomRes = () => { const S = srcs(), r = (WW.radios || []).find(x => x.id === S.data); if (!r || !isSdr(r) || !view || !last) return;
-    if (!(r.state?.sdr?.hw || ["kiwisdr", "openwebrx"].includes(r.sdr_type) || r.kind === "kiwisdr")) return;
+    if (!(r.state?.sdr?.hw || r.sdr_type === "kiwisdr" || r.kind === "kiwisdr")) return;   // OpenWebRX liefert die volle Aufloesung schon mit
     const w = view[1] - view[0], full = (r.state?.sdr?.rate) || 0, sp = WF_SPANS.find(v => v >= w * 1.15) || 0, want = full && sp >= full * .8 ? 0 : sp;
     if (want === (+st.span || 0)) return; st.span = want; zoomed = true; reqSpan = null; store.set("wf.view", st); $(".wf-span", root).value = String(want); };
   // ---------- Bedienung ----------
