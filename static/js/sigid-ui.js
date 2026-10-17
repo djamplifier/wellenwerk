@@ -225,13 +225,18 @@ async function sigProbe(o, list, decs, opt = {}) {
     ${o.rep ? `<div class="hint"><b>${esc(o.rep.c)}</b> · ${fmkRepFacts(o.rep).map(x => `<span>${esc(x)}</span>`).join(" · ")}</div>` : ""}
     <div class="hint"><span>${opt.own ? "Wellenwerk dekodiert selbst" : "Dekoder des Empfängers läuft"}</span> · <span class="sig-tf">${fmtMHz(f)}</span> MHz · <span>Meldungen auch im Fenster „Datenempfang“</span></div>
     ${!fx && Math.abs(f - o.rf) >= 500 ? `<div class="hint sig-auto">✓ <span>auf Signalmitte abgestimmt (${f > o.rf ? "+" : "−"}${(Math.abs(f - o.rf) / 1000).toFixed(1)} kHz)</span></div>` : ""}
-    <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(name(found))}</b><i class="grow"></i>${opt.own && ["dmr", "dstar", "ysf"].includes(found) ? `<button type="button" class="sig-voice" title="Sprache über das optionale Sprachmodul (AMBE) hören">🔈 Sprache</button>` : ""}<button type="button" class="sig-live-x">Dekoder aus</button></div><pre translate="no"></pre></div>
+    <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(name(found))}</b><i class="grow"></i>${opt.own && ["dmr", "dstar", "ysf"].includes(found) ? `<button type="button" class="sig-voice" title="Sprache über das optionale Sprachmodul (AMBE) hören">🔈 Sprache</button>` : ""}<button type="button" class="sig-live-x">Dekoder aus</button></div><div class="sig-dvst hint"></div><pre translate="no"></pre></div>
     <div class="hint sig-db"></div><div class="sig-act"></div>`;
-  const pre = $("pre", body); let got = [];
+  const pre = $("pre", body), dvst = $(".sig-dvst", body), slots = {}; let got = [];
+  // Zeitschlitz-Zustand (DMR): Meldungen ohne Kennung zeigen, dass der Dekoder arbeitet, auch wenn gerade niemand spricht
+  const status = d => { const v = d.value || {}; if (d.decoder !== "dmr" || v.slot == null || v.slot === "") return;
+    slots[v.slot] = { s: v.source ? "Sprecher " + (idPerson(idName("dmr", v.source), "ID " + v.source)) : v.sync === "voice" ? "Sprache" : v.sync === "data" ? "Daten" : "Leerlauf", t: Date.now() };
+    dvst.innerHTML = Object.keys(slots).sort().map(k => `TS${+k + 1}: <span>${esc(Date.now() - slots[k].t > 4000 ? "still" : slots[k].s)}</span>`).join(" · "); };
   // Zeilen bei jedem Neuzeichnen aus den Meldungen bilden – so erscheinen Namen (Rufzeichen, Talkgroup), sobald sie nachgeladen sind
-  const render = () => { const L = got.map(d => [d, decSummary(d)]).filter(x => x[1].trim()).slice(-60).map(([d, s]) => `${new Date((d.t || Date.now() / 1000) * 1000).toLocaleTimeString(I18N.locale)}  ${s}`);
+  const render = () => { const L = got.map(d => [d, decSummary(d)]).filter(x => x[1].trim())
+    .filter((x, i, a) => !(i && a[i - 1][1] === x[1] && (x[0].t || 0) - (a[i - 1][0].t || 0) < 10)).slice(-60).map(([d, s]) => `${new Date((d.t || Date.now() / 1000) * 1000).toLocaleTimeString(I18N.locale)}  ${s}`);   // Kopf + Sprache derselben Aussendung nur einmal
     if (L.length) { pre.textContent = L.join("\n"); pre.scrollTop = 1e9; } };
-  const add = d => { if (d.decoder !== found) return; got.push(d); if (got.length > 300) got = got.slice(-200); render(); };
+  const add = d => { if (d.decoder !== found) return; status(d); if (!decSummary(d).trim()) return; got.push(d); if (got.length > 300) got = got.slice(-200); render(); };
   const offIds = WW.on("ids", () => { if (pre.isConnected) render(); else offIds(); });
   pre.textContent = fx ? "warte auf die nächste Aussendung …" : ""; msgs.forEach(add); R.onMsg = add;
   // Nachfuehren, solange der Dekoder laeuft (Sender mit Ablage, Drift); Handabstimmen beendet es

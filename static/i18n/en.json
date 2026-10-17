@@ -1887,5 +1887,9 @@
 "Der Server hat auf „{}“ umgeschaltet (anderer Nutzer oder Zeitplan)": "The server switched to “{}” (another user or schedule)",
 "Empfangsfrequenz {} MHz liegt außerhalb dieses Ausschnitts": "Receive frequency {} MHz is outside this range",
 "anderes Profil": "another profile",
-"Profilwechsel auf „{}“ in {} s …": "Profile change to “{}” in {} s …"
+"Profilwechsel auf „{}“ in {} s …": "Profile change to “{}” in {} s …",
+"Sprecher {}": "Speaker {}",
+"Leerlauf": "idle",
+"still": "quiet",
+"Daten": "Data"
 }
