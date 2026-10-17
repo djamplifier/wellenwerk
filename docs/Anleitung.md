@@ -206,6 +206,23 @@ Wechselst du in einen anderen Bereich oder stimmst du auf eine bekannte Digi-Fre
 
 **Frequenzliste der Digimodes:** FT8, FT4, JS8, WSPR, MSK144, PSK31, RTTY, Olivia, SSTV, FreeDV und CW-QRP mit ihren Aktivitätsfrequenzen je Band – ein Klick stellt Frequenz, Betriebsart und Filter ein (im Digitalbetrieb auch die passende Betriebsart dort). Zu finden unter **Speicher → Frequenzen der Digimodes** (Gerätesteuerung), **Frequenzen** in der Werkzeugleiste des Digitalbetriebs sowie als Ausklappliste **Frequenzen ▾** im FreeDV- und im SSTV-Fenster.
 
+### Rauschfilter: NB, Rauschminderung (auch KI) und Notch
+
+**Ansicht → Rauschfilter** (oder die Taste **Rauschfilter** in der Werkzeugleiste) bereitet den Ton auf, den du hörst – nach dem Vorbild von Thetis. Das funktioniert für jede Quelle: SDR-Hardware, KiwiSDR, OpenWebRX und WebSDR sowie Funkgeräte über CAT, deren Ton du über die Soundkarte am PC hörst.
+
+- **NB (Störimpulsaustaster):** blendet kurze Störimpulse aus (Zündfunken, Weidezaun, Schaltnetzteile). Der Regler stellt die Empfindlichkeit ein. Bei eigener SDR-Hardware (RTL-SDR, Hermes Lite) gibt es zusätzlich **„im Empfänger (IQ)“** bzw. die Taste **NB** an der Geräteanzeige. Dort wird schon auf den IQ-Daten ausgetastet, bevor ein Filter die Impulse verschmiert – das wirkt deutlich besser.
+- **NR (Rauschminderung):**
+  - **Spektral** schätzt laufend das Rauschen je Frequenz und senkt es zwischen und unter der Sprache ab (Wiener-Filter, ähnlich NR2/NR4 in Thetis). Der Regler bestimmt, wie stark.
+  - **KI (RNNoise)** ist ein neuronales Netz, das Sprache von Rauschen trennt (wie NR3 in Thetis). SSB klingt damit oft fast rauschfrei. Es wird beim ersten Einschalten geladen (ca. 5 MB) und arbeitet ganz auf deinem Rechner.
+  - Im Test mit Sprache und kräftigem Rauschen senkten beide das Rauschen in den Sprechpausen um 15–20 dB, ohne die Sprache leiser zu machen.
+- **ANF (Auto-Notch):** entfernt gleichbleibende Pfeiftöne (Träger, Tuner) automatisch, Sprache bleibt.
+- **Eigene Notches:** Rechtsklick im Wasserfall → **„Notch hier“**. Die Stelle wird rot gestrichelt markiert und bleibt beim Abstimmen auf derselben Frequenz im Band. Breite 40–300 Hz, bis zu sechs Notches; entfernen per Rechtsklick oder im Fenster.
+- **Funkgerät über CAT:** Haken bei **„Ton des Funkgeräts über den PC hören“** setzen und die USB-Soundkarte des Funkgeräts als Eingang wählen; den Lautsprecher am Gerät leise stellen. Das geht im Desktop-Programm (im Browser nur über localhost oder https). Die eingebauten Filter des Funkgeräts (NB, NR, Notch) schaltest du weiterhin über die Tasten der Geräteanzeige.
+
+Digitale Dekoder (FT8, RTTY, DMR, APRS …) bekommen immer den unbearbeiteten Ton – die Filter gelten nur fürs Hören.
+
+![Fenster Rauschfilter mit Notch im Wasserfall](bilder/31-rauschfilter.png)
+
 ### Markierungen im Wasserfall: typische Frequenzen, Rundfunk, Relais
 
 ![Rundfunksender im 49-m-Band, gerade auf Sendung (EiBi)](bilder/26-markierungen.png)

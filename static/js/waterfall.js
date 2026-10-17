@@ -67,6 +67,9 @@ function createWfPanel(root) {
       pbox.classList.remove("hidden"); pbox.style.left = x0 + "px"; pbox.style.width = Math.max(2, x1 - x0) + "px"; pbox.style.top = H + "px";
       const car = $(".wf-car", pbox); car.style.left = (fx(s.freq, W) - x0) + "px"; car.style.display = (s.mode === "USB" || s.mode === "LSB" || s.mode.startsWith("PKT")) ? "" : "none"; }
     else pbox.classList.add("hidden");
+    if (typeof DSP !== "undefined") for (const nf of DSP.opts.notches) { if (nf < view[0] || nf > view[1]) continue;   // eigene Notches (Rauschfilter)
+      const x = Math.round(fx(nf, W)) + .5; c.strokeStyle = "rgba(255,90,90,.9)"; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(x, 3); c.lineTo(x, H); c.stroke(); c.setLineDash([]);
+      c.fillStyle = "rgba(255,110,110,.95)"; c.font = "10px system-ui, sans-serif"; c.fillText("N", x + 2, 14); }
     c.strokeStyle = "#5cd0ff"; c.lineWidth = 1.2; c.beginPath(); for (let x = 0; x < W; x += .5) { const y = H - norm(val(x), L) / 255 * (H - 16) - 2; x ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke(); c.lineWidth = 1;
     const stp = niceStep((view[1] - view[0]) / Math.max(4, W / 110)), dig = Math.max(3, Math.min(6, Math.ceil(6 - Math.log10(stp) - 1e-9)));   // Teilung und Nachkommastellen nach Zoomstufe
     c.font = "11px system-ui, sans-serif"; c.fillStyle = "rgba(220,235,250,.8)";

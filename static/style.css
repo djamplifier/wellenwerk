@@ -484,3 +484,14 @@ canvas.dial { background: #02060d; } .rot-dials { background: radial-gradient(el
 .wf-area { position: relative; }
 .wf-pbox { position: absolute; bottom: 0; background: rgba(43,212,255,.07); border-left: 1px solid rgba(90,220,255,.85); border-right: 1px solid rgba(90,220,255,.85); pointer-events: none; box-shadow: 0 0 8px rgba(43,212,255,.25); }
 .wf-pbox .wf-car { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed rgba(255,120,120,.75); }
+/* ---------- Rauschfilter ---------- */
+.dspp { padding: 8px 10px; display: flex; flex-flow: row wrap; align-content: flex-start; gap: 8px 26px; font-size: 13px; overflow: auto; height: 100%; box-sizing: border-box; }
+.dsp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dsp-row > b { min-width: 42px; }
+.dsp-row input[type=range] { width: 120px; }
+.dsp-seg { display: inline-flex; border: 1px solid var(--line, #c9d3dd); border-radius: 6px; overflow: hidden; }
+.dsp-seg button { border: 0; border-radius: 0; padding: 3px 10px; background: transparent; }
+.dsp-seg button.on { background: var(--accent, #1f8fd6); color: #fff; }
+.dsp-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 8px; border-radius: 10px; background: color-mix(in srgb, #ff5a5a 15%, transparent); border: 1px solid color-mix(in srgb, #ff5a5a 50%, transparent); font-variant-numeric: tabular-nums; }
+.dsp-chip button { border: 0; background: none; padding: 0 4px; cursor: pointer; }
+.dspp .hint { margin: 0; } .dspp > p.hint { flex-basis: 100%; }

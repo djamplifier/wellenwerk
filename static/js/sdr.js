@@ -5,7 +5,7 @@ const RX = { players: new Map() };
 const isSdr = r => r && r.kind === "sdr";
 async function rxPlay(id) {
   if (RX.players.has(id)) return RX.players.get(id);
-  const P = { id, mute: store.get("rx.mute." + id, false), level: 0, pcm: new Set() };
+  const P = { id, mute: store.get("rx.mute." + id, false), level: 0, pcm: new Set(), dsp: dspChain() };
   RX.players.set(id, P);
   P.ctx = new AudioContext();
   P.node = P.ctx.createGain(); P.push = pcmScheduler(P.ctx, P.node);
@@ -17,7 +17,8 @@ async function rxPlay(id) {
     P.ws.onmessage = e => { const dv = new DataView(e.data), rate = dv.getUint32(0, true), s = new Int16Array(e.data, 4), f = new Float32Array(s.length);
       for (let i = 0; i < s.length; i++) f[i] = s[i] / 32768;
       P.pcm.forEach(fn => { try { fn(f, rate); } catch (err) { console.error(err); } });   // Dekoder bekommen den Ton direkt, ohne Umweg ueber die Wiedergabe
-      P.push(f, rate); };
+      const r = (WW.radios || []).find(x => x.id === id);                                   // Rauschfilter nur fuers Hoeren
+      P.push(P.dsp(f, rate, id === WW.current ? WW.rig : r?.state, true), rate); };
     P.ws.onclose = () => { if (RX.players.get(id) === P) setTimeout(open, 2000); }; };
   open();
   if (P.ctx.state !== "running") ["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, () => P.ctx.resume(), { once: true }));

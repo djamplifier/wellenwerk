@@ -212,6 +212,23 @@ When you move into another segment or tune to a known digital frequency (e.g. FT
 
 **Digimode frequency list:** FT8, FT4, JS8, WSPR, MSK144, PSK31, RTTY, Olivia, SSTV, FreeDV and CW QRP with their activity frequencies per band – a click sets frequency, mode and filter (in digital modes also the matching mode there). Found under **Memory → Digimode frequencies** (radio control), **Frequencies** in the digital-modes toolbar and as a drop-down **Frequencies ▾** in the FreeDV and SSTV windows.
 
+### Noise filters: NB, noise reduction (also AI) and notch
+
+**View → Noise filters** (or the **Noise filters** button in the toolbar) processes the audio you listen to – modelled on Thetis. It works for every source: SDR hardware, KiwiSDR, OpenWebRX and WebSDR as well as radios via CAT whose audio you hear through the PC sound card.
+
+- **NB (noise blanker):** blanks short impulses (ignition, electric fences, switch-mode supplies). The slider sets the sensitivity. With your own SDR hardware (RTL-SDR, Hermes Lite) there is also **“in the receiver (IQ)”** or the **NB** button on the radio display. It blanks on the IQ data before any filter smears the impulses – that works much better.
+- **NR (noise reduction):**
+  - **Spectral** continuously estimates the noise per frequency and lowers it between and under the speech (Wiener filter, similar to NR2/NR4 in Thetis). The slider sets the strength.
+  - **AI (RNNoise)** is a neural network that separates speech from noise (like NR3 in Thetis). SSB often sounds almost noise-free with it. It is loaded the first time you switch it on (about 5 MB) and runs entirely on your computer.
+  - In a test with speech and strong noise both lowered the noise in speech pauses by 15–20 dB without making the speech quieter.
+- **ANF (auto notch):** removes steady whistles (carriers, tuners) automatically; speech stays.
+- **Own notches:** right-click in the waterfall → **“Notch here”**. The spot is marked with a dashed red line and stays on the same frequency in the band while you tune. Width 40–300 Hz, up to six notches; remove by right-click or in the window.
+- **Radio via CAT:** tick **“Listen to the radio through the PC”** and choose the radio's USB sound card as input; turn the radio's speaker down. This works in the desktop program (in a browser only via localhost or https). The radio's own filters (NB, NR, notch) are still switched with the buttons of the radio display.
+
+Digital decoders (FT8, RTTY, DMR, APRS …) always get the unprocessed audio – the filters only apply to listening.
+
+![Noise filters window with a notch in the waterfall](bilder/31-rauschfilter.png)
+
 ### Markers in the waterfall: typical frequencies, broadcast, repeaters
 
 ![Broadcast stations in the 49 m band, on air now (EiBi)](bilder/26-markierungen.png)

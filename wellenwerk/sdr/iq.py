@@ -12,7 +12,7 @@ from .dsp import AUDIO_RATE, Receiver, Spectrum, ZoomSpectrum
 class IqRig(SdrRig):
     MODES = ["USB", "LSB", "CW", "CWR", "AM", "FM", "PKTUSB", "PKTLSB", "RTTY"]
     LEVELS_SET = ["AF", "RF", "AGC"]
-    FUNCS_SET = []
+    FUNCS_SET = ["NB"]                       # Stoerimpulsaustaster auf den IQ-Daten
     RATE = 1536000
 
     def __init__(self, *a, **k):
@@ -24,6 +24,10 @@ class IqRig(SdrRig):
         self.zspec, self.zoom_span, self.zoom_cf, self._hist = ZoomSpectrum(), 0, 0, []
         self._buf, self._next_spec = [], 0.0
         self.state["sdr"]["hw"] = True
+
+    async def apply_func(self, name, on):
+        if name == "NB":
+            self.rx.nb = bool(on)
 
     # Hardware stellt die Mittenfrequenz; Empfangsfrequenz liegt bevorzugt etwas neben der Mitte (DC-Spitze)
     async def set_center(self, hz: int):

@@ -77,6 +77,8 @@ class Receiver:
         self.dc = 0.0
         self.deemph = 0.0
         self.disc = None
+        self.nb, self.nb_thr, self.nb_ref = False, 8.0, 0.0
+        self.nb_w = max(2, int(rate * 0.00015))                 # Austastbreite um jeden Impuls (~0,15 ms)
 
     def set(self, offset: float, mode: str, pb: tuple[int, int]):
         if (mode, pb) != (self.mode, self.pb):
@@ -94,7 +96,25 @@ class Receiver:
             h = (lowpass(bw, AUDIO_RATE, 129) * np.exp(2j * np.pi * mid / AUDIO_RATE * n)).astype(np.complex64)
         self.filt = Fir(h)
 
+    def blank(self, iq: np.ndarray) -> np.ndarray:
+        """Stoerimpulsaustaster auf den IQ-Daten (vor jedem Filter, wo Impulse noch kurz und hoch sind): Werte, die weit ueber
+        dem typischen Pegel liegen, samt kurzer Umgebung auf null setzen."""
+        if not len(iq):
+            return iq
+        a = np.abs(iq)
+        med = float(np.median(a[:: max(1, len(a) // 4096)]))
+        self.nb_ref = med if not self.nb_ref else 0.9 * self.nb_ref + 0.1 * med
+        hit = a > self.nb_thr * max(self.nb_ref, 1e-9)
+        if not hit.any():
+            return iq
+        mask = np.convolve(hit.astype(np.float32), np.ones(2 * self.nb_w + 1, np.float32), mode="same") > 0
+        out = iq.copy()
+        out[mask] = 0
+        return out
+
     def process(self, iq: np.ndarray) -> np.ndarray:
+        if self.nb:
+            iq = self.blank(iq)
         n = len(iq)
         ph = self.nco_phase + (-2 * np.pi * self.offset / self.rate) * np.arange(n)
         x = iq * np.exp(1j * ph).astype(np.complex64)

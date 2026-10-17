@@ -139,6 +139,11 @@ ctxRegister(".pane-programs tr[data-id]", el => { const sp = PRG.spots.find(x =>
     { label: `${PRG.names[sp.prog]}-Seite der Referenz öffnen`, icon: "i-globe", act: () => window.open(prgSite(sp.prog, sp.ref.split(",")[0]), "_blank") }, { label: "Referenz kopieren", icon: "i-copy", act: () => clipCopy(sp.ref) },
     ...(sp.lat != null && WW.home ? [{ label: "Antenne zur Referenz drehen", icon: "i-compass", act: () => { const b = bearingTo(sp.lat, sp.lon); if (b) rotorSet(b.az); } }] : []), "-", ...callItems(sp.call, { freq: sp.freq }).slice(1)]; });
 ctxRegister(".pane-calendar tr[data-call]", el => callItems(el.dataset.call.split("/")[0]));
+ctxRegister(".pane-waterfall .wf-spec, .pane-waterfall .wf-fall", (el, e) => { const root = el.closest(".pane-root"), v = (root?.dataset.view || "").split(",").map(Number);
+  if (v.length < 2 || !v[1]) return []; const r = el.getBoundingClientRect(), f = v[0] + (e.clientX - r.left) / r.width * (v[1] - v[0]), near = DSP.opts.notches.find(x => Math.abs(x - f) < (v[1] - v[0]) / 150);
+  return [{ label: `${fmtMHz(f)} MHz`, disabled: true }, { label: "Hierher abstimmen", icon: "i-tune", act: () => setFreq(snapRaster(f)) }, "-",
+    near ? { label: "Notch entfernen", act: () => dspSet({ notches: DSP.opts.notches.filter(x => x !== near) }) } : { label: "Notch hier (Pfeifton ausblenden)", icon: "i-filter", act: () => dspNotchAt(f) },
+    ...(DSP.opts.notches.length ? [{ label: "Alle Notches löschen", act: () => dspSet({ notches: [] }) }] : []), { label: "Rauschfilter …", icon: "i-sliders", act: () => addPanel("rig", "dsp") }]; });
 ctxRegister(".pane-bandmap canvas.bm", (el, e) => { const r = el.getBoundingClientRect(), y = e.clientY - r.top, hit = (el._hits || []).reduce((b, h) => Math.abs(h[0] - 5 - y) < Math.abs((b?.[0] ?? 1e9) - 5 - y) ? h : b, null);
   if (hit && Math.abs(hit[0] - 5 - y) < 12) { const s = hit[1]; return [...freqItems(s.freq), "-", ...callItems(s.call, { freq: s.freq })]; }
   return [{ label: "Bandkarte folgt dem Funkgerät", act: () => WW.emit("bm-follow") }]; });

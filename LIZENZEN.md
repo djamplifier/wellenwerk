@@ -37,6 +37,7 @@ und sind Marken der jeweiligen Inhaber.
 | [D3](https://d3js.org/) 7.9.0 | (Satelliten-Überflug, Hilfsfunktionen) | ISC |
 | Erdbilder `static/vendor/earth/` | 3D-Erde (Graulinie, Karten, Peilkarte, Satelliten) | gemeinfrei – NASA Earth Observatory: „Blue Marble: Next Generation“ (Reto Stöckli, NASA GSFC, Dezember 2004, mit Relief und Meeresboden) und „Earth at Night 2016 / Black Marble“ (NASA Earth Observatory, Joshua Stevens, Suomi NPP VIIRS). Auf 4096×2048 bzw. 3600×1800 Pixel verkleinert. |
 | [satellite.js](https://github.com/shashwatak/satellite-js) 5.0.0 | Satellitenbahnen | MIT |
+| [RNNoise](https://github.com/xiph/rnnoise) (Xiph.Org, Jean-Marc Valin), als WebAssembly von [@shiguredo/rnnoise-wasm](https://github.com/shiguredo/rnnoise-wasm) 2025.1.5 (`static/vendor/rnnoise/`) | KI-Rauschminderung im Fenster „Rauschfilter“, wird nur bei Bedarf geladen | BSD-3-Clause (RNNoise), Apache-2.0 (WebAssembly-Fassung, Lizenztext in `static/vendor/rnnoise/LICENSE`) |
 | [topojson-client](https://github.com/topojson/topojson-client) 3.1.0, [world-atlas](https://github.com/topojson/world-atlas) 2.0.2 | Ländergrenzen (Natural Earth, gemeinfrei) | ISC |
 | [marked](https://github.com/markedjs/marked) 12.0.2 | Anzeige der Anleitung | MIT |
 | Schrift [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono) | Frequenz- und Uhranzeigen | SIL Open Font License 1.1 – Copyright (c) 2012, Carrois Type Design, Ralph du Carrois, with Reserved Font Name „Share“. Text in [`licenses/OFL-1.1.txt`](licenses/OFL-1.1.txt) |
