@@ -186,6 +186,8 @@ function createDspPanel(root) {
       <div class="dsp-row"><b>Notch</b> ${o.notches.length ? o.notches.map((f, i) => `<span class="dsp-chip">${fmtMHz(f)} <button type="button" data-del="${i}" title="Entfernen">×</button></span>`).join("") : `<span class="hint">Rechtsklick im Wasserfall → „Notch hier“</span>`}
         <label class="chk">Breite <select data-o="notchW">${[40, 80, 150, 300].map(w => `<option ${w === o.notchW ? "selected" : ""}>${w}</option>`).join("")}</select> Hz</label>
         ${o.notches.length ? `<button type="button" data-a="clear">alle löschen</button>` : ""}</div>
+      ${rx && typeof sdrTxOn === "function" && sdrTxOn() ? `<div class="dsp-row"><b>Senden</b> Mikrofon <select data-a="txmic"><option value="">Standard-Mikrofon</option>${devs.map(d => `<option value="${esc(d.deviceId)}" ${d.deviceId === store.get("tx.mic", "") ? "selected" : ""}>${esc(d.label || "Eingang")}</option>`).join("")}</select>
+        Pegel <input type="range" data-a="txlvl" min="0.2" max="2" step="0.1" value="${store.get("tx.lvl", 1)}"></div>` : ""}
       ${rx ? `<p class="hint">Wirkt auf den Ton dieses Empfängers. Digitale Dekoder bekommen weiter den unbearbeiteten Ton.</p>` : `
       <div class="dsp-row"><label class="chk"><input type="checkbox" data-a="rigaud" ${RIGAUD.on ? "checked" : ""}> Ton des Funkgeräts über den PC hören</label>
         <select data-a="rigdev"><option value="">Standard-Eingang</option>${devs.map(d => `<option value="${esc(d.deviceId)}" ${d.deviceId === ra.dev ? "selected" : ""}>${esc(d.label || "Eingang")}</option>`).join("")}</select></div>
@@ -196,6 +198,8 @@ function createDspPanel(root) {
   box.addEventListener("change", async e => { const t = e.target;
     if (t.dataset.hw) return act("/api/rig/func", { name: t.dataset.hw, on: t.checked });
     if (t.dataset.a === "rigaud") { try { t.checked ? await rigAudioStart($('[data-a="rigdev"]', box)?.value || "") : rigAudioStop(true); } catch (err) { t.checked = false; toast(err.message, true); } draw(); }
+    if (t.dataset.a === "txmic") { store.set("tx.mic", t.value); if (typeof sdrMicStop === "function") sdrMicStop(); }
+    if (t.dataset.a === "txlvl") store.set("tx.lvl", +t.value);
     if (t.dataset.a === "rigdev") { store.set("rigaud", { ...store.get("rigaud", {}), dev: t.value }); if (RIGAUD.on) rigAudioStart(t.value).catch(err => toast(err.message, true)); } });
   box.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.nr) dspSet({ nr: b.dataset.nr });

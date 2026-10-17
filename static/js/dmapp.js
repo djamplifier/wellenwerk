@@ -114,10 +114,12 @@ async function dmPlay(data) {
   const sink = store.get("dm.out", ""); if (sink && D.txCtx.setSinkId) { try { await D.txCtx.setSinkId(sink); } catch (e) { toast("Ausgabe: " + e.message, true); } }
   const sr = D.txCtx.sampleRate, buf = D.txCtx.createBuffer(1, data.length, sr); buf.copyToChannel(data, 0);
   const g = D.txCtx.createGain(); g.gain.value = store.get("dm.txlvl", 50) / 100;
-  D.txSrc = D.txCtx.createBufferSource(); D.txSrc.buffer = buf; D.txSrc.connect(g).connect(D.txCtx.destination);
+  const sdr = typeof sdrTxOn === "function" && sdrTxOn(), out = sdr ? sdrTxNode(D.txCtx) : D.txCtx.destination;   // SDR sendet selbst: Ton an den Dienst statt an die Soundkarte
+  if (sdr) SDRTX.ext++;
+  D.txSrc = D.txCtx.createBufferSource(); D.txSrc.buffer = buf; D.txSrc.connect(g).connect(out);
   await post("/api/rig/ptt", { on: true }).catch(e => toast("PTT: " + e.message, true));
   WW.emit("dm-tx", true); await new Promise(r => setTimeout(r, 120));
-  return new Promise(res => { D.txSrc.onended = () => { D.txSrc = null; setTimeout(() => post("/api/rig/ptt", { on: false }).catch(() => { }), 80); WW.emit("dm-tx", false); res(); };
+  return new Promise(res => { D.txSrc.onended = () => { D.txSrc = null; setTimeout(() => { post("/api/rig/ptt", { on: false }).catch(() => { }); if (sdr) { SDRTX.ext--; setTimeout(() => out.disconnect(), 300); } }, sdr ? 200 : 80); WW.emit("dm-tx", false); res(); };
     D.txSrc.start(); });
 }
 function dmTxStop() {   // Senden abbrechen; PTT geht in jedem Fall aus (auch wenn die Wiedergabe kein Ende meldet)
@@ -128,8 +130,10 @@ function dmTune() {
   if (D.txSrc) return; D.txCtx = D.txCtx || new AudioContext(); const sr = D.txCtx.sampleRate, f = D.rx ? D.rx.freq : 1500, d = new Float32Array(sr * 4);
   for (let i = 0; i < d.length; i++) d[i] = 0.5 * Math.sin(TAU * f * i / sr);
   const b = D.txCtx.createBuffer(1, d.length, sr); b.copyToChannel(d, 0); const g = D.txCtx.createGain(); g.gain.value = store.get("dm.txlvl", 50) / 100;
-  D.txSrc = D.txCtx.createBufferSource(); D.txSrc.buffer = b; D.txSrc.connect(g).connect(D.txCtx.destination);
-  post("/api/rig/ptt", { on: true }).then(() => { WW.emit("dm-tx", true); D.txSrc.onended = () => { D.txSrc = null; post("/api/rig/ptt", { on: false }); WW.emit("dm-tx", false); }; D.txSrc.start(); }).catch(e => { D.txSrc = null; toast(e.message, true); });
+  const sdr = typeof sdrTxOn === "function" && sdrTxOn(), out = sdr ? sdrTxNode(D.txCtx) : D.txCtx.destination; if (sdr) SDRTX.ext++;
+  D.txSrc = D.txCtx.createBufferSource(); D.txSrc.buffer = b; D.txSrc.connect(g).connect(out);
+  const fin = () => { if (sdr) { SDRTX.ext--; setTimeout(() => out.disconnect(), 300); } };
+  post("/api/rig/ptt", { on: true }).then(() => { WW.emit("dm-tx", true); D.txSrc.onended = () => { D.txSrc = null; post("/api/rig/ptt", { on: false }); WW.emit("dm-tx", false); fin(); }; D.txSrc.start(); }).catch(e => { D.txSrc = null; fin(); toast(e.message, true); });
 }
 
 // ---------- Bereiche ----------

@@ -14,6 +14,11 @@ Parameter (mit ; getrennt):
   direct=0|1|2          RTL-SDR: Direktabtastung fuer Kurzwelle bei Geraeten ohne V4-Konverter (2 = Q-Zweig, z. B. Blog V3)
   bias=0|1              Speisespannung fuer aktive Antennen/LNA
   rx_offset=0           Frequenzversatz LNB/Transverter: Anzeige = Hardware + Versatz
+  HackRF senden (nur mit Amateurfunkzulassung, gesendet wird nur in den Amateurfunkbaendern):
+  tx=1                  Senden freigeben
+  power=20              Sendeverstaerkung 0..47 dB (HackRF gibt je nach Band nur wenige mW ab)
+  tx_amp=0|1            HackRF-Endverstaerker beim Senden (+11 dB)
+  Wichtig: Der HackRF hat kein Oberwellenfilter – am Ausgang gehoert ein Tiefpass fuer das jeweilige Band.
 """
 import asyncio
 import ctypes
@@ -276,6 +281,9 @@ def hackrf_devices() -> list[dict]:
 class HackRfRig(IqRig):
     kind = "hackrf"
     RATE = 4800000
+    TX_CAPABLE = True
+    TX_RATE = 2400000
+    TX_LO_OFF = 300000                                   # Sende-LO neben der Sendefrequenz: Traegerrest (DC) faellt nicht aufs Signal
 
     def __init__(self, *a, **k):
         super().__init__(*a, **k)
@@ -285,6 +293,10 @@ class HackRfRig(IqRig):
         self.state["offsets"] = dict(rx=self.rx_off, tx=0)
         self.state["sdr"]["ranges"] = [[1_000_000 + self.rx_off, 6_000_000_000 + self.rx_off]]
         self._cb = None
+        self._txcb = None
+        self.mox = False
+        self._ring = bytearray()
+        self._rl = threading.Lock()
 
     def _err(self, r, what):
         if r != 0:
@@ -352,14 +364,102 @@ class HackRfRig(IqRig):
             try:
                 raw = await asyncio.wait_for(self.q.get(), 3)
             except asyncio.TimeoutError:
+                if self.mox:                                 # beim Senden ruht der Empfang
+                    continue
                 raise RigError("HackRF liefert keine Daten mehr – USB getrennt?")
             s = np.frombuffer(raw, np.int8).astype(np.float32)
             iq = (s[0::2] + 1j * s[1::2]).astype(np.complex64) / 128.0
             await self.feed(iq)
 
+    # ---------- Senden (HackRF ist halbduplex: Empfang ruht) ----------
+    def _rx_start(self):
+        L, dev = self.lib, self.dev
+        L.hackrf_set_sample_rate(dev, float(self.rate))
+        L.hackrf_set_baseband_filter_bandwidth(dev, L.hackrf_compute_baseband_filter_bw(int(self.rate * 0.75)))
+        L.hackrf_set_amp_enable(dev, 1 if self.params.get("amp") in ("1", "ja", "true") else 0)
+        L.hackrf_set_freq(dev, max(1_000_000, int(self.center - self.rx_off)))
+        self._err(L.hackrf_start_rx(dev, self._cb, None), "Empfang starten")
+
+    async def tx_start(self):
+        from .dsp import Modulator
+        if not self.dev:
+            raise RigError("HackRF nicht verbunden")
+        L, dev = self.lib, self.dev
+        for _ in range(6):                                   # kurz Ton sammeln
+            if self.tx_pending() >= 1200:
+                break
+            await asyncio.sleep(0.025)
+        self.mod = Modulator(self.TX_RATE)
+        self._ph = 0.0
+        with self._rl:
+            self._ring = bytearray()
+        L.hackrf_stop_rx(dev)
+        f = int(self.state["freq"] - self.rx_off)
+        L.hackrf_set_sample_rate(dev, float(self.TX_RATE))
+        L.hackrf_set_baseband_filter_bandwidth(dev, L.hackrf_compute_baseband_filter_bw(int(self.TX_RATE * 0.75)))
+        L.hackrf_set_freq(dev, f + self.TX_LO_OFF)
+        L.hackrf_set_amp_enable(dev, 1 if self.params.get("tx_amp") in ("1", "ja", "true") else 0)
+        L.hackrf_set_txvga_gain(dev, max(0, min(47, int(float(self.params.get("power", 20))))))
+        self.mox = True
+        self._fill(0.25)
+
+        def cb(t):                                           # USB-Thread: Puffer aus dem Ring fuellen, sonst Stille
+            tr = t.contents
+            n = tr.buffer_length
+            with self._rl:
+                k = min(n, len(self._ring))
+                if k:
+                    ctypes.memmove(tr.buffer, bytes(self._ring[:k]), k)
+                    del self._ring[:k]
+            if k < n:
+                ctypes.memset(ctypes.addressof(tr.buffer.contents) + k, 0, n - k)
+            tr.valid_length = n
+            return 0
+
+        self._txcb = HCB(cb)
+        self._err(L.hackrf_start_tx(dev, self._txcb, None), "Senden starten")
+        self._txtask = asyncio.ensure_future(self._tx_loop())
+
+    def _fill(self, seconds: float):
+        """Ring bis auf seconds Vorrat mit moduliertem, um den LO-Versatz verschobenem Signal (Int8) fuellen."""
+        want = int(self.TX_RATE * seconds) * 2
+        while len(self._ring) < want and self.mox:
+            a = self.tx_take(480)                            # 40 ms Ton
+            z = self.mod.process(a, self.state["mode"], fm_dev=int(float(self.params.get("fm_dev", 2500))))
+            ph = self._ph + (-2 * np.pi * self.TX_LO_OFF / self.TX_RATE) * np.arange(len(z))
+            z = z * np.exp(1j * ph).astype(np.complex64)
+            self._ph = float((ph[-1] - 2 * np.pi * self.TX_LO_OFF / self.TX_RATE) % (2 * np.pi))
+            b = np.empty(len(z) * 2, np.int8)
+            b[0::2] = np.clip(z.real * 120, -127, 127)
+            b[1::2] = np.clip(z.imag * 120, -127, 127)
+            with self._rl:
+                self._ring += b.tobytes()
+
+    async def _tx_loop(self):
+        loop = asyncio.get_running_loop()
+        while self.mox:
+            await loop.run_in_executor(None, self._fill, 0.25)
+            await asyncio.sleep(0.02)
+
+    async def tx_stop(self):
+        if not self.mox:
+            return
+        self.mox = False
+        if self.dev:
+            try:
+                self.lib.hackrf_stop_tx(self.dev)
+            except Exception:
+                pass
+            self._rx_start()
+
     async def close(self):
+        self.mox = False
         if self.dev:
             dev, self.dev = self.dev, None
+            try:
+                self.lib.hackrf_stop_tx(dev)
+            except Exception:
+                pass
             try:
                 self.lib.hackrf_stop_rx(dev)
                 self.lib.hackrf_close(dev)

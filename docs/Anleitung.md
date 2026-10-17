@@ -134,7 +134,7 @@ Wellenwerk kann öffentliche Internet-Empfänger wie ein Funkgerät benutzen –
 
 1. **Datei → Empfänger (WebSDR/KiwiSDR) …** (oder im Verbinden-Dialog der Reiter **Empfänger (SDR)**). Die Liste zeigt über 1800 öffentliche Empfänger aus receiverbook.de und kiwisdr.com, nach Entfernung zur eigenen Station sortiert. Filter: Art, Suchtext (Ort, Rufzeichen, Locator, Antenne), **freie Plätze**, **empfängt aktuelle Frequenz**.
 2. **verbinden** macht den Empfänger zum Hauptgerät; **2. Empf.** verbindet ihn zusätzlich, das eigene Funkgerät bleibt Hauptgerät.
-3. Ton, S-Meter und Wasserfall kommen sofort; Abstimmen, Betriebsart, Lautstärke, AGC und Störaustaster wie beim Funkgerät. Senden ist bei Empfängern natürlich gesperrt.
+3. Ton, S-Meter und Wasserfall kommen sofort; Abstimmen, Betriebsart, Lautstärke, AGC und Störaustaster wie beim Funkgerät. Senden ist bei Internet-Empfängern natürlich gesperrt (mit eigenem HackRF oder Hermes Lite 2 geht es, siehe unten).
 
 Ist ein Empfänger das aktuelle Gerät, zeigt die Geräteanzeige nur die Bänder, die er empfangen kann, und oben neben den Geräte-Reitern eine **Auswahlliste mit weiteren Empfängern** (freie Plätze, nach Entfernung) – ein Klick wechselt den Server; klappt das nicht, verbindet Wellenwerk wieder mit dem vorherigen.
 
@@ -145,8 +145,18 @@ Ist ein Empfänger das aktuelle Gerät, zeigt die Geräteanzeige nur die Bänder
 **Digitalbetrieb:** als Eingang **Empfänger (WebSDR/KiwiSDR)** wählen – PSK, RTTY, SSTV usw. dekodieren dann den Ton des Empfängers.
 
 **Eigene SDR-Hardware** (unten im Reiter, „Empfänger direkt eintragen“):
-- **RTL-SDR-Stick:** das Programm `rtl_tcp` (Paket *rtl-sdr*) starten und als Adresse `127.0.0.1:1234` eintragen – oder Parameter `start=1`, dann startet Wellenwerk es selbst. Kurzwelle ohne Konverter: `direct=2` (z. B. RTL-SDR Blog V3), mit Konverter `offset=125000000`. Mit LNB oder Transverter davor `rx_offset=…` in Hz – für QO-100 mit LNB 9750 MHz `rx_offset=9750000000`, dann zeigt Wellenwerk 10489,5 MHz an. Weitere Parameter: `gain=30`, `ppm=…`, `rate=1536000`.
-- **Hermes Lite 2** (und andere openHPSDR-Geräte): Adresse leer lassen – Wellenwerk sucht das Gerät im Netz – oder die IP eintragen. Parameter `rate=192000`, `gain=20`. In dieser Version nur Empfang.
+- **RTL-SDR-Stick direkt am USB:** Art **„RTL-SDR (USB direkt)“** wählen. Wellenwerk sucht den Stick selbst und trägt seine Seriennummer ein, Adresse leer lassen. Ein Zusatzprogramm ist nicht nötig; die Treiberbibliothek (Fassung von RTL-SDR Blog) ist im Desktop-Programm enthalten. Auch der **RTL-SDR Blog V4** empfängt so Kurzwelle ab 500 kHz. Ältere Sticks ohne eingebauten Konverter brauchen für Kurzwelle `direct=2`. Weitere Parameter: `gain=auto` oder dB, `ppm=…`, `bias=1` (Speisespannung für aktive Antennen).
+- **HackRF One direkt am USB:** Art **„HackRF One (USB)“**. Empfang von 1 MHz bis 6 GHz mit 4,8 MS/s. Parameter: `gain=auto` oder 0–102 dB, `amp=1` (Vorverstärker), `bias=1`.
+- **RTL-SDR über das Netz:** Art „RTL-SDR (rtl_tcp)“ und als Adresse `127.0.0.1:1234` bzw. den Rechner mit `rtl_tcp` eintragen.
+- **Hermes Lite 2** (und andere openHPSDR-Geräte): Adresse leer lassen – Wellenwerk sucht das Gerät im Netz – oder die IP eintragen. Parameter `rate=192000`, `gain=20`.
+- **Einmalig unter Windows:** RTL-SDR und HackRF brauchen den WinUSB-Treiber. Programm **Zadig** (zadig.akeo.ie) starten, Options → List All Devices, das Gerät wählen (RTL-SDR: „Bulk-In, Interface (Interface 0)“), Treiber **WinUSB** → Install. **Linux:** udev-Regeln aus den Paketen *rtl-sdr* bzw. *hackrf* installieren; beim RTL-SDR den DVB-T-Treiber sperren (`blacklist dvb_usb_rtl28xxu`).
+
+**Senden mit SDR (HackRF One, Hermes Lite 2)** – nur mit Amateurfunkzulassung:
+- Im Profil den Parameter **`tx=1`** setzen, sonst bleibt das Senden gesperrt. Gesendet wird ausschließlich innerhalb der Amateurfunkbänder (IARU Region 1, das ganze Signal muss im Band liegen); eigene Bereiche mit `tx_ranges=von-bis,…` in kHz, z. B. für Region 2.
+- **PTT** wie beim Funkgerät (Taste TX, Leertaste, Digitalbetrieb). Bei gedrückter PTT geht das **Mikrofon** auf Sendung (Auswahl und Pegel im Fenster **Rauschfilter** unter „Senden“). **Digitalbetrieb und SSTV** schicken ihren Ton direkt ans SDR, nicht an die Soundkarte. Betriebsarten USB, LSB, CW, AM, FM und die Datenarten. Nach spätestens drei Minuten am Stück schaltet Wellenwerk die PTT selbst ab.
+- **HackRF One:** Parameter `power=0…47` (Sendeverstärkung, Vorgabe 20) und `tx_amp=1` (Endverstärker). Der HackRF gibt je nach Band nur einige Milliwatt ab und schaltet beim Senden den Empfang ab. **Der HackRF hat kein Oberwellenfilter – am Ausgang gehört unbedingt ein Tiefpass bzw. Bandpass für das jeweilige Band, sonst strahlt er Oberwellen ab.**
+- **Hermes Lite 2:** Parameter `power=0…15` (Vorgabe 4) und `pa=1` (eingebaute Endstufe, bis etwa 5 W). Der HL2 hat eigene Tiefpassfilter.
+- Wellenwerk begrenzt den Pegel und filtert den Ton auf die Sprachbandbreite. Im Test lag das unterdrückte Seitenband 50 dB und mehr tiefer, alles außerhalb von 3 kHz über 85 dB.
 
 Wellenwerk berechnet Spektrum, Wasserfall und Ton (USB, LSB, CW, AM, FM) selbst; das S-Meter ist nicht kalibriert (`smeter_offset=…`).
 

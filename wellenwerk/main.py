@@ -2775,6 +2775,22 @@ async def ws_audio(websocket: WebSocket, radio: str = ""):
         AUDIO_SUBS.get(rid, {}).pop(websocket, None)
 
 
+@app.websocket("/ws/tx")
+async def ws_tx(websocket: WebSocket, radio: str = ""):
+    """Sendeton fuer sendefaehige SDRs (HackRF, Hermes Lite 2): Binaerbloecke [Abtastrate uint32 LE][PCM int16 LE mono]
+    vom Mikrofon bzw. von den Digimodes. Gesendet wird nur bei gedrueckter PTT (/api/rig/ptt) und nur in den Amateurfunkbaendern."""
+    await websocket.accept()
+    rid = radio or radios.current or ""
+    try:
+        while True:
+            b = await websocket.receive_bytes()
+            r = radios.rig(rid)
+            if r is not None and hasattr(r, "tx_push") and len(b) > 4:
+                r.tx_push(b[4:], struct.unpack("<I", b[:4])[0])
+    except WebSocketDisconnect:
+        pass
+
+
 @app.get("/api/voice", tags=["Empfänger"])
 async def voice_status():
     """Optionales Sprachmodul (vom Nutzer selbst gebaute mbelib in <Datenordner>/module): Zustand, Fundort, Ordner."""

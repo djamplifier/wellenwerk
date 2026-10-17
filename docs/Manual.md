@@ -140,7 +140,7 @@ Wellenwerk can use public internet receivers like a radio – for listening, for
 
 1. **File → Receivers (WebSDR/KiwiSDR) …** (or the **Receiver (SDR)** tab in the Connect dialog). The list shows more than 1800 public receivers from receiverbook.de and kiwisdr.com, sorted by distance from your station. Filters: type, search text (place, callsign, locator, antenna), **free slots**, **receives current frequency**.
 2. **connect** makes the receiver the main radio; **2nd rx** connects it in addition, your own radio stays the main radio.
-3. Audio, S-meter and waterfall arrive immediately; tuning, mode, volume, AGC and noise blanker work as with a radio. Transmitting is of course blocked for receivers.
+3. Audio, S-meter and waterfall arrive immediately; tuning, mode, volume, AGC and noise blanker work as with a radio. Transmitting is of course blocked for internet receivers (with your own HackRF or Hermes Lite 2 it works, see below).
 
 When a receiver is the current radio, the display only shows the bands it can receive, and next to the radio tabs a **list with more receivers** appears (free slots, by distance) – one click switches the server; if that fails, Wellenwerk reconnects to the previous one.
 
@@ -151,8 +151,18 @@ When a receiver is the current radio, the display only shows the bands it can re
 **Digital modes:** choose **Receiver (WebSDR/KiwiSDR)** as input – PSK, RTTY, SSTV etc. then decode the receiver's audio.
 
 **Your own SDR hardware** (bottom of the tab, “enter receiver directly”):
-- **RTL-SDR stick:** start the program `rtl_tcp` (package *rtl-sdr*) and enter `127.0.0.1:1234` as address – or the parameter `start=1`, then Wellenwerk starts it itself. Shortwave without converter: `direct=2` (e.g. RTL-SDR Blog V3), with converter `offset=125000000`. With an LNB or transverter in front use `rx_offset=…` in Hz – for QO-100 with a 9750 MHz LNB `rx_offset=9750000000`, Wellenwerk then shows 10489.5 MHz. More parameters: `gain=30`, `ppm=…`, `rate=1536000`.
-- **Hermes Lite 2** (and other openHPSDR devices): leave the address empty – Wellenwerk searches the network – or enter the IP. Parameters `rate=192000`, `gain=20`. Receive only in this version.
+- **RTL-SDR stick directly on USB:** choose the type **“RTL-SDR (USB direct)”**. Wellenwerk finds the stick and enters its serial number; leave the address empty. No extra program is needed; the driver library (RTL-SDR Blog version) is included in the desktop program. The **RTL-SDR Blog V4** receives shortwave from 500 kHz this way. Older sticks without a built-in converter need `direct=2` for shortwave. Further parameters: `gain=auto` or dB, `ppm=…`, `bias=1` (supply voltage for active antennas).
+- **HackRF One directly on USB:** type **“HackRF One (USB)”**. Reception from 1 MHz to 6 GHz at 4.8 MS/s. Parameters: `gain=auto` or 0–102 dB, `amp=1` (preamplifier), `bias=1`.
+- **RTL-SDR over the network:** type “RTL-SDR (rtl_tcp)” and enter `127.0.0.1:1234` or the computer running `rtl_tcp` as address.
+- **Hermes Lite 2** (and other openHPSDR devices): leave the address empty – Wellenwerk searches the network – or enter the IP. Parameters `rate=192000`, `gain=20`.
+- **Once on Windows:** RTL-SDR and HackRF need the WinUSB driver. Start **Zadig** (zadig.akeo.ie), Options → List All Devices, choose the device (RTL-SDR: “Bulk-In, Interface (Interface 0)”), driver **WinUSB** → Install. **Linux:** install the udev rules from the *rtl-sdr* or *hackrf* packages; for the RTL-SDR block the DVB-T driver (`blacklist dvb_usb_rtl28xxu`).
+
+**Transmitting with an SDR (HackRF One, Hermes Lite 2)** – amateur radio licence required:
+- Set the parameter **`tx=1`** in the profile, otherwise transmitting stays locked. Wellenwerk transmits only inside the amateur bands (IARU Region 1; the whole signal must be in the band); own ranges with `tx_ranges=from-to,…` in kHz, e.g. for Region 2.
+- **PTT** as with a radio (TX button, space bar, digital modes). While PTT is pressed the **microphone** goes on air (choice and level in the **Noise filters** window under “Transmit”). **Digital modes and SSTV** send their audio straight to the SDR instead of the sound card. Modes USB, LSB, CW, AM, FM and the data modes. After at most three minutes in one go Wellenwerk releases the PTT itself.
+- **HackRF One:** parameters `power=0…47` (transmit gain, default 20) and `tx_amp=1` (power amplifier). Depending on the band the HackRF delivers only a few milliwatts and switches reception off while transmitting. **The HackRF has no harmonic filter – a low-pass or band-pass filter for the band in use is mandatory at the output, otherwise it radiates harmonics.**
+- **Hermes Lite 2:** parameters `power=0…15` (default 4) and `pa=1` (built-in power amplifier, up to about 5 W). The HL2 has its own low-pass filters.
+- Wellenwerk limits the level and filters the audio to voice bandwidth. In tests the unwanted sideband was 50 dB or more down, everything outside 3 kHz more than 85 dB.
 
 Wellenwerk computes spectrum, waterfall and audio (USB, LSB, CW, AM, FM) itself; the S-meter is not calibrated (`smeter_offset=…`).
 

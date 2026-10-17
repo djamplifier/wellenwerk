@@ -7,7 +7,7 @@ from .usbsdr import HackRfRig, RtlUsbRig
 
 TYPES = {"kiwisdr": dict(cls=KiwiRig, label="KiwiSDR", needs="url"), "openwebrx": dict(cls=OpenWebRXRig, label="OpenWebRX", needs="url"),
          "rtltcp": dict(cls=RtlTcpRig, label="RTL-SDR (rtl_tcp)", needs=""),
-         "hl2": dict(cls=Hl2Rig, label="Hermes Lite 2 / openHPSDR (Empfang)", needs=""),
+         "hl2": dict(cls=Hl2Rig, label="Hermes Lite 2 / openHPSDR", needs=""),
          "rtlusb": dict(cls=RtlUsbRig, label="RTL-SDR (USB direkt)", needs=""),
          "hackrf": dict(cls=HackRfRig, label="HackRF One (USB)", needs="")}
 

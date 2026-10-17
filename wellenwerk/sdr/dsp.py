@@ -192,3 +192,84 @@ class ZoomSpectrum:
             p = p[: k * 1024].reshape(1024, k).max(axis=1)
         self.avg = p if self.avg is None or len(self.avg) != len(p) else self.avg * 0.5 + p * 0.5
         return np.clip((self.avg + 125) * 2.0, 0, 255).astype(np.uint8)
+
+
+# ---------- Senden: Ton (12 kHz) -> IQ fuer sendefaehige SDRs ----------
+def hilbert_taps(n: int = 127) -> np.ndarray:
+    """FIR-Hilbert-Transformator (ungerade Laenge, Hamming-Fenster): 90-Grad-Phasenschieber fuer SSB."""
+    k = np.arange(n) - (n - 1) // 2
+    h = np.zeros(n)
+    odd = k % 2 != 0
+    h[odd] = 2 / (np.pi * k[odd])
+    return (h * np.hamming(n)).astype(np.float32)
+
+
+class FirInterp:
+    """Interpolation um den Faktor u (Nullen einfuegen + Tiefpass), Zustand ueber Bloecke."""
+    def __init__(self, u: int, rate_in: float, taps: int = 63):
+        self.u = u
+        self.f = Fir((lowpass(0.45 * rate_in / 2 * 0.9, rate_in * u, taps) * u).astype(np.complex64))
+
+    def __call__(self, x: np.ndarray) -> np.ndarray:
+        if self.u == 1 or not len(x):
+            return x
+        y = np.zeros(len(x) * self.u, np.complex64)
+        y[:: self.u] = x
+        return self.f(y)
+
+
+def interp_plan(rate: int) -> list[int]:
+    """Stufen von 12 kHz auf die Senderate (umgekehrte Dezimierung: erst kleine Faktoren mit steilem Filter)."""
+    return list(reversed(decim_plan(rate)))
+
+
+class Modulator:
+    """Ton (Float32, 12 kHz, -1..1) -> komplexes Basisband bei rate (Traeger auf 0 Hz) fuer USB, LSB, AM, FM, CW.
+    Mit Hochpass/Tiefpass fuer die Sprachbandbreite und einem Begrenzer, damit nichts uebersteuert (Splatter)."""
+    def __init__(self, rate: int):
+        self.rate = rate
+        self.stages, r = [], AUDIO_RATE
+        for u in interp_plan(rate):
+            self.stages.append(FirInterp(u, r, 63 if u <= 4 else 95))
+            r *= u
+        self.hil = Fir(hilbert_taps(127))
+        self.dly = Fir(np.eye(1, 127, 63, dtype=np.float32)[0])        # gleiche Verzoegerung wie der Hilbert-Zweig
+        self.bp = Fir(self._bandpass(200, 2800))
+        self.fm_ph = 0.0
+        self.cw_ph = 0.0
+        self.peak = 0.1
+
+    @staticmethod
+    def _bandpass(lo, hi, n=129):
+        return (lowpass(hi, AUDIO_RATE, n) - lowpass(lo, AUDIO_RATE, n)).astype(np.float32)
+
+    def process(self, x: np.ndarray, mode: str, cw_pitch: int = 600, fm_dev: int = 2500) -> np.ndarray:
+        if not len(x):
+            return np.zeros(0, np.complex64)
+        m = mode.upper()
+        x = x.astype(np.float32)
+        if m not in ("FM", "PKTFM"):
+            x = self.bp(x)
+        pk = float(np.max(np.abs(x)))                         # langsame Pegelregelung + harte Grenze
+        self.peak = max(pk, self.peak * 0.995)
+        x = np.clip(x * (0.9 / max(self.peak, 0.05)), -1, 1).astype(np.float32)
+        if m in ("USB", "PKTUSB", "RTTY", "LSB", "PKTLSB", "CW", "CWR"):
+            i, q = self.dly(x), self.hil(x)
+            z = (i + 1j * q) if m in ("USB", "PKTUSB", "RTTY", "CW") else (i - 1j * q)
+            if m in ("CW", "CWR"):                               # Ton liegt bei pitch: so verschieben, dass der Traeger auf der Anzeige liegt
+                s = -cw_pitch if m == "CW" else cw_pitch
+                ph = self.cw_ph + 2 * np.pi * s / AUDIO_RATE * np.arange(len(z))
+                z = z * np.exp(1j * ph)
+                self.cw_ph = float((ph[-1] + 2 * np.pi * s / AUDIO_RATE) % (2 * np.pi))
+            z = z.astype(np.complex64) * 0.7
+        elif m in ("AM", "SAM"):
+            z = (0.5 * (1 + 0.8 * x)).astype(np.complex64)
+        elif m in ("FM", "PKTFM"):
+            ph = self.fm_ph + np.cumsum(2 * np.pi * fm_dev * x / AUDIO_RATE)
+            self.fm_ph = float(ph[-1] % (2 * np.pi))
+            z = (0.8 * np.exp(1j * ph)).astype(np.complex64)
+        else:
+            raise ValueError(f"Senden in {mode} nicht möglich")
+        for st in self.stages:
+            z = st(z)
+        return z.astype(np.complex64)

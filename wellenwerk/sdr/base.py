@@ -67,7 +67,7 @@ class SdrRig:
                     preamp=[], att=[], agc=[0, 2, 6, 3], ranges={}, max_rit=0, max_xit=0, memories=[],
                     ui_levels=ui_levels, ui_funcs=[dict(name=n, label=FUNCS.get(n, n)) for n in self.FUNCS_SET],
                     ui_ops=[], ui_choices=[dict(name="AGC", label="AGC", options=[dict(value=a, label=AGC_NAMES[a]) for a in (0, 2, 6, 3)])],
-                    meters=["STRENGTH"], receiver=True)
+                    meters=["STRENGTH"], receiver=not self.tx_allowed(), tx=self.tx_allowed(), ptt=self.tx_allowed())
 
     # ---------- Digitalfunk-Erkennung: FM-Diskriminator der letzten Sekunden (dvsync, alle Verfahren gleichzeitig) ----------
     def dv_feed(self, x, rate: int):
@@ -376,9 +376,110 @@ class SdrRig:
         await self.apply_func(name, bool(on))
         await self.changed(True)
 
-    async def set_ptt(self, on: bool):
-        if on:
+    # ---------- Senden (nur sendefaehige SDRs: HackRF, Hermes Lite 2) ----------
+    TX_CAPABLE = False
+    TX_RATE = 48000
+    TX_MAX_S = 180                                   # laengstes Senden am Stueck, dann Abschaltung (Schutz vor haengender PTT)
+
+    def tx_allowed(self) -> bool:
+        return self.TX_CAPABLE and str(self.params.get("tx", "0")).lower() in ("1", "ja", "true")
+
+    def tx_ranges(self) -> list:
+        """Erlaubte Sendebereiche: Amateurfunkbaender (Region 1) oder eigene Liste tx_ranges=von-bis,von-bis in kHz."""
+        own = self.params.get("tx_ranges")
+        if own:
+            out = []
+            for part in str(own).replace(" ", "").split(","):
+                a, _, b = part.partition("-")
+                try:
+                    out.append((float(a) * 1000, float(b) * 1000))
+                except ValueError:
+                    pass
+            return out
+        from ..bands import BANDS
+        return [(lo, hi) for _, lo, hi, _ in BANDS]
+
+    def tx_check(self):
+        if not self.TX_CAPABLE:
             raise RigError("Dies ist ein Empfänger – Senden ist nicht möglich")
+        if not self.tx_allowed():
+            raise RigError("Senden ist für dieses Gerät nicht freigegeben (im Profil Parameter tx=1 setzen – nur mit Amateurfunkzulassung)")
+        f, mode = self.state["freq"], self.state["mode"]
+        lo, hi = (f - 3000, f + 3000) if mode not in ("FM", "AM", "SAM") else (f - 6000, f + 6000)
+        if not any(a <= lo and hi <= b for a, b in self.tx_ranges()):
+            raise RigError(f"{f / 1e6:.4f} MHz liegt nicht (ganz) in einem Amateurfunkband – Senden gesperrt")
+
+    def tx_push(self, pcm: bytes, rate: int):
+        """Sendeton von der Oberflaeche (Mikrofon, Digimodes): Int16, beliebige Rate -> 12 kHz in die Warteschlange."""
+        import numpy as np
+        from .dsp import AUDIO_RATE
+        x = np.frombuffer(pcm, "<i2").astype(np.float32) / 32768
+        if rate != AUDIO_RATE and len(x):
+            n = int(len(x) * AUDIO_RATE / rate)
+            x = np.interp(np.arange(n) * (rate / AUDIO_RATE), np.arange(len(x)), x).astype(np.float32)
+        if not hasattr(self, "txq"):
+            self.txq = deque()
+        self.txq.append(x)
+        while sum(len(b) for b in self.txq) > AUDIO_RATE * 120:        # hoechstens 2 min Vorrat
+            self.txq.popleft()
+
+    def tx_take(self, n: int):
+        """n Werte (12 kHz) aus der Warteschlange, fehlende als Stille."""
+        import numpy as np
+        out = np.zeros(n, np.float32)
+        k, q = 0, getattr(self, "txq", None)
+        while q and k < n:
+            b = q[0]
+            m = min(len(b), n - k)
+            out[k:k + m] = b[:m]
+            k += m
+            if m < len(b):
+                q[0] = b[m:]
+            else:
+                q.popleft()
+        return out
+
+    def tx_pending(self) -> int:
+        return sum(len(b) for b in getattr(self, "txq", ()))
+
+    async def set_ptt(self, on: bool):
+        if not on:
+            if self.state.get("ptt"):
+                for _ in range(20):                      # Rest der Warteschlange noch senden (hoechstens 1 s), dann umschalten
+                    if not self.tx_pending():
+                        break
+                    await asyncio.sleep(0.05)
+                await self.tx_stop()
+                self.txq = deque()                       # Rest verwerfen (naechstes Senden beginnt frisch)
+                self.state["ptt"] = False
+                await self.changed(True)
+            return
+        if self.state.get("ptt"):
+            return
+        self.tx_check()
+        if not hasattr(self, "txq"):
+            self.txq = deque()
+        await self.tx_start()
+        self.state["ptt"] = True
+        self._tx_t0 = time.monotonic()
+        self.say(f"Senden auf {self.state['freq'] / 1e6:.4f} MHz {self.state['mode']}")
+        await self.changed(True)
+        asyncio.ensure_future(self._tx_watch())
+
+    async def _tx_watch(self):
+        t0 = self._tx_t0
+        while self.state.get("ptt") and self._tx_t0 == t0:
+            if time.monotonic() - t0 > self.TX_MAX_S:
+                self.say(f"Senden nach {self.TX_MAX_S} s automatisch beendet")
+                await self.set_ptt(False)
+                return
+            await asyncio.sleep(1)
+
+    async def tx_start(self):
+        raise RigError("Senden ist mit diesem Gerät nicht möglich")
+
+    async def tx_stop(self):
+        pass
 
     async def _no(self, *a, **k):
         raise RigError("Diese Funktion gibt es bei einem Empfänger nicht")

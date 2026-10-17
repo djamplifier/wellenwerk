@@ -29,7 +29,9 @@ Alle Versionen und Neuerungen: [Releases](https://github.com/djamplifier/wellenw
   Chat (Tastatur-QSO) über ARDOP, VARA, Packet und Telnet
 - **Signalerkennung per Klick**: Klick auf ein Signal im Wasserfall zeigt die Betriebsart (z. B. RTTY mit Baud/Shift, FT8, PSK31,
   SSTV mit Bildmodus, CW mit Tempo, Olivia, Sprache, AM) und öffnet auf Wunsch gleich den passenden Dekoder
-- **Empfänger ohne Funkgerät**: KiwiSDR, OpenWebRX, RTL-SDR, Hermes Lite 2 (Empfang), öffentliche Empfängerlisten, Wasserfall 2D/3D
+- **Empfänger ohne Funkgerät**: KiwiSDR, OpenWebRX, öffentliche Empfängerlisten, Wasserfall 2D/3D
+- **Eigene SDRs**: RTL-SDR (auch V4) und HackRF One direkt per USB, Hermes Lite 2 im Netz; **Senden** mit HackRF und Hermes Lite 2 (nur in den Amateurfunkbändern)
+- **Rauschfilter wie in Thetis**: Störimpulsaustaster, Rauschminderung spektral und per KI (RNNoise), Auto-Notch, Notch per Rechtsklick – für jede Tonquelle
 - **Winlink**: E-Mail über Funk – Postfach, Verfassen mit Anhängen, Austausch über Telnet, ARDOP, VARA (TCP-Schnittstelle) und Packet (AGW/Direwolf)
 - **Satelliten** (Doppler- und Rotor-Nachführung, Zeitplan, gemeinsame Sichtbarkeit), **Rotor** (Anschlag, Versatz, Überlauf), **Karten**
 - **Erweiterungen** (Plugins), Oberfläche Deutsch/Englisch, automatische Aktualisierung, Rückmeldung an die Entwickler aus dem Programm
