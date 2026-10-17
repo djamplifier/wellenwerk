@@ -223,7 +223,7 @@ Wechselst du in einen anderen Bereich oder stimmst du auf eine bekannte Digi-Fre
 - **NB (Störimpulsaustaster):** blendet kurze Störimpulse aus (Zündfunken, Weidezaun, Schaltnetzteile). Der Regler stellt die Empfindlichkeit ein. Bei eigener SDR-Hardware (RTL-SDR, Hermes Lite) gibt es zusätzlich **„im Empfänger (IQ)“** bzw. die Taste **NB** an der Geräteanzeige. Dort wird schon auf den IQ-Daten ausgetastet, bevor ein Filter die Impulse verschmiert – das wirkt deutlich besser.
 - **NR (Rauschminderung):**
   - **Spektral** schätzt laufend das Rauschen je Frequenz und senkt es zwischen und unter der Sprache ab (Wiener-Filter, ähnlich NR2/NR4 in Thetis). Der Regler bestimmt, wie stark.
-  - **KI (RNNoise)** ist ein neuronales Netz, das Sprache von Rauschen trennt (wie NR3 in Thetis). SSB klingt damit oft fast rauschfrei. Es wird beim ersten Einschalten geladen (ca. 5 MB) und arbeitet ganz auf deinem Rechner.
+  - **KI (RNNoise)** ist ein neuronales Netz, das Sprache von Rauschen trennt (wie NR3 in Thetis). Das Rauschen zwischen und unter der Sprache verschwindet weitgehend. Es wird beim ersten Einschalten geladen (ca. 5 MB) und arbeitet ganz auf deinem Rechner.
   - Im Test mit Sprache und kräftigem Rauschen senkten beide das Rauschen in den Sprechpausen um 15–20 dB, ohne die Sprache leiser zu machen.
 - **ANF (Auto-Notch):** entfernt gleichbleibende Pfeiftöne (Träger, Tuner) automatisch, Sprache bleibt.
 - **Eigene Notches:** Rechtsklick im Wasserfall → **„Notch hier“**. Die Stelle wird rot gestrichelt markiert und bleibt beim Abstimmen auf derselben Frequenz im Band. Breite 40–300 Hz, bis zu sechs Notches; entfernen per Rechtsklick oder im Fenster.

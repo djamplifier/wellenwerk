@@ -229,7 +229,7 @@ When you move into another segment or tune to a known digital frequency (e.g. FT
 - **NB (noise blanker):** blanks short impulses (ignition, electric fences, switch-mode supplies). The slider sets the sensitivity. With your own SDR hardware (RTL-SDR, Hermes Lite) there is also **“in the receiver (IQ)”** or the **NB** button on the radio display. It blanks on the IQ data before any filter smears the impulses – that works much better.
 - **NR (noise reduction):**
   - **Spectral** continuously estimates the noise per frequency and lowers it between and under the speech (Wiener filter, similar to NR2/NR4 in Thetis). The slider sets the strength.
-  - **AI (RNNoise)** is a neural network that separates speech from noise (like NR3 in Thetis). SSB often sounds almost noise-free with it. It is loaded the first time you switch it on (about 5 MB) and runs entirely on your computer.
+  - **AI (RNNoise)** is a neural network that separates speech from noise (like NR3 in Thetis). The noise between and under the speech largely disappears. It is loaded the first time you switch it on (about 5 MB) and runs entirely on your computer.
   - In a test with speech and strong noise both lowered the noise in speech pauses by 15–20 dB without making the speech quieter.
 - **ANF (auto notch):** removes steady whistles (carriers, tuners) automatically; speech stays.
 - **Own notches:** right-click in the waterfall → **“Notch here”**. The spot is marked with a dashed red line and stays on the same frequency in the band while you tune. Width 40–300 Hz, up to six notches; remove by right-click or in the window.
