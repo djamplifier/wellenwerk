@@ -3,14 +3,14 @@
 Stationssteuerung, Logbuch und Digitalbetrieb für Funkamateure – ein Desktop-Programm für Windows, macOS und Linux.
 Code, Logo und Icons sind eigenständig.
 
-## Download (Version 1.3.4)
+## Download (Version 1.3.5)
 | System | Datei |
 |---|---|
-| Windows 10/11 | [Wellenwerk-1.3.4-Windows-Setup.exe](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.4/Wellenwerk-1.3.4-Windows-Setup.exe) |
-| Mac mit Apple-Chip (M1–M4) | [Wellenwerk-1.3.4-Mac-AppleSilicon.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.4/Wellenwerk-1.3.4-Mac-AppleSilicon.dmg) |
-| Mac mit Intel-Chip | [Wellenwerk-1.3.4-Mac-Intel.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.4/Wellenwerk-1.3.4-Mac-Intel.dmg) |
-| Linux (alle Distributionen) | [Wellenwerk-1.3.4-Linux.AppImage](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.4/Wellenwerk-1.3.4-Linux.AppImage) |
-| Debian/Ubuntu | [wellenwerk_1.3.4_amd64.deb](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.4/wellenwerk_1.3.4_amd64.deb) |
+| Windows 10/11 | [Wellenwerk-1.3.5-Windows-Setup.exe](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.5/Wellenwerk-1.3.5-Windows-Setup.exe) |
+| Mac mit Apple-Chip (M1–M4) | [Wellenwerk-1.3.5-Mac-AppleSilicon.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.5/Wellenwerk-1.3.5-Mac-AppleSilicon.dmg) |
+| Mac mit Intel-Chip | [Wellenwerk-1.3.5-Mac-Intel.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.5/Wellenwerk-1.3.5-Mac-Intel.dmg) |
+| Linux (alle Distributionen) | [Wellenwerk-1.3.5-Linux.AppImage](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.5/Wellenwerk-1.3.5-Linux.AppImage) |
+| Debian/Ubuntu | [wellenwerk_1.3.5_amd64.deb](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.5/wellenwerk_1.3.5_amd64.deb) |
 
 Alle Versionen und Neuerungen: [Releases](https://github.com/djamplifier/wellenwerk/releases). Installierte Programme melden neue Versionen selbst.
 
