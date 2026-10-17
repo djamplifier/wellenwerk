@@ -481,3 +481,6 @@ canvas.dial { background: #02060d; } .rot-dials { background: radial-gradient(el
 .rc-bar:not(.cur) .rc-ruler .sg { opacity: .45; }
 .rc-status .chip.plan { color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, transparent); border-color: color-mix(in srgb, var(--pc) 50%, transparent); }
 .fl-tabs { flex-wrap: wrap; gap: 3px; } .fl-tabs button.on { background: var(--accent); color: #fff; } .fl-body { overflow: auto; height: calc(100% - 64px); } .fl-t tr { cursor: pointer; }
+.wf-area { position: relative; }
+.wf-pbox { position: absolute; bottom: 0; background: rgba(43,212,255,.07); border-left: 1px solid rgba(90,220,255,.85); border-right: 1px solid rgba(90,220,255,.85); pointer-events: none; box-shadow: 0 0 8px rgba(43,212,255,.25); }
+.wf-pbox .wf-car { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed rgba(255,120,120,.75); }

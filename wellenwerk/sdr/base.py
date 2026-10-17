@@ -336,6 +336,10 @@ class SdrRig:
         if not force and now - self._last_push < 0.2:       # Messwerte hoechstens 5x/s melden
             return
         self._last_push = now
+        try:
+            self.state["sdr"]["pb"] = list(self.passband())    # tatsaechlicher Durchlassbereich (Rahmen im Wasserfall)
+        except Exception:
+            pass
         await self.on_change(dict(self.state))
 
     # ---------- gleiche Schnittstelle wie rig.Rig ----------

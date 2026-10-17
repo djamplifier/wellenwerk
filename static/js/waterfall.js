@@ -21,7 +21,7 @@ function createWfPanel(root) {
     <button class="wf-zr" title="ganzer Bereich">⤢</button>
     <label class="wf-sl" title="Kontrast">◐<input type="range" class="wf-con" min="0.3" max="3" step="0.05" value="${st.con}"></label>
     <label class="wf-sl" title="Helligkeit">☀<input type="range" class="wf-bri" min="-1" max="1" step="0.02" value="${st.bri}"></label><span class="hint wf-info"></span><i class="grow"></i><button class="wf-opt" title="Einstellungen">${icon("i-gear")}</button></div>
-    <div class="wf-area"><canvas class="wf-spec"></canvas><canvas class="wf-fall"></canvas><canvas class="wf-3d hidden"></canvas></div>`;
+    <div class="wf-area"><canvas class="wf-spec"></canvas><canvas class="wf-fall"></canvas><canvas class="wf-3d hidden"></canvas><div class="wf-pbox hidden"><i class="wf-car"></i></div></div>`;
   const spec = $(".wf-spec", root), fall = $(".wf-fall", root), c3 = $(".wf-3d", root);
   let lut = wfLut(o.palette), last = null, view = null, rows = 0, gl = null, g3 = null, nLevel = [0, 255];
   // Quelle: data = Geraet, dessen Spektrum gezeigt wird; ctl = Geraet, das ein Klick abstimmt (SDR als Panadapter: Funkgeraet)
@@ -49,17 +49,29 @@ function createWfPanel(root) {
   // ---------- 2D ----------
   const draw2d = (l, L0) => { const L = adj(L0);
     const W = spec.clientWidth, H = spec.clientHeight, FH = fall.clientHeight; if (!W || !H) return;
-    if (spec.width !== W || spec.height !== H) { spec.width = W; spec.height = H; } if (fall.width !== W || fall.height !== FH) { fall.width = W; fall.height = FH; }
-    const c = spec.getContext("2d"), n = l.data.length, s = radioState();
+    const dpr = Math.min(3, devicePixelRatio || 1);                  // in voller Bildschirmaufloesung: scharfe Schrift und Linien
+    if (spec.width !== Math.round(W * dpr) || spec.height !== Math.round(H * dpr)) { spec.width = Math.round(W * dpr); spec.height = Math.round(H * dpr); } if (fall.width !== W || fall.height !== FH) { fall.width = W; fall.height = FH; }
+    const c = spec.getContext("2d"), n = l.data.length, s = radioState(); c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.fillStyle = "#08121c"; c.fillRect(0, 0, W, H);
-    const i0 = (view[0] - l.low) / (l.high - l.low) * n, i1 = (view[1] - l.low) / (l.high - l.low) * n;
-    const val = x => l.data[Math.max(0, Math.min(n - 1, Math.floor(i0 + x / W * (i1 - i0))))];
-    // Durchlassbereich
-    if (s.freq && s.passband !== undefined) { const pb = wfPass(s); c.fillStyle = "rgba(255,255,255,.08)"; c.fillRect(fx(s.freq + pb[0], W), 0, fx(s.freq + pb[1], W) - fx(s.freq + pb[0], W), H); }
-    c.strokeStyle = "#5cd0ff"; c.beginPath(); for (let x = 0; x < W; x++) { const y = H - norm(val(x), L) / 255 * (H - 14) - 2; x ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke();
-    c.fillStyle = "rgba(255,255,255,.6)"; c.font = "10px sans-serif"; const stp = niceStep((view[1] - view[0]) / 7);
-    for (let f = Math.ceil(view[0] / stp) * stp; f < view[1]; f += stp) { const x = fx(f, W); c.fillRect(x, 0, 1, 5); c.fillText((f / 1e6).toFixed(stp < 1000 ? 4 : 3), x + 2, 11); }
-    if (s.freq) { c.fillStyle = "rgba(255,80,80,.9)"; c.fillRect(fx(s.freq, W), 0, 1.5, H); }
+    const i0 = (view[0] - l.low) / (l.high - l.low) * n, i1 = (view[1] - l.low) / (l.high - l.low) * n, per = (i1 - i0) / W;
+    const val = x => { const a = i0 + (x + .5) * per - .5;              // gezoomt: zwischen den Messpunkten weich interpolieren, sonst staerkster Wert je Pixel
+      if (per < 1) { const k = Math.floor(a), t = a - k, d0 = l.data[Math.max(0, Math.min(n - 1, k))], d1 = l.data[Math.max(0, Math.min(n - 1, k + 1))]; return d0 + (d1 - d0) * t; }
+      let v = -1e9; for (let i = Math.floor(a), e = Math.max(i + 1, Math.floor(a + per)); i < e; i++) { const d = l.data[Math.max(0, Math.min(n - 1, i))]; if (d > v) v = d; } return v; };
+    if (typeof BANDSEGS !== "undefined") for (const sg of BANDSEGS[planRegion()] || []) {   // Bandplan-Bereiche als Streifen
+      const a = Math.max(view[0], sg[0] * 1000), b = Math.min(view[1], sg[1] * 1000); if (b <= a) continue; c.fillStyle = SEG_KIND[sg[2]].c; c.globalAlpha = .75; c.fillRect(fx(a, W), 0, Math.max(1, fx(b, W) - fx(a, W)), 3); c.globalAlpha = 1; }
+    // Durchlassbereich als Rahmen (Lage nach Betriebsart und Filter)
+    const pbox = $(".wf-pbox", root);
+    if (s.freq && s.passband !== undefined) { const pb = wfPass(s), x0 = fx(s.freq + pb[0], W), x1 = fx(s.freq + pb[1], W);
+      c.fillStyle = "rgba(43,212,255,.10)"; c.fillRect(x0, 3, x1 - x0, H - 3); c.strokeStyle = "rgba(90,220,255,.95)"; c.lineWidth = 1; c.strokeRect(Math.round(x0) + .5, 3.5, Math.max(1, Math.round(x1 - x0) - 1), H - 4);
+      pbox.classList.remove("hidden"); pbox.style.left = x0 + "px"; pbox.style.width = Math.max(2, x1 - x0) + "px"; pbox.style.top = H + "px";
+      const car = $(".wf-car", pbox); car.style.left = (fx(s.freq, W) - x0) + "px"; car.style.display = (s.mode === "USB" || s.mode === "LSB" || s.mode.startsWith("PKT")) ? "" : "none"; }
+    else pbox.classList.add("hidden");
+    c.strokeStyle = "#5cd0ff"; c.lineWidth = 1.2; c.beginPath(); for (let x = 0; x < W; x += .5) { const y = H - norm(val(x), L) / 255 * (H - 16) - 2; x ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke(); c.lineWidth = 1;
+    const stp = niceStep((view[1] - view[0]) / Math.max(4, W / 110)), dig = Math.max(3, Math.min(6, Math.ceil(6 - Math.log10(stp) - 1e-9)));   // Teilung und Nachkommastellen nach Zoomstufe
+    c.font = "11px system-ui, sans-serif"; c.fillStyle = "rgba(220,235,250,.8)";
+    for (let f = Math.ceil(view[0] / stp) * stp - stp; f < view[1]; f += stp) { const x = fx(f, W); for (let k = 1; k < 5; k++) { const xm = fx(f + stp * k / 5, W); if (xm > 0 && xm < W) c.fillRect(xm, 3, 1, 3); }
+      if (x < 0) continue; c.fillRect(x, 3, 1, 6); c.fillText((f / 1e6).toFixed(dig), x + 3, 14); }
+    if (s.freq) { const x = fx(s.freq, W); c.strokeStyle = "rgba(255,120,120,.9)"; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(x + .5, 3); c.lineTo(x + .5, H); c.stroke(); c.setLineDash([]); }
     for (const t of SIG.tags) { if (t.until < Date.now() || t.rf < view[0] || t.rf > view[1]) continue; const x = fx(t.rf, W), w = c.measureText(t.label).width + 8;   // erkannte Signale
       c.fillStyle = "rgba(20,30,40,.8)"; c.fillRect(x - w / 2, 14, w, 14); c.fillStyle = "#ffd166"; c.fillText(t.label, x - w / 2 + 4, 25); c.fillRect(x, 28, 1, 6); }
     if (typeof fmkDraw === "function") fmkDraw(c, W, view, srcs().data);           // typische Frequenzen, Rundfunk, Relais
@@ -74,8 +86,9 @@ function createWfPanel(root) {
   // Wasserfall laeuft gleichmaessig (wfScroller); Pixelwerte erst beim Zeichnen aus dem aktuellen Ausschnitt
   const scr = wfScroller(fall, ({ l, L: L0 }, W) => { const n = l.data.length, out = new Uint8Array(W), L = adj(L0); if (!view) return out;
     const i0 = (view[0] - l.low) / (l.high - l.low) * n, i1 = (view[1] - l.low) / (l.high - l.low) * n, per = (i1 - i0) / W;
-    for (let x = 0; x < W; x++) { const a = i0 + x * per; let v = -1e9;                       // mehrere Bins je Pixel: staerkster Wert
-      for (let i = Math.floor(a), e = Math.max(Math.floor(a) + 1, Math.floor(a + per)); i < e; i++) { const d = l.data[Math.max(0, Math.min(n - 1, i))]; if (d > v) v = d; }
+    for (let x = 0; x < W; x++) { const a = i0 + x * per; let v = -1e9;                       // mehrere Bins je Pixel: staerkster Wert; gezoomt: interpoliert
+      if (per < 1) { const b = a + per / 2 - .5, k = Math.floor(b), t = b - k, d0 = l.data[Math.max(0, Math.min(n - 1, k))], d1 = l.data[Math.max(0, Math.min(n - 1, k + 1))]; v = d0 + (d1 - d0) * t; }
+      else for (let i = Math.floor(a), e = Math.max(Math.floor(a) + 1, Math.floor(a + per)); i < e; i++) { const d = l.data[Math.max(0, Math.min(n - 1, i))]; if (d > v) v = d; }
       out[x] = (l.low <= view[0] + (x + 0.5) * (view[1] - view[0]) / W && view[0] + (x + 0.5) * (view[1] - view[0]) / W <= l.high) ? norm(v, L) : 0; }
     return out; }, { pps: +o.pps || 25 });
   // ---------- 3D (WebGL2) ----------
@@ -137,12 +150,18 @@ function createWfPanel(root) {
     if (vkey !== view.join()) { vkey = view.join(); scr.invalidate(); root.dataset.view = vkey; }   // data-view: Ausschnitt (auch fuer Tests)
     last = l; rows++; const L = level(l.data); recent.push(l); if (recent.length > 24) recent.shift();
     $(".wf-info", root).textContent = `${((view[1] - view[0]) / 1000).toFixed(1)} kHz · ${l.name || ""}${S.pan ? " · Panadapter für " + ((WW.radios || []).find(r => r.id === S.ctl)?.name || "Funkgerät") : ""}`;
+    if (st.mode === "3d") $(".wf-pbox", root).classList.add("hidden");
     st.mode === "3d" ? row3d(l, L) : draw2d(l, L); };
   // Breite: SDR rechnet den Ausschnitt selbst (feinere Aufloesung), Icom-Scope ueber SPECTRUM_SPAN, sonst nur Zoom
   const applySpan = () => { const S = srcs(); reqSpan = `${S.data}:${st.span}`; const r = (WW.radios || []).find(x => x.id === S.data); if (!r) return;
     if (isSdr(r)) api(`/api/radios/${S.data}/rig/span`, { method: "POST", body: { hz: +st.span || 0 } }).catch(() => { });
     else if (r.scope && st.span > 0) { const v = [2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000].find(x => x * 2 >= st.span) || 500000;
       api(`/api/radios/${S.data}/rig/level`, { method: "POST", body: { name: "SPECTRUM_SPAN", value: v } }).catch(() => { }); } };
+  // Gezoomt: Empfaenger mit eigener Spektrumberechnung (IQ-Geraete, KiwiSDR) liefern den Ausschnitt feiner – passende Breite anfordern
+  const zoomRes = () => { const S = srcs(), r = (WW.radios || []).find(x => x.id === S.data); if (!r || !isSdr(r) || !view || !last) return;
+    if (!(r.state?.sdr?.hw || r.sdr_type === "kiwisdr" || r.kind === "kiwisdr")) return;
+    const w = view[1] - view[0], full = (r.state?.sdr?.rate) || 0, sp = WF_SPANS.find(v => v >= w * 1.15) || 0, want = full && sp >= full * .8 ? 0 : sp;
+    if (want === (+st.span || 0)) return; st.span = want; zoomed = true; reqSpan = null; store.set("wf.view", st); $(".wf-span", root).value = String(want); };
   // ---------- Bedienung ----------
   const tune = hz => { const id = src(); (id && id !== WW.current ? api(`/api/radios/${id}/rig/freq`, { method: "POST", body: { hz } }) : post("/api/rig/freq", { hz })).catch(e => toast(e.message, true)); };
   [spec, fall].forEach(cv => {
@@ -157,7 +176,8 @@ function createWfPanel(root) {
     if (cv === spec) cv.addEventListener("mousemove", e => { if (typeof fmkTip !== "function") return; const r = cv.getBoundingClientRect(), t = fmkTip(e.clientX - r.left, e.clientY - r.top); if (cv.title !== t) cv.title = t; cv.style.cursor = t ? "pointer" : ""; });
     cv.addEventListener("wheel", e => { if (!view || !last) return; e.preventDefault(); scr.invalidate(); zoomed = true; const r = cv.getBoundingClientRect(), at = view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0]), k = e.deltaY > 0 ? 1.25 : 0.8;
       let a = at - (at - view[0]) * k, b = at + (view[1] - at) * k; if (b - a > last.high - last.low) [a, b] = [last.low, last.high]; if (b - a < 500) return;
-      if (a < last.low) { b += last.low - a; a = last.low; } if (b > last.high) { a -= b - last.high; b = last.high; } view = [a, b]; }, { passive: false });
+      if (a < last.low) { b += last.low - a; a = last.low; } if (b > last.high) { a -= b - last.high; b = last.high; } view = [a, b];
+      clearTimeout(st._zt); st._zt = setTimeout(zoomRes, 450); }, { passive: false });
     cv.addEventListener("pointerdown", e => { if (!view) return; const x0 = e.clientX, v0 = view.slice(), w = cv.getBoundingClientRect().width; cv._dragged = false;
       const mv = ev => { const df = (ev.clientX - x0) / w * (v0[1] - v0[0]); if (Math.abs(ev.clientX - x0) > 3) cv._dragged = true; let a = v0[0] - df, b = v0[1] - df; scr.invalidate();
         if (last) { if (a < last.low) { b += last.low - a; a = last.low; } if (b > last.high) { a -= b - last.high; b = last.high; } } view = [a, b]; };
@@ -212,7 +232,8 @@ function wfPanSdr() {
   if (want === "auto") return sdrs.length && !cur.scope ? sdrs[0] : null;
   return sdrs.includes(want) ? want : null;
 }
-function wfPass(s) { const m = s.mode, pb = +s.passband || 0;
-  if (m === "LSB" || m === "PKTLSB") return [-(pb || 2700), -100]; if (m === "CW") return [500 - (pb || 500) / 2, 500 + (pb || 500) / 2];
+function wfPass(s) { const m = s.mode, pb = +s.passband || 0;   // Durchlassbereich relativ zur angezeigten Frequenz (Hz)
+  if (Array.isArray(s.sdr?.pb) && s.sdr.pb.length === 2) return s.sdr.pb;                  // Empfaenger meldet seinen tatsaechlichen Bereich
+  if (m === "LSB" || m === "PKTLSB") return [-(pb || 2700), -100]; if (m === "CW" || m === "CWR" || m === "RTTY" || m === "RTTYR") return [-(pb || 500) / 2, (pb || 500) / 2];
   if (m === "AM" || m === "SAM" || m === "FM") return [-(pb || 9000) / 2, (pb || 9000) / 2]; return [100, pb || 2700]; }
 APPS.rig.panels.waterfall = { title: "Wasserfall", create: createWfPanel, dock: { ref: "face", dir: "below" }, size: { height: 340 } };
