@@ -92,62 +92,35 @@ function createRotDials(root) {
 const ROT = { target: null, path: "short" };
 function createRotMap(root) {
   root.innerHTML = `<div class="pane-tb rot-tb"><label>Rufzeichen <input class="rt-call" style="width:100px"></label><label>Land <select class="rt-country"><option value=""></option></select></label><label>Locator <input class="rt-loc" style="width:80px"></label>
-    <span class="seg2"><button data-p="short" class="on">Kurz</button><button data-p="long">Lang</button></span><span class="seg2"><button data-v="merc" class="on">Mercator</button><button data-v="gc">Großkreis</button></span><b class="rt-info"></b><button class="primary rt-go">Rotor drehen</button></div>
-    <div class="rot-mapbox"><div class="rt-merc" style="height:100%"></div><canvas class="rt-gc hidden"></canvas></div>`;
-  const m = L.map($(".rt-merc", root), { worldCopyJump: true, minZoom: 1, attributionControl: false }).setView([30, 10], 2);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 10 }).addTo(m); const lay = L.layerGroup().addTo(m), grey = L.layerGroup().addTo(m);
+    <span class="seg2"><button data-p="short" class="on">Kurz</button><button data-p="long">Lang</button></span><b class="rt-info"></b><button class="primary rt-go">Drehen</button></div>
+    <div class="rot-mapbox"></div>`;
   api("/api/countries").then(cs => { $(".rt-country", root).innerHTML += cs.map(c => `<option value="${c.lat},${c.lon},${esc(c.name)}">${esc(c.name)}</option>`).join(""); }).catch(() => { });
-  const view = () => $(".seg2 [data-v].on", root).dataset.v;
-  const draw = () => { lay.clearLayers(); grey.clearLayers(); L.polygon(nightPolygon(), { stroke: false, fillColor: "#001030", fillOpacity: .25, interactive: false }).addTo(grey);
-    if (WW.home) { L.circleMarker(WW.home, { radius: 6, color: "#fff", fillColor: "#f5a524", fillOpacity: 1, weight: 2 }).addTo(lay);
-      if (WW.rotor.connected && WW.rotor.az != null) { const pts = []; for (let d = 0; d <= 20000; d += 250) pts.push(destPoint(WW.home, WW.rotor.az, d)); splitLine(pts).forEach(sg => L.polyline(sg, { color: "#f59e0b", weight: 2 }).addTo(lay)); }
-      if (ROT.target) { L.circleMarker([ROT.target.lat, ROT.target.lon], { radius: 6, color: "#d62828", fillOpacity: 1 }).bindTooltip(ROT.target.name || "").addTo(lay);
-        const b = bearingTo(ROT.target.lat, ROT.target.lon), az = ROT.path === "long" ? (b.az + 180) % 360 : b.az, km = ROT.path === "long" ? 40030 - b.km : b.km;
-        const pts = []; for (let d = 0; d <= km; d += 200) pts.push(destPoint(WW.home, az, d)); splitLine(pts).forEach(sg => L.polyline(sg, { color: "#d62828", weight: 2, dashArray: "6 5" }).addTo(lay));
-        $(".rt-info", root).textContent = `${Math.round(az)}° · ${Math.round(km).toLocaleString(I18N.locale)} km`; ROT.az = az; } }
-    if (view() === "gc") drawGc(); };
-  const drawGc = async () => { const cv = $(".rt-gc", root); if (!window.d3) { await loadScript("/static/vendor/d3.min.js"); await loadScript("/static/vendor/topojson-client.min.js"); }
-    if (!WW.world) { const w = await (await fetch("/static/vendor/countries-110m.json")).json(); WW.world = { land: topojson.feature(w, w.objects.countries), borders: topojson.mesh(w, w.objects.countries, (a, b) => a !== b) }; }
-    azimuthalMap(cv, { target: ROT.target, rotor: WW.rotor, path: ROT.path }); };
+  const E = wwEarth($(".rot-mapbox", root), { mode: store.get("rt.mode", "azi"), modes: [["azi", "Großkreis"], ["flat", "Karte"], ["globe", "Globus"]], grid: "", onMode: m => store.set("rt.mode", m),
+    draw: (ctx, E) => drawBeam(ctx, E, WW.rotor, ROT.target),
+    onClick: ll => { if (ll) setTarget({ lat: ll[0], lon: ll[1], name: `${ll[0].toFixed(1)}°, ${ll[1].toFixed(1)}°` }); } });
+  const draw = () => {
+    E.points = WW.home ? [{ lat: WW.home[0], lon: WW.home[1], color: "#2bd4ff", r: 4, pulse: true }] : []; E.arcs = []; E.lines = [];
+    if (WW.home && WW.rotor.connected && WW.rotor.az != null && E.o.mode !== "azi") { const pts = []; for (let d = 0; d <= 20000; d += 250) pts.push(destPoint(WW.home, WW.rotor.az, d)); E.lines.push({ pts, color: "#7ff0ff", width: 2 }); }
+    if (WW.home && ROT.target) { E.points.push({ lat: ROT.target.lat, lon: ROT.target.lon, color: "#ff4fd8", r: 5, label: ROT.target.name || "" });
+      const b = bearingTo(ROT.target.lat, ROT.target.lon), az = ROT.path === "long" ? (b.az + 180) % 360 : b.az, km = ROT.path === "long" ? 40030 - b.km : b.km;
+      const pts = []; for (let d = 0; d <= km; d += 150) pts.push(destPoint(WW.home, az, d)); pts.push(destPoint(WW.home, az, km)); E.lines.push({ pts, color: "#ff4fd8", width: 2.2, dash: [7, 6], glow: 12 });
+      $(".rt-info", root).textContent = `${Math.round(az)}° · ${Math.round(km).toLocaleString(I18N.locale)} km`; ROT.az = az; }
+    if (WW.home) E.set({ center: E.o.mode === "azi" ? [WW.home[0], WW.home[1]] : E.o.center }); E.redraw(); };
   const setTarget = t => { ROT.target = t; draw(); };
   root.addEventListener("change", async e => {
     if (e.target.classList.contains("rt-country") && e.target.value) { const [la, lo, n] = e.target.value.split(","); setTarget({ lat: +la, lon: +lo, name: n }); }
     if (e.target.classList.contains("rt-loc") && e.target.value) { try { const r = await api(`/api/lookup/X?grid=${encodeURIComponent(e.target.value)}`); setTarget({ lat: r.lat, lon: r.lon, name: e.target.value.toUpperCase() }); } catch { } }
     if (e.target.classList.contains("rt-call") && e.target.value) { try { const r = await api(`/api/lookup/${encodeURIComponent(e.target.value)}?${logq()}`); setTarget({ lat: r.lat, lon: r.lon, name: `${e.target.value.toUpperCase()} (${r.country})` }); } catch { } } });
-  root.addEventListener("click", e => { const p = e.target.closest("[data-p]"), v = e.target.closest("[data-v]");
+  root.addEventListener("click", e => { const p = e.target.closest("[data-p]");
     if (p) { ROT.path = p.dataset.p; $$("[data-p]", root).forEach(x => x.classList.toggle("on", x === p)); draw(); }
-    if (v) { $$("[data-v]", root).forEach(x => x.classList.toggle("on", x === v)); $(".rt-merc", root).classList.toggle("hidden", v.dataset.v !== "merc"); $(".rt-gc", root).classList.toggle("hidden", v.dataset.v !== "gc"); setTimeout(() => { m.invalidateSize(); draw(); }, 30); }
     if (e.target.closest(".rt-go") && ROT.az != null) rotorSet(ROT.az); });
-  m.on("click", e => { setTarget({ lat: e.latlng.lat, lon: e.latlng.lng, name: `${e.latlng.lat.toFixed(1)}°, ${e.latlng.lng.toFixed(1)}°` }); });
-  $(".rt-gc", root).addEventListener("click", e => { const g = $(".rt-gc", root)._g; if (!g) return; const r = e.target.getBoundingClientRect(), x = e.clientX - r.left - g.c, y = e.clientY - r.top - g.c; if (Math.hypot(x, y) > g.R) return;
-    const ll = g.proj.invert([x + g.c, y + g.c]); if (ll) setTarget({ lat: ll[1], lon: ll[0], name: `${ll[1].toFixed(1)}°, ${ll[0].toFixed(1)}°` }); });
-  const ro = new ResizeObserver(() => { m.invalidateSize(); if (view() === "gc") drawGc(); }); ro.observe(root);
-  const offs = [WW.on("rotor", draw), WW.on("dx", d => { if (d?.lat != null) { $(".rt-call", root).value = d.call; setTarget({ lat: d.lat, lon: d.lon, name: `${d.call} (${d.country})` }); } })];
-  const t = setInterval(draw, 60000); draw(); return () => { ro.disconnect(); offs.forEach(f => f()); clearInterval(t); m.remove(); };
+  const offs = [WW.on("rotor", draw), WW.on("settings", draw), WW.on("dx", d => { if (d?.lat != null) { $(".rt-call", root).value = d.call; setTarget({ lat: d.lat, lon: d.lon, name: `${d.call} (${d.country})` }); } })];
+  draw(); return () => { offs.forEach(f => f()); E.destroy(); };
 }
 function destPoint(home, az, km) { const R = 6371, d = km / R, b = az * Math.PI / 180, la1 = home[0] * Math.PI / 180, lo1 = home[1] * Math.PI / 180;
   const la2 = Math.asin(Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(b)); const lo2 = lo1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la1), Math.cos(d) - Math.sin(la1) * Math.sin(la2));
   return [la2 * 180 / Math.PI, ((lo2 * 180 / Math.PI + 540) % 360) - 180]; }
 function splitLine(pts) { const out = [[]]; pts.forEach((p, i) => { if (i && Math.abs(p[1] - pts[i - 1][1]) > 180) out.push([]); out[out.length - 1].push(p); }); return out; }
-function azimuthalMap(cv, o = {}) {
-  const wrap = cv.parentElement, size = Math.max(200, Math.min(wrap.clientWidth, wrap.clientHeight) - 4), dpr = devicePixelRatio || 1, ctx = cv.getContext("2d");
-  cv.width = size * dpr; cv.height = size * dpr; cv.style.width = cv.style.height = size + "px"; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const home = WW.home || [51, 10], c = size / 2, R = c - 22;
-  const proj = d3.geoAzimuthalEquidistant().rotate([-home[1], -home[0]]).clipAngle(179.9).translate([c, c]).scale(R / Math.PI).precision(0.3), path = d3.geoPath(proj, ctx);
-  cv._g = { proj, c, R };
-  ctx.clearRect(0, 0, size, size); ctx.save(); ctx.beginPath(); ctx.arc(c, c, R, 0, 7); ctx.clip();
-  ctx.fillStyle = "#a9cdee"; ctx.fillRect(0, 0, size, size); ctx.beginPath(); path(d3.geoGraticule10()); ctx.strokeStyle = "rgba(30,60,100,.15)"; ctx.stroke();
-  ctx.beginPath(); path(WW.world.land); ctx.fillStyle = "#d9e6b8"; ctx.fill(); ctx.beginPath(); path(WW.world.borders); ctx.strokeStyle = "rgba(70,80,50,.45)"; ctx.lineWidth = .6; ctx.stroke();
-  const sun = sunPos(); ctx.beginPath(); path(d3.geoCircle().center([sun.lon + 180, -sun.lat]).radius(90)()); ctx.fillStyle = "rgba(0,10,40,.14)"; ctx.fill();
-  const vec = (az, len) => [c + Math.sin(az * Math.PI / 180) * len, c - Math.cos(az * Math.PI / 180) * len];
-  if (o.rotor?.connected && o.rotor.az != null) { const a = (o.rotor.az % 360) * Math.PI / 180, w = 30 * Math.PI / 180; ctx.beginPath(); ctx.moveTo(c, c); ctx.arc(c, c, R, a - w - Math.PI / 2, a + w - Math.PI / 2); ctx.closePath(); ctx.fillStyle = "rgba(255,150,0,.12)"; ctx.fill(); ctx.strokeStyle = "rgba(230,120,0,.75)"; ctx.setLineDash([4, 4]); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
-    const e = vec(o.rotor.az, R); ctx.beginPath(); ctx.moveTo(c, c); ctx.lineTo(e[0], e[1]); ctx.strokeStyle = "#f59e0b"; ctx.lineWidth = 2.5; ctx.stroke(); }
-  if (o.target) { ctx.beginPath(); path({ type: "LineString", coordinates: [[home[1], home[0]], [o.target.lon, o.target.lat]] }); ctx.strokeStyle = "#d62828"; ctx.lineWidth = 2; ctx.stroke(); const p = proj([o.target.lon, o.target.lat]); if (p) { ctx.fillStyle = "#d62828"; ctx.beginPath(); ctx.arc(p[0], p[1], 5, 0, 7); ctx.fill(); } }
-  (o.points || []).forEach(p => { const q = proj([p.lon, p.lat]); if (q) { ctx.fillStyle = BAND_COLORS[p.band] || "#64748b"; ctx.beginPath(); ctx.arc(q[0], q[1], 2.5, 0, 7); ctx.fill(); } });
-  ctx.beginPath(); ctx.arc(c, c, 4, 0, 7); ctx.fillStyle = "#f59e0b"; ctx.fill(); ctx.restore();
-  ctx.beginPath(); ctx.arc(c, c, R, 0, 7); ctx.strokeStyle = "#888"; ctx.lineWidth = 1.5; ctx.stroke(); ctx.fillStyle = "#333"; ctx.font = "11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  for (let a = 0; a < 360; a += 30) { const t = vec(a, R + 12); ctx.fillText(a % 90 === 0 ? { 0: "N", 90: "O", 180: "S", 270: "W" }[a] : a, t[0], t[1]); }
-}
 APPS.rot = {
   title: "Rotor", icon: "i-compass",
   panels: { dials: { title: "Rotor", create: createRotDials }, rmap: { title: "Karte", create: createRotMap } },
@@ -159,42 +132,51 @@ APPS.rot = {
 };
 
 // ---------- Karten ----------
-function createWorldMap(root) {
-  root.innerHTML = `<div class="pane-tb"><label class="chk"><input type="checkbox" class="wm-grey" checked> Graulinie</label><label class="chk"><input type="checkbox" class="wm-qso" checked> QSOs</label><label class="chk"><input type="checkbox" class="wm-spots" checked> DX-Spots</label><label class="chk"><input type="checkbox" class="wm-grid"> Locator-Felder</label></div><div class="wm" style="flex:1"></div>`;
-  const m = L.map($(".wm", root), { worldCopyJump: true, minZoom: 1 }).setView([30, 10], 2);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 12 }).addTo(m);
-  const G = { grey: L.layerGroup().addTo(m), qso: L.layerGroup().addTo(m), spots: L.layerGroup().addTo(m), grid: L.layerGroup().addTo(m), dx: L.layerGroup().addTo(m) };
-  const draw = async () => {
-    Object.values(G).forEach(g => g.clearLayers());
-    if ($(".wm-grey", root).checked) { L.polygon(nightPolygon(), { stroke: false, fillColor: "#001030", fillOpacity: .28, interactive: false }).addTo(G.grey); const s = sunPos(); L.circleMarker([s.lat, s.lon], { radius: 6, color: "#b8860b", fillColor: "#ffcc33", fillOpacity: 1 }).bindTooltip("Sonne im Zenit").addTo(G.grey); }
-    if ($(".wm-grid", root).checked) for (let lo = -180; lo < 180; lo += 20) for (let la = -90; la < 90; la += 10) { L.rectangle([[la, lo], [la + 10, lo + 20]], { color: "#1f5fae", weight: .5, fill: false, interactive: false }).addTo(G.grid);
-      L.marker([la + 5, lo + 10], { icon: L.divIcon({ className: "gridlbl", html: String.fromCharCode(65 + (lo + 180) / 20) + String.fromCharCode(65 + (la + 90) / 10) }), interactive: false }).addTo(G.grid); }
-    const r = await api("/api/map?" + logq());
-    if (r.home) L.circleMarker(r.home, { radius: 7, color: "#fff", fillColor: "#f5a524", fillOpacity: 1, weight: 2 }).bindPopup(`<b>${esc(WW.settings.callsign)}</b> ${esc(WW.settings.locator)}`).addTo(G.qso);
-    if ($(".wm-qso", root).checked) { const gr = {}; r.points.forEach(p => { const k = p.lat.toFixed(2) + "," + p.lon.toFixed(2); (gr[k] = gr[k] || []).push(p); });
-      Object.values(gr).forEach(g => { const p = g[0], col = BAND_COLORS[p.band] || "#94a3b8"; L.circleMarker([p.lat, p.lon], { radius: Math.min(4 + g.length, 11), color: col, fillColor: col, fillOpacity: p.exact ? .85 : .45, weight: 1 })
-        .bindPopup(`<b>${esc(p.country || "")}</b><br>` + g.slice(0, 12).map(q => `${esc(q.call)} · ${esc(q.band)} ${esc(q.mode)} · ${fmtDate(q.date)}`).join("<br>")).addTo(G.qso); }); }
-    if ($(".wm-spots", root).checked) WW.spots.forEach(sp => { if (sp.lat == null) return; L.circleMarker([sp.lat, sp.lon], { radius: 4, color: sp.status === "new_dxcc" ? "#d62828" : sp.status === "new_band" ? "#e09a1a" : "#3b6fb6", fillOpacity: .8, weight: 1 })
-      .bindTooltip(`${sp.call} · ${(sp.freq / 1e3).toFixed(1)} kHz · ${sp.country}`).on("click", () => tuneSpot(sp.freq, sp.call, sp.comment)).addTo(G.spots); });
-  };
-  m.on("click", e => { if (WW.rotor?.enabled && e.originalEvent.shiftKey) { const b = bearingTo(e.latlng.lat, e.latlng.lng); if (b) rotorSet(b.az); } });
-  root.addEventListener("change", draw);
-  const ro = new ResizeObserver(() => m.invalidateSize()); ro.observe(root);
-  const offs = [WW.on("qso", draw), WW.on("reload", draw), WW.on("dx", d => { G.dx.clearLayers(); if (d?.lat != null && WW.home) { L.polyline([WW.home, [d.lat, d.lon]], { color: "#d62828", weight: 2, dashArray: "6 6" }).addTo(G.dx); L.circleMarker([d.lat, d.lon], { radius: 7, color: "#fff", fillColor: "#d62828", fillOpacity: 1 }).bindTooltip(d.call, { permanent: true }).addTo(G.dx); } })];
-  const t = setInterval(draw, 120000); draw(); return () => { ro.disconnect(); offs.forEach(f => f()); clearInterval(t); m.remove(); };
+function createWorldMap(root) {   // Weltkarte: Erde als Karte oder Globus mit QSOs, Spots, Locator-Feldern und DX-Bogen
+  root.innerHTML = `<div class="pane-tb"><label class="chk"><input type="checkbox" class="wm-grey" checked> Graulinie</label><label class="chk"><input type="checkbox" class="wm-qso" checked> QSOs</label><label class="chk"><input type="checkbox" class="wm-spots" checked> Spots</label><label class="chk"><input type="checkbox" class="wm-grid"> Locator-Felder</label><span class="hint">Umschalt+Klick: Antenne drehen</span></div><div class="wm" style="height:calc(100% - 30px)"></div><div class="wm-pop hidden"></div>`;
+  const pop = $(".wm-pop", root); let pts = [], dx = null;
+  const E = wwEarth($(".wm", root), { mode: store.get("wm.mode", "flat"), modes: [["flat", "Karte"], ["globe", "Globus"]], grid: "", onMode: m => store.set("wm.mode", m),
+    onClick: (ll, hit, ev) => { pop.classList.add("hidden");
+      if (ev.shiftKey && WW.rotor?.enabled && ll) { const b = bearingTo(ll[0], ll[1]); if (b) rotorSet(b.az); return; }
+      if (hit?.spot) return tuneSpot(hit.spot.freq, hit.spot.call, hit.spot.comment);
+      if (hit?.qsos) { pop.innerHTML = `<b>${esc(hit.qsos[0].country || "")}</b><br>` + hit.qsos.slice(0, 12).map(q => `${esc(q.call)} · ${esc(q.band)} ${esc(q.mode)} · ${fmtDate(q.date)}`).join("<br>") + (hit.qsos.length > 12 ? `<br>… ${hit.qsos.length - 12} weitere` : "");
+        pop.style.left = Math.min(ev.offsetX + 12, root.clientWidth - 260) + "px"; pop.style.top = ev.offsetY + 40 + "px"; pop.classList.remove("hidden"); } } });
+  const build = () => { const on = c => $(c, root).checked; E.set({ terminator: on(".wm-grey"), grid: on(".wm-grid") ? "maiden" : "" });
+    const P = [];
+    if (on(".wm-qso")) { const gr = {}; pts.forEach(p => { const k = p.lat.toFixed(2) + "," + p.lon.toFixed(2); (gr[k] = gr[k] || []).push(p); });
+      Object.values(gr).forEach(g => { const p = g[0]; P.push({ lat: p.lat, lon: p.lon, color: BAND_COLORS[p.band] || "#94a3b8", r: Math.min(2.5 + g.length * .6, 7), qsos: g, tip: `${p.country || ""} · ${g.length} QSO${g.length > 1 ? "s" : ""}` }); }); }
+    if (on(".wm-spots")) WW.spots.forEach(sp => { if (sp.lat != null) P.push({ lat: sp.lat, lon: sp.lon, color: sp.status === "new_dxcc" ? "#ff3b5c" : sp.status === "new_band" ? "#ffb02e" : "#2bd4ff", r: 3, spot: sp, tip: `${sp.call} · ${(sp.freq / 1e3).toFixed(1)} kHz · ${sp.country}` }); });
+    if (WW.home) P.push({ lat: WW.home[0], lon: WW.home[1], color: "#2bd4ff", r: 4, pulse: true, tip: `${WW.settings.callsign || ""} ${WW.settings.locator || ""}` });
+    if (dx) P.push({ lat: dx.lat, lon: dx.lon, color: "#ff4fd8", r: 4, label: dx.call });
+    E.points = P; E.arcs = dx && WW.home ? [{ from: WW.home, to: [dx.lat, dx.lon], color: "#ff4fd8" }] : []; E.redraw(); };
+  const load = async () => { try { pts = (await api("/api/map?" + logq())).points; } catch { } build(); };
+  root.addEventListener("change", build);
+  const offs = [WW.on("qso", load), WW.on("reload", load), WW.on("spots", build), WW.on("dx", d => { dx = d?.lat != null ? d : null; build(); })];
+  const t = setInterval(load, 120000); load(); return () => { offs.forEach(f => f()); clearInterval(t); E.destroy(); };
 }
-function createBeamMap(root) {
-  root.innerHTML = `<div class="beam-wrap"><canvas class="bmc"></canvas><div class="beam-hover"></div></div>`;
-  const cv = $(".bmc", root); let pts = [], dx = null;
-  const draw = async () => { if (!window.d3) { await loadScript("/static/vendor/d3.min.js"); await loadScript("/static/vendor/topojson-client.min.js"); }
-    if (!WW.world) { const w = await (await fetch("/static/vendor/countries-110m.json")).json(); WW.world = { land: topojson.feature(w, w.objects.countries), borders: topojson.mesh(w, w.objects.countries, (a, b) => a !== b) }; }
-    azimuthalMap(cv, { points: pts, rotor: WW.rotor, target: dx }); };
-  cv.addEventListener("click", e => { const g = cv._g; if (!g) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left - g.c, y = e.clientY - r.top - g.c; if (Math.hypot(x, y) <= g.R) rotorSet((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360); });
-  cv.addEventListener("mousemove", e => { const g = cv._g; if (!g || !window.d3) return; const r = cv.getBoundingClientRect(), x = e.clientX - r.left - g.c, y = e.clientY - r.top - g.c; const ll = g.proj.invert([x + g.c, y + g.c]);
-    $(".beam-hover", root).textContent = Math.hypot(x, y) <= g.R && ll ? `${Math.round((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360)}° · ${Math.round(d3.geoDistance([WW.home[1], WW.home[0]], ll) * 6371).toLocaleString(I18N.locale)} km` : ""; });
-  api("/api/map?" + logq()).then(r => { pts = r.points; draw(); });
-  const ro = new ResizeObserver(draw); ro.observe(root); const offs = [WW.on("rotor", draw), WW.on("dx", d => { dx = d?.lat != null ? d : null; draw(); })];
-  return () => { ro.disconnect(); offs.forEach(f => f()); };
+function createBeamMap(root) {   // Peilkarte: mittabstandstreu um den eigenen Standort, Antennenkeule, QSOs, Ziel
+  root.innerHTML = `<div class="beam-wrap"></div><div class="beam-hover"></div>`;
+  let pts = [], dx = null;
+  const E = wwEarth($(".beam-wrap", root), { mode: "azi", grid: "", draw: (ctx, E) => drawBeam(ctx, E, WW.rotor, dx),
+    onClick: ll => { if (ll) { const b = bearingTo(ll[0], ll[1]); if (b) rotorSet(b.az); } },
+    onHover: (hit, ll) => { const b = ll && bearingTo(ll[0], ll[1]); $(".beam-hover", root).textContent = b ? `${Math.round(b.az)}° · ${Math.round(b.km).toLocaleString(I18N.locale)} km` : ""; } });
+  const build = () => { E.points = pts.map(p => ({ lat: p.lat, lon: p.lon, color: BAND_COLORS[p.band] || "#94a3b8", r: 2.2, glow: 6, tip: `${p.call} · ${p.band}` }));
+    if (dx) E.points.push({ lat: dx.lat, lon: dx.lon, color: "#ff4fd8", r: 4, label: dx.call });
+    E.arcs = dx && WW.home ? [{ from: WW.home, to: [dx.lat, dx.lon], color: "#ff4fd8" }] : []; if (WW.home) E.set({ center: [WW.home[0], WW.home[1]] }); E.redraw(); };
+  api("/api/map?" + logq()).then(r => { pts = r.points; build(); }).catch(build);
+  const offs = [WW.on("rotor", () => E.redraw()), WW.on("dx", d => { dx = d?.lat != null ? d : null; build(); }), WW.on("settings", build)];
+  return () => { offs.forEach(f => f()); E.destroy(); };
+}
+// Antennenkeule (Peilkarte/Rotorkarte): leuchtender Faecher in Drehrichtung, Hauptstrahl, eigener Standort
+function drawBeam(ctx, E, rot, target) {
+  if (E.o.mode !== "azi") return;
+  const [cx, cy] = E.azCenter(), R = E.azRadius();
+  if (rot?.connected && rot.az != null) { const a = (rot.az % 360) * Math.PI / 180, w = 30 * Math.PI / 180;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R); g.addColorStop(0, "rgba(43,212,255,.35)"); g.addColorStop(1, "rgba(43,212,255,.03)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a - w - Math.PI / 2, a + w - Math.PI / 2); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#7ff0ff"; ctx.lineWidth = 2.2; ctx.shadowColor = "#2bd4ff"; ctx.shadowBlur = 14; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(a) * R, cy - Math.cos(a) * R); ctx.stroke();
+    ctx.fillStyle = "#bff8ff"; ctx.font = "bold 13px 'Share Tech Mono', monospace"; ctx.textAlign = "center"; ctx.fillText(`${String(Math.round(((rot.az % 360) + 360) % 360)).padStart(3, "0")}°`, cx + Math.sin(a) * R * .55, cy - Math.cos(a) * R * .55 - 8); }
+  ctx.shadowBlur = 16; ctx.shadowColor = "#2bd4ff"; ctx.fillStyle = "#e6fbff"; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 7); ctx.fill();
 }
 APPS.map = {
   title: "Karten", icon: "i-globe",
@@ -346,16 +328,19 @@ function createSatPolar(root) {
     const l = SAT.now; if (l && l.el > -5) { const q = xy(l.az, l.el); ctx.beginPath(); ctx.arc(q[0], q[1], 6, 0, 7); ctx.fillStyle = l.el > 0 ? "#d62828" : "#888"; ctx.fill(); } };
   const ro = new ResizeObserver(draw); ro.observe(root); const offs = [WW.on("sat-tick", draw), WW.on("sat-sel", draw)]; return () => { ro.disconnect(); offs.forEach(f => f()); };
 }
-function createSatMap(root) {
-  root.innerHTML = `<div style="height:100%" class="sm"></div>`;
-  const m = L.map($(".sm", root), { worldCopyJump: true, minZoom: 1, attributionControl: false }).setView([20, 0], 1); L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 8 }).addTo(m);
-  const lay = L.layerGroup().addTo(m), grey = L.layerGroup().addTo(m); let last = 0;
-  const draw = () => { if (!SAT.sel || !SAT.now || Date.now() - last < 4000) return; last = Date.now(); lay.clearLayers(); grey.clearLayers(); const x = SAT.sel, now = new Date(), l = SAT.now;
-    L.polygon(nightPolygon(), { stroke: false, fillColor: "#001030", fillOpacity: .22, interactive: false }).addTo(grey); if (WW.home) L.circleMarker(WW.home, { radius: 5, color: "#fff", fillColor: "#f5a524", fillOpacity: 1, weight: 2 }).addTo(lay);
-    const pts = []; for (let t = -45; t <= 90; t++) { const p = satLook(x.rec, new Date(+now + t * 60e3)); if (p) pts.push([p.lat, p.lon]); } splitLine(pts).forEach(sg => L.polyline(sg, { color: "#d62828", weight: 1.5, dashArray: "4 4" }).addTo(lay));
-    L.circle([l.lat, l.lon], { radius: 6371 * Math.acos(6371 / (6371 + l.alt)) * 1000, color: l.el > 0 ? "#23a344" : "#1f5fae", weight: 1, fillOpacity: .08 }).addTo(lay);
-    L.circleMarker([l.lat, l.lon], { radius: 6, color: "#fff", fillColor: "#d62828", fillOpacity: 1, weight: 2 }).bindTooltip(x.name).addTo(lay); };
-  const ro = new ResizeObserver(() => m.invalidateSize()); ro.observe(root); const offs = [WW.on("sat-tick", draw), WW.on("sat-sel", () => { last = 0; draw(); })]; return () => { ro.disconnect(); offs.forEach(f => f()); m.remove(); };
+function createSatMap(root) {   // Satellit ueber der Erde: Bodenspur, Sichtbereich, eigener Standort
+  const E = wwEarth(root, { mode: store.get("sm.mode", "globe"), modes: [["globe", "Globus"], ["flat", "Karte"]], grid: "latlon", onMode: m => store.set("sm.mode", m) });
+  let last = 0, follow = true;
+  const draw = () => { if (!SAT.sel || !SAT.now || Date.now() - last < 3000) return; last = Date.now(); const x = SAT.sel, now = new Date(), l = SAT.now;
+    const track = []; for (let t = -45; t <= 90; t++) { const p = satLook(x.rec, new Date(+now + t * 60e3)); if (p) track.push([p.lat, p.lon]); }
+    const fr = Math.acos(6371 / (6371 + l.alt)) * 6371, foot = []; for (let a = 0; a <= 360; a += 4) foot.push(destPoint([l.lat, l.lon], a, fr));
+    E.lines = [{ pts: track, color: "#ffb02e", width: 1.6, dash: [5, 5], glow: 8 }, { pts: foot, color: l.el > 0 ? "#3dffa2" : "#2bd4ff", width: 1.4, glow: 10 }];
+    E.points = [...(WW.home ? [{ lat: WW.home[0], lon: WW.home[1], color: "#2bd4ff", r: 3.5, pulse: true }] : []), { lat: l.lat, lon: l.lon, color: "#ff4fd8", r: 5, pulse: true, label: x.name }];
+    E.arcs = WW.home && l.el > 0 ? [{ from: WW.home, to: [l.lat, l.lon], color: "#3dffa2", width: 1.4 }] : [];
+    if (follow && E.o.mode === "globe") E.set({ center: [Math.max(-60, Math.min(60, l.lat)), l.lon] }); else E.redraw(); };
+  root.addEventListener("pointerdown", () => { follow = false; });
+  root.addEventListener("dblclick", () => { follow = true; last = 0; draw(); });
+  const offs = [WW.on("sat-tick", draw), WW.on("sat-sel", () => { last = 0; follow = true; draw(); })]; return () => { offs.forEach(f => f()); E.destroy(); };
 }
 APPS.sat = {
   title: "Satelliten", icon: "i-sat",

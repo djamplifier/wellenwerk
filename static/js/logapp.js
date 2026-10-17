@@ -532,18 +532,14 @@ function createBandMap(root) {
 }
 
 // ---------- Graulinie, Uhr, Rotor ----------
-function createGreyline(root) {
-  root.innerHTML = `<div class="gl-map" style="height:100%"></div>`;
-  const m = L.map($(".gl-map", root), { worldCopyJump: true, zoomControl: false, attributionControl: false, minZoom: 0 }).setView([20, 10], 0);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 6 }).addTo(m);
-  const g = L.layerGroup().addTo(m), dx = L.layerGroup().addTo(m);
-  const draw = () => { g.clearLayers(); L.polygon(nightPolygon(), { stroke: false, fillColor: "#001030", fillOpacity: .32, interactive: false }).addTo(g);
-    const s = sunPos(); L.circleMarker([s.lat, s.lon], { radius: 4, color: "#b8860b", fillColor: "#ffcc33", fillOpacity: 1, weight: 1 }).addTo(g);
-    if (WW.home) L.circleMarker(WW.home, { radius: 3, color: "#fff", fillColor: "#f5a524", fillOpacity: 1, weight: 1 }).addTo(g); };
-  const ro = new ResizeObserver(() => { m.invalidateSize(); m.fitWorld(); }); ro.observe(root);
-  const t = setInterval(draw, 60000); draw();
-  const off = WW.on("dx", d => { dx.clearLayers(); if (d?.lat != null && WW.home) { L.polyline([WW.home, [d.lat, d.lon]], { color: "#d62828", weight: 1.5 }).addTo(dx); L.circleMarker([d.lat, d.lon], { radius: 3, color: "#d62828" }).addTo(dx); } });
-  return () => { clearInterval(t); ro.disconnect(); off(); m.remove(); };
+function createGreyline(root) {   // Graulinie: fotorealistische Erde, Globus oder Karte, eigener Standort und DX-Bogen
+  const E = wwEarth(root, { mode: store.get("gl.mode", "globe"), modes: [["globe", "Globus"], ["flat", "Karte"]], grid: "latlon", onMode: m => store.set("gl.mode", m) });
+  let dx = null;
+  const upd = () => { E.points = [...(WW.home ? [{ lat: WW.home[0], lon: WW.home[1], color: "#2bd4ff", r: 3.5, pulse: true, tip: WW.settings.callsign || "" }] : []),
+      ...(dx ? [{ lat: dx.lat, lon: dx.lon, color: "#ff4fd8", r: 3.5, label: dx.call, tip: `${dx.call} · ${dx.country || ""}` }] : [])];
+    E.arcs = dx && WW.home ? [{ from: WW.home, to: [dx.lat, dx.lon], color: "#ff4fd8" }] : []; E.redraw(); };
+  const offs = [WW.on("dx", d => { dx = d?.lat != null ? d : null; upd(); }), WW.on("settings", upd), WW.on("state", upd)]; upd();
+  return () => { offs.forEach(f => f()); E.destroy(); };
 }
 function createClock(root) {
   root.innerHTML = `<div class="clk"><div class="clk-t"></div><div class="clk-s"></div></div>`;
@@ -552,20 +548,27 @@ function createClock(root) {
   root.onclick = () => { utc = !utc; store.set("clk.utc", utc); };
   return () => clearInterval(t);
 }
-function dialGauge(cv, az, target, label) {
+function dialGauge(cv, az, target, label) {   // Holo-Skala: leuchtender Ring, Teilung, Ziel gestrichelt, Antennenrichtung als Lichtstrahl
   const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, c = cv.getContext("2d"); c.scale(devicePixelRatio, devicePixelRatio);
-  const w = cv.clientWidth, hh = cv.clientHeight, r = Math.min(w, hh) / 2 - 6, cx = w / 2, cy = hh / 2;
+  const w = cv.clientWidth, hh = cv.clientHeight, r = Math.min(w, hh) / 2 - 10, cx = w / 2, cy = hh / 2;
   if (r < 20) return;
-  const grd = c.createRadialGradient(cx, cy - r * 0.3, r * 0.1, cx, cy, r); grd.addColorStop(0, "#3a3f45"); grd.addColorStop(1, "#111");
-  c.fillStyle = "#c56a12"; c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill(); c.fillStyle = grd; c.beginPath(); c.arc(cx, cy, r * 0.9, 0, 7); c.fill();
-  c.strokeStyle = "#ddd"; c.fillStyle = "#f5a524"; c.font = `${Math.max(9, r * 0.11)}px system-ui`; c.textAlign = "center"; c.textBaseline = "middle";
-  for (let a = 0; a < 360; a += 10) { const rad = (a - 90) * Math.PI / 180, big = a % 30 === 0; c.beginPath(); c.moveTo(cx + Math.cos(rad) * r * 0.9, cy + Math.sin(rad) * r * 0.9); c.lineTo(cx + Math.cos(rad) * r * (big ? 0.78 : 0.84), cy + Math.sin(rad) * r * (big ? 0.78 : 0.84)); c.stroke();
-    if (big) c.fillText(a, cx + Math.cos(rad) * r * 0.66, cy + Math.sin(rad) * r * 0.66); }
-  if (target != null) { const tr = (target - 90) * Math.PI / 180; c.strokeStyle = "#6aa8ff"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(tr) * r * 0.85, cy + Math.sin(tr) * r * 0.85); c.stroke(); c.setLineDash([]); }
-  if (az != null) { const ar = (az - 90) * Math.PI / 180; c.strokeStyle = "#fff"; c.lineWidth = 3; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(ar) * r * 0.85, cy + Math.sin(ar) * r * 0.85); c.stroke(); c.lineWidth = 1; }
-  c.fillStyle = "#444"; c.beginPath(); c.arc(cx, cy, r * 0.12, 0, 7); c.fill();
-  c.fillStyle = "#ff7a1a"; c.font = `bold ${Math.max(11, r * 0.16)}px "Share Tech Mono", monospace`; c.fillText(az != null ? String(Math.round(((az % 360) + 360) % 360)).padStart(3, "0") : "---", cx, cy - r * 0.32);
-  c.fillStyle = "#aaa"; c.font = `${Math.max(9, r * 0.09)}px system-ui`; c.fillText(label, cx, cy + r * 0.45);
+  const pt = (a, k) => { const rad = (a - 90) * Math.PI / 180; return [cx + Math.cos(rad) * r * k, cy + Math.sin(rad) * r * k]; };
+  const bg = c.createRadialGradient(cx, cy, r * .1, cx, cy, r); bg.addColorStop(0, "#0b2238"); bg.addColorStop(1, "#030b14");
+  c.fillStyle = bg; c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill();
+  c.shadowColor = "#2bd4ff"; c.shadowBlur = 14; c.strokeStyle = "rgba(90,210,255,.9)"; c.lineWidth = 2; c.beginPath(); c.arc(cx, cy, r, 0, 7); c.stroke();
+  c.shadowBlur = 0; c.strokeStyle = "rgba(90,210,255,.25)"; c.lineWidth = 1; c.beginPath(); c.arc(cx, cy, r * .72, 0, 7); c.stroke(); c.beginPath(); c.arc(cx, cy, r * .4, 0, 7); c.stroke();
+  c.font = `${Math.max(9, r * .1)}px "Share Tech Mono", monospace`; c.textAlign = "center"; c.textBaseline = "middle";
+  for (let a = 0; a < 360; a += 5) { const big = a % 30 === 0, mid = a % 10 === 0, [x1, y1] = pt(a, .97), [x2, y2] = pt(a, big ? .86 : mid ? .9 : .93);
+    c.strokeStyle = big ? "rgba(160,235,255,.95)" : "rgba(90,210,255,.45)"; c.lineWidth = big ? 1.6 : 1; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+    if (big) { const [tx, ty] = pt(a, .76); c.fillStyle = "rgba(170,235,255,.85)"; c.fillText(a % 90 === 0 && label === "Azimut" ? { 0: "N", 90: I18N.lang === "de" ? "O" : "E", 180: "S", 270: "W" }[a] : a, tx, ty); } }
+  if (target != null) { const [tx, ty] = pt(target, .95); c.strokeStyle = "#ff4fd8"; c.shadowColor = "#ff4fd8"; c.shadowBlur = 10; c.setLineDash([5, 5]); c.lineWidth = 1.6; c.beginPath(); c.moveTo(cx, cy); c.lineTo(tx, ty); c.stroke(); c.setLineDash([]); c.shadowBlur = 0; }
+  if (az != null) { const a = az * Math.PI / 180, wd = 14 * Math.PI / 180, g = c.createRadialGradient(cx, cy, 0, cx, cy, r * .96);
+    g.addColorStop(0, "rgba(43,212,255,.45)"); g.addColorStop(1, "rgba(43,212,255,0)"); c.fillStyle = g; c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, r * .96, a - wd - Math.PI / 2, a + wd - Math.PI / 2); c.closePath(); c.fill();
+    const [ex, ey] = pt(az, .95); c.strokeStyle = "#bff8ff"; c.shadowColor = "#2bd4ff"; c.shadowBlur = 16; c.lineWidth = 3; c.beginPath(); c.moveTo(cx, cy); c.lineTo(ex, ey); c.stroke(); c.shadowBlur = 0; }
+  c.fillStyle = "#081a2b"; c.strokeStyle = "rgba(90,210,255,.6)"; c.beginPath(); c.arc(cx, cy, r * .2, 0, 7); c.fill(); c.stroke();
+  c.fillStyle = "#dffaff"; c.shadowColor = "#2bd4ff"; c.shadowBlur = 12; c.font = `${Math.max(12, r * .17)}px "Share Tech Mono", monospace`;
+  c.fillText(az != null ? String(Math.round(((az % 360) + 360) % 360)).padStart(3, "0") + "°" : "---", cx, cy - r * .3); c.shadowBlur = 0;
+  c.fillStyle = "rgba(140,220,255,.75)"; c.font = `${Math.max(9, r * .085)}px "Share Tech Mono", monospace`; c.fillText(I18N.t(label).toUpperCase(), cx, cy + r * .3);
   cv._geom = { cx, cy };
 }
 function createRotorPane(root) {

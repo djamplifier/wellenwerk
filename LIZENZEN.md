@@ -34,7 +34,8 @@ und sind Marken der jeweiligen Inhaber.
 | [pySerial](https://github.com/pyserial/pyserial) | serielle Schnittstellen | BSD-3-Clause |
 | [dockview](https://github.com/mathuo/dockview) 8.4.1 | andockbare Fenster | MIT |
 | [Leaflet](https://leafletjs.com/) 1.9.4 | Karten | BSD-2-Clause |
-| [D3](https://d3js.org/) 7.9.0 | Peilkarte | ISC |
+| [D3](https://d3js.org/) 7.9.0 | (Satelliten-Überflug, Hilfsfunktionen) | ISC |
+| Erdbilder `static/vendor/earth/` | 3D-Erde (Graulinie, Karten, Peilkarte, Satelliten) | gemeinfrei – NASA Earth Observatory: „Blue Marble: Next Generation“ (Reto Stöckli, NASA GSFC, Dezember 2004, mit Relief und Meeresboden) und „Earth at Night 2016 / Black Marble“ (NASA Earth Observatory, Joshua Stevens, Suomi NPP VIIRS). Auf 4096×2048 bzw. 3600×1800 Pixel verkleinert. |
 | [satellite.js](https://github.com/shashwatak/satellite-js) 5.0.0 | Satellitenbahnen | MIT |
 | [topojson-client](https://github.com/topojson/topojson-client) 3.1.0, [world-atlas](https://github.com/topojson/world-atlas) 2.0.2 | Ländergrenzen (Natural Earth, gemeinfrei) | ISC |
 | [marked](https://github.com/markedjs/marked) 12.0.2 | Anzeige der Anleitung | MIT |
@@ -43,7 +44,6 @@ und sind Marken der jeweiligen Inhaber.
 ## Daten und Dienste zur Laufzeit
 
 Wellenwerk lädt bei Bedarf Daten von öffentlichen Quellen; es gelten deren Bedingungen:
-Kartenkacheln © [OpenStreetMap](https://www.openstreetmap.org/copyright)-Mitwirkende (ODbL),
 Länderdatei [AD1C / country-files.com](https://www.country-files.com/),
 Sonnendaten [NOAA SWPC](https://www.swpc.noaa.gov/),
 Kurzwellen-Sendeplan [EiBi](http://www.eibispace.de/),

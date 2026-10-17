@@ -515,7 +515,7 @@ Also in the Connect dialog: **end stop** in the north (0°…360°) or south (�
 
 ![Maps](bilder/15-karten.png)
 
-World map with grey line (day/night), your station and spots, plus the **bearing map** (azimuthal equidistant around your location – directions are exact there). Right-clicking a point shows locator, direction and distance and turns the antenna on request.
+All maps show the Earth **photorealistically in 3D** from NASA satellite imagery: by day the “Blue Marble” image with relief and sea floor, by night the city lights (“Black Marble”), in between the glowing **grey line**; time and sun position at the edge. The **world map** switches between **Map** and **Globe** at the top right (drag rotates or pans, the mouse wheel zooms, a double-click centres on your location) and shows your station, QSOs, spots, locator fields and the great-circle arc to the DX station with a travelling light dot. Plus the **bearing map** (azimuthal equidistant around your location – directions are exact there) with distance rings and a glowing antenna beam. The same view is used by the grey line (logbook), the rotator map (great circle, map, globe), the satellite map (follows the satellite) and the map in digital modes; the rotator dials are glowing holo displays. Graphics acceleration (WebGL) is required. Right-clicking a point shows locator, direction and distance and turns the antenna on request.
 
 ## 16. Keyboard shortcuts
 

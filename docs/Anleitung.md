@@ -509,7 +509,7 @@ Im Verbinden-Dialog außerdem: **Anschlag** im Norden (0°…360°) oder Süden 
 
 ![Karten](bilder/15-karten.png)
 
-Weltkarte mit Graulinie (Tag/Nacht), eigener Station und Spots, dazu die **Peilkarte** (mittabstandstreu um den eigenen Standort – Richtungen stimmen dort exakt). Rechtsklick auf einen Punkt zeigt Locator, Richtung und Entfernung und dreht auf Wunsch die Antenne.
+Alle Karten zeigen die Erde **fotorealistisch in 3D** aus NASA-Satellitenbildern: tagsüber das „Blue Marble“-Bild mit Relief und Meeresboden, nachts die Stadtlichter („Black Marble“), dazwischen die leuchtende **Graulinie**; am Rand Uhrzeit und Sonnenstand. Die **Weltkarte** lässt sich oben rechts zwischen **Karte** und **Globus** umschalten (ziehen dreht bzw. verschiebt, Mausrad zoomt, Doppelklick zentriert auf den eigenen Standort) und zeigt eigene Station, QSOs, Spots, Locator-Felder und den Großkreisbogen zur DX-Station mit wanderndem Lichtpunkt. Dazu die **Peilkarte** (mittabstandstreu um den eigenen Standort – Richtungen stimmen dort exakt) mit Entfernungsringen und leuchtender Antennenkeule. Dieselbe Darstellung nutzen Graulinie (Logbuch), Rotorkarte (Großkreis, Karte, Globus), Satellitenkarte (folgt dem Satelliten) und die Karte im Digitalbetrieb; die Rotor-Skalen sind als leuchtende Holo-Anzeigen gestaltet. Eine Grafikbeschleunigung (WebGL) wird gebraucht. Rechtsklick auf einen Punkt zeigt Locator, Richtung und Entfernung und dreht auf Wunsch die Antenne.
 
 ## 16. Tastenkürzel
 

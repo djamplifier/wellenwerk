@@ -284,11 +284,9 @@ canvas.dial { flex: 1; width: 100%; min-height: 140px; cursor: crosshair; }
 .sat-row.sel { background: #3d82d4; color: #fff; } .sat-row.up .el { color: var(--ok); font-weight: 700; } .sat-row.sel .el { color: #fff; } .sat-row .el { font-family: "Share Tech Mono", monospace; }
 .sat-head { display: flex; gap: 12px; flex-wrap: wrap; padding: 6px; font-family: "Share Tech Mono", monospace; font-size: 13.5px; } .sat-head b { font-family: system-ui; font-size: 15px; } .sat-head .up { color: var(--ok); font-weight: 700; }
 tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
-.beam-wrap { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; } .beam-hover { position: absolute; left: 6px; top: 4px; font-family: "Share Tech Mono", monospace; color: var(--muted); }
 .rot-dials { flex: 1; display: flex; flex-direction: column; min-height: 0; } .rot-dials canvas { flex: 1; width: 100%; min-height: 120px; cursor: crosshair; }
 .rot-ctl { display: flex; gap: 3px; padding: 4px; flex-wrap: wrap; } .rot-ctl input { width: 64px; }
 .rot-tb label { display: flex; align-items: center; gap: 4px; } .seg2 { display: inline-flex; } .seg2 button { border-radius: 0; } .seg2 button + button { border-left: none; }
-.rot-mapbox { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; } .rt-merc { width: 100%; } .rt-gc { cursor: crosshair; }
 .wm { min-height: 200px; }
 @media (max-width: 800px) { .toolbar button span { display: none; } .toolbar button { min-width: 34px; } .rc-face { grid-template-columns: 1fr; } .rc-center { min-width: 0; } .rc-freq { font-size: 40px; } .ale-grid { grid-template-columns: 1fr 1fr; } .cn-grid, .cu-zones { grid-template-columns: 1fr; } }
 
@@ -462,3 +460,20 @@ tr.now td { background: #c9efcf; } canvas.pol { margin: auto; display: block; }
 @keyframes sigblink { 50% { opacity: .3; } }
 .sig-live pre { margin: 0; padding: 4px 6px; max-height: 140px; min-height: 40px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: "Share Tech Mono", monospace; font-size: 12.5px; }
 .sig-auto { color: var(--ok, #2a8a2a); }
+
+/* ================= 3D-Erde (earth3d.js): Karten im Zukunfts-Look ================= */
+.earth3d { position: relative; overflow: hidden; background: #02060d; height: 100%; min-height: 120px; user-select: none; }
+.earth3d canvas { position: absolute; inset: 0; display: block; }
+.earth3d .e3-ov { cursor: grab; } .earth3d .e3-ov:active { cursor: grabbing; }
+.e3-hud { position: absolute; left: 10px; top: 8px; display: flex; flex-direction: column; gap: 1px; font: 11px "Share Tech Mono", monospace; color: #8fe7ff; letter-spacing: .6px; text-shadow: 0 0 6px rgba(43,212,255,.8); pointer-events: none; }
+.e3-hud b { font-size: 14px; color: #dffaff; font-weight: 400; }
+.e3-modes { position: absolute; right: 8px; top: 8px; display: flex; gap: 4px; }
+.e3-modes button { background: rgba(6,24,40,.65); color: #9fe9ff; border: 1px solid rgba(43,212,255,.45); border-radius: 12px; font: 11px "Share Tech Mono", monospace; padding: 2px 10px; backdrop-filter: blur(4px); box-shadow: 0 0 8px rgba(43,212,255,.15); }
+.e3-modes button.on { background: rgba(43,212,255,.28); color: #fff; border-color: #2bd4ff; box-shadow: 0 0 12px rgba(43,212,255,.6); }
+.e3-tip, .wm-pop { position: absolute; z-index: 5; background: rgba(4,18,32,.88); color: #dffaff; border: 1px solid rgba(43,212,255,.55); border-radius: 8px; padding: 4px 8px; font: 11.5px "Share Tech Mono", monospace; box-shadow: 0 0 14px rgba(43,212,255,.35); pointer-events: none; max-width: 260px; }
+.wm-pop { pointer-events: auto; line-height: 1.45; }
+.e3-nogl { position: absolute; inset: auto 10px 10px 10px; color: #9fe9ff; }
+.beam-wrap { position: relative; height: 100%; } .beam-hover { position: absolute; left: 10px; bottom: 8px; font: 12px "Share Tech Mono", monospace; color: #8fe7ff; text-shadow: 0 0 6px rgba(43,212,255,.8); pointer-events: none; }
+.rot-mapbox { position: relative; height: calc(100% - 34px); }
+canvas.dial { background: #02060d; } .rot-dials { background: radial-gradient(ellipse at center, #071a2c 0%, #02060d 75%); }
+.rot-ctl { background: #02060d; border-top: 1px solid rgba(43,212,255,.25); }

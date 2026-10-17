@@ -269,14 +269,12 @@ function createSweeper(root) {
   root.addEventListener("click", e => { const tr = e.target.closest("tr[data-f]"); if (tr) { const sm = store.get("sw.mode", "PSK31"); if (D.mode !== sm) dmSetMode(sm); dmSetFreq(+tr.dataset.f); } });
   const t = setInterval(() => { if (D.sweepOn) draw(); }, 1000); return () => { clearInterval(t); clearInterval(scanT); };
 }
-function createDmMap(root) {
-  root.innerHTML = `<div style="height:100%" class="dm-map"></div>`;
-  const m = L.map($(".dm-map", root), { worldCopyJump: true, attributionControl: false, minZoom: 1 }).setView([30, 10], 1);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 8 }).addTo(m); const g = L.layerGroup().addTo(m), grey = L.layerGroup().addTo(m);
-  const draw = () => { g.clearLayers(); grey.clearLayers(); L.polygon(nightPolygon(), { stroke: false, fillColor: "#001030", fillOpacity: .25, interactive: false }).addTo(grey);
-    if (WW.home) L.circleMarker(WW.home, { radius: 5, color: "#fff", fillColor: "#f5a524", fillOpacity: 1, weight: 2 }).addTo(g);
-    D.heard.forEach((v, c) => { L.circleMarker([v.lat, v.lon], { radius: 5, color: "#d62828", fillOpacity: .8, weight: 1 }).bindTooltip(`${c} · ${v.country}`).addTo(g); if (WW.home) L.polyline([WW.home, [v.lat, v.lon]], { color: "#d62828", weight: 1, opacity: .5 }).addTo(g); }); };
-  const ro = new ResizeObserver(() => m.invalidateSize()); ro.observe(root); const off = WW.on("dm-heard", draw); draw(); return () => { ro.disconnect(); off(); m.remove(); };
+function createDmMap(root) {   // gehoerte Stationen auf der Erde
+  const E = wwEarth(root, { mode: store.get("dmm.mode", "flat"), modes: [["flat", "Karte"], ["globe", "Globus"]], grid: "", onMode: m => store.set("dmm.mode", m) });
+  const draw = () => { E.points = WW.home ? [{ lat: WW.home[0], lon: WW.home[1], color: "#2bd4ff", r: 4, pulse: true }] : []; E.arcs = [];
+    D.heard.forEach((v, c) => { E.points.push({ lat: v.lat, lon: v.lon, color: "#ff4fd8", r: 3.5, tip: `${c} · ${v.country}` }); if (WW.home) E.arcs.push({ from: WW.home, to: [v.lat, v.lon], color: "rgba(255,79,216,.55)", width: 1.2, flow: false }); });
+    E.redraw(); };
+  const off = WW.on("dm-heard", draw); draw(); return () => { off(); E.destroy(); };
 }
 
 // ---------- Programm Digitalbetrieb ----------

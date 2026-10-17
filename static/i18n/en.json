@@ -1947,5 +1947,15 @@
 "Neu laden": "Reload",
 "Spaltenbreiten an Inhalt anpassen": "Fit column widths to content",
 "Auf QRZ.com ansehen": "View on QRZ.com",
-"Bis zu sechs Regler-Sätze, z. B. eines für SSB und eines für CW. Umschalten unten im Bereich „Regler“.": "Up to six slider sets, e.g. one for SSB and one for CW. Switch at the bottom in the “Sliders” area."
+"Bis zu sechs Regler-Sätze, z. B. eines für SSB und eines für CW. Umschalten unten im Bereich „Regler“.": "Up to six slider sets, e.g. one for SSB and one for CW. Switch at the bottom in the “Sliders” area.",
+"Globus": "Globe",
+"Sonne": "Sun",
+"Elevation": "Elevation",
+"WebGL ist nicht verfügbar – die 3D-Erde braucht eine Grafikbeschleunigung.": "WebGL is not available – the 3D Earth needs graphics acceleration.",
+"Erdbilder nicht ladbar": "Earth images could not be loaded",
+"Auf eigenen Standort zentrieren": "Centre on your location",
+"Umschalt+Klick: Antenne drehen": "Shift+click: turn the antenna",
+"… {} weitere": "… {} more",
+"{} · {} QSO": "{} · {} QSO",
+"{} · {} QSOs": "{} · {} QSOs"
 }

@@ -153,6 +153,13 @@ ctxRegister(".leaflet-container", (el, e) => { const m = el._wwmap; if (!m) retu
     { label: "Antenne hierhin drehen (langer Weg)", disabled: brg == null, act: () => rotorSet(brg + 180) },
     { label: "Locator kopieren", icon: "i-copy", act: () => clipCopy(loc) }, { label: "Koordinaten kopieren", act: () => clipCopy(`${lat.toFixed(5)}, ${lon.toFixed(5)}`) },
     "-", { label: "Ganze Welt zeigen", act: () => m.setView([20, 0], 1) }]; });
+ctxRegister(".earth3d", (el, e) => { const E = el._earth; if (!E) return []; const r = el.getBoundingClientRect(), ll = E.unproj(e.clientX - r.left, e.clientY - r.top); if (!ll) return [];
+  const [lat, lon] = ll, loc = latLonToGrid(lat, lon), bt = bearingTo(lat, lon), brg = bt ? bt.az : null;
+  return [`${loc} · ${lat.toFixed(2)}°, ${lon.toFixed(2)}°${bt ? ` · ${Math.round(bt.az)}° · ${Math.round(bt.km).toLocaleString(I18N.locale)} km` : ""}`,
+    { label: "Antenne hierhin drehen (kurzer Weg)", icon: "i-compass", disabled: brg == null, act: () => rotorSet(brg) },
+    { label: "Antenne hierhin drehen (langer Weg)", disabled: brg == null, act: () => rotorSet(brg + 180) },
+    { label: "Locator kopieren", icon: "i-copy", act: () => clipCopy(loc) }, { label: "Koordinaten kopieren", act: () => clipCopy(`${lat.toFixed(5)}, ${lon.toFixed(5)}`) },
+    "-", { label: "Auf eigenen Standort zentrieren", act: () => E.set({ zoom: 1, center: WW.home ? [WW.home[0], WW.home[1]] : [20, 0] }) }]; });
 ctxRegister(".pane-rotator canvas.dial, canvas.d-az", () => [{ label: "Drehen auf … Grad", icon: "i-compass", act: () => { const v = prompt("Richtung in Grad (0–359)"); if (v !== null && v !== "") rotorSet(+v); } },
   { label: "Stopp", act: () => act("/api/rotor/stop", {}) }, { label: "Parken", act: () => act("/api/rotor/park", {}) }, ...[0, 90, 180, 270].map(a => ({ label: `${a}° (${["N", "O", "S", "W"][a / 90]})`, act: () => rotorSet(a) })),
   "-", { label: "Rotor verbinden …", icon: "i-plug", act: openRotorConnect }]);
