@@ -48,6 +48,8 @@ VERSION = "1.3.4"
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("WW_DATA", BASE / "data"))
 DATA.mkdir(parents=True, exist_ok=True)
+from . import dvvoice
+dvvoice.DATA = DATA
 CFG_PATH = DATA / "config.json"
 DEFAULTS = dict(callsign="", locator="", operator="", tx_pwr="100", lang="", dmr_id="",
                 cluster_host="dxc.ve7cc.net", cluster_port=23, cluster_cmds="",
@@ -2769,6 +2771,28 @@ async def ws_audio(websocket: WebSocket, radio: str = ""):
         AUDIO_SUBS.get(rid, {}).pop(websocket, None)
 
 
+@app.get("/api/voice", tags=["Empfänger"])
+async def voice_status():
+    """Optionales Sprachmodul (mbelib, lokal gebaut): Zustand, gefundener C-Compiler, Hinweis."""
+    return dvvoice.status(DATA)
+
+
+@app.post("/api/voice/build", tags=["Empfänger"])
+async def voice_build(body: dict):
+    """Sprachmodul aus dem Originalquelltext bauen – nur mit {"accept": true} (Nutzer uebernimmt die Verantwortung)."""
+    if body.get("accept") is not True:
+        raise HTTPException(400, "Bitte zuerst den Hinweis bestätigen")
+    asyncio.get_running_loop().run_in_executor(None, dvvoice.build, DATA)
+    await asyncio.sleep(0.1)
+    return dvvoice.status(DATA)
+
+
+@app.delete("/api/voice", tags=["Empfänger"])
+async def voice_remove():
+    dvvoice.remove(DATA)
+    return dvvoice.status(DATA)
+
+
 @app.post("/api/ids", tags=["Frequenzen"])
 async def ids_lookup(body: dict):
     """Namen zu Digitalfunk-Kennungen: {dmr: [IDs], nxdn: [IDs], tg: [Talkgroups], call: [Rufzeichen]} (RadioID.net, BrandMeister)."""
@@ -2866,7 +2890,7 @@ async def radio_rig_cmd(pid: str, what: str, body: dict):
         if not hasattr(r, "dv_decode"):
             raise HTTPException(400, "Eigenes Dekodieren gibt es nur bei Empfängern")
         try:
-            return {"proto": r.dv_decode(str(body.get("proto") or ""))}
+            return {"proto": r.dv_decode(str(body.get("proto") or ""), body.get("voice"))}
         except RigError as e:
             raise HTTPException(400, str(e))
     if what == "dvdetect":                   # Digitalfunk erkennen (DMR, D-STAR, YSF, P25, NXDN, M17 gleichzeitig) – eigene Auswertung

@@ -225,7 +225,7 @@ async function sigProbe(o, list, decs, opt = {}) {
     ${o.rep ? `<div class="hint"><b>${esc(o.rep.c)}</b> · ${fmkRepFacts(o.rep).map(x => `<span>${esc(x)}</span>`).join(" · ")}</div>` : ""}
     <div class="hint"><span>${opt.own ? "Wellenwerk dekodiert selbst" : "Dekoder des Empfängers läuft"}</span> · <span class="sig-tf">${fmtMHz(f)}</span> MHz · <span>Meldungen auch im Fenster „Datenempfang“</span></div>
     ${!fx && Math.abs(f - o.rf) >= 500 ? `<div class="hint sig-auto">✓ <span>auf Signalmitte abgestimmt (${f > o.rf ? "+" : "−"}${(Math.abs(f - o.rf) / 1000).toFixed(1)} kHz)</span></div>` : ""}
-    <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(name(found))}</b><i class="grow"></i><button type="button" class="sig-live-x">Dekoder aus</button></div><pre translate="no"></pre></div>
+    <div class="sig-live"><div class="sig-live-h"><span class="sig-live-dot"></span><b>Live: ${esc(name(found))}</b><i class="grow"></i>${opt.own && ["dmr", "dstar", "ysf"].includes(found) ? `<button type="button" class="sig-voice" title="Sprache über das optionale Sprachmodul (AMBE) hören">🔈 Sprache</button>` : ""}<button type="button" class="sig-live-x">Dekoder aus</button></div><pre translate="no"></pre></div>
     <div class="hint sig-db"></div><div class="sig-act"></div>`;
   const pre = $("pre", body); let got = [];
   // Zeilen bei jedem Neuzeichnen aus den Meldungen bilden – so erscheinen Namen (Rufzeichen, Talkgroup), sobald sie nachgeladen sind
@@ -239,6 +239,12 @@ async function sigProbe(o, list, decs, opt = {}) {
   (async () => { while (!R.stop && R.track && SIG.run === R) { await new Promise(r => setTimeout(r, 1000)); const cur = sigState(o.ctl).freq;
     if (cur && Math.abs(cur - f) > 50 && Date.now() - (R.tuned || 0) > 2500) { R.track = false; break; } await R.retune(); } })();
   $(".sig-live-x", body).onclick = async () => { if (opt.own) await api(`/api/radios/${encodeURIComponent(o.radio)}/rig/dvdecode`, { method: "POST", body: { proto: "" } }).catch(() => { }); else await setDec("").catch(() => { }); R.onMsg = null; R.track = false; body.querySelector(".sig-live").classList.add("off"); $(".sig-live-x", body).remove(); };
+  const vb = $(".sig-voice", body);
+  if (vb) { const sync = () => { const on = !!sigRadio(o.radio)?.state?.sdr?.dv_voice; vb.classList.toggle("on", on); vb.textContent = on ? "🔊 Sprache an" : "🔈 Sprache"; };
+    sync(); vb.onclick = async () => { const on = !sigRadio(o.radio)?.state?.sdr?.dv_voice;
+      if (on && !(await voiceModuleReady())) return;
+      try { await api(`/api/radios/${encodeURIComponent(o.radio)}/rig/dvdecode`, { method: "POST", body: { proto: found, voice: on } }); } catch (e) { toast(e.message, true); }
+      setTimeout(sync, 400); }; }
   sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbLink(found) || sigDbHtml(f, { id: found === "packet" ? "PACKET" : "FSK" }, 0, !!bandFor(f)); });
   SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - f) > 3000).concat({ rf: f, label: name(found), until: Date.now() + 60000, radio: o.radio });
 }
@@ -251,6 +257,12 @@ function sigDvResult(R, o, f, body, hit, mod, secs) {
     ${Math.abs(f - o.rf) >= 500 ? `<div class="hint sig-auto">✓ <span>auf Signalmitte abgestimmt (${f > o.rf ? "+" : "−"}${(Math.abs(f - o.rf) / 1000).toFixed(1)} kHz)</span></div>` : ""}
     <div class="hint sig-db"></div><div class="sig-act"></div>`;
   $(".sig-bar", c).classList.add("done"); sigProgress(R, 1);
+  const vb = $(".sig-voice", body);
+  if (vb) { const sync = () => { const on = !!sigRadio(o.radio)?.state?.sdr?.dv_voice; vb.classList.toggle("on", on); vb.textContent = on ? "🔊 Sprache an" : "🔈 Sprache"; };
+    sync(); vb.onclick = async () => { const on = !sigRadio(o.radio)?.state?.sdr?.dv_voice;
+      if (on && !(await voiceModuleReady())) return;
+      try { await api(`/api/radios/${encodeURIComponent(o.radio)}/rig/dvdecode`, { method: "POST", body: { proto: found, voice: on } }); } catch (e) { toast(e.message, true); }
+      setTimeout(sync, 400); }; }
   sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbLink(hit.id) || sigDbHtml(f, { id: "FSK" }, 0, !!bandFor(f)); });
   SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - f) > 3000).concat({ rf: f, label: hit.label, until: Date.now() + 60000, radio: o.radio });
   const b = document.createElement("button"); b.textContent = "Nochmal"; b.onclick = () => sigProbe(o, sigProbeList(o.rf, []), []); $(".sig-act", body).appendChild(b);
@@ -345,6 +357,12 @@ async function sigAprsLive(R, f, label) {
   render(); const offIds = WW.on("ids", () => pre.isConnected ? render() : offIds());
   const stop = why => { try { R.live?.un?.(); } catch { } R.live = null; body.querySelector(".sig-live")?.classList.add("off"); $(".sig-live-x", body)?.remove(); if (why) { const b = $(".sig-live-h b", body); if (b) b.textContent += " – " + why; } };
   $(".sig-live-x", body).onclick = () => stop("angehalten");
+  const vb = $(".sig-voice", body);
+  if (vb) { const sync = () => { const on = !!sigRadio(o.radio)?.state?.sdr?.dv_voice; vb.classList.toggle("on", on); vb.textContent = on ? "🔊 Sprache an" : "🔈 Sprache"; };
+    sync(); vb.onclick = async () => { const on = !sigRadio(o.radio)?.state?.sdr?.dv_voice;
+      if (on && !(await voiceModuleReady())) return;
+      try { await api(`/api/radios/${encodeURIComponent(o.radio)}/rig/dvdecode`, { method: "POST", body: { proto: found, voice: on } }); } catch (e) { toast(e.message, true); }
+      setTimeout(sync, 400); }; }
   sigDbLoad().then(() => { const el = $(".sig-db", body); if (el) el.innerHTML = sigDbLink("packet"); });
   SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - f) > 3000).concat({ rf: f, label: "APRS", until: Date.now() + 60000, radio: o.radio });
   const rx = APRS.Rx(8000, v => { const d = { decoder: "packet", radio: o.radio, freq: f, t: Date.now() / 1000, value: v, local: true };
@@ -537,3 +555,23 @@ function sigActions(R, res, el) {
 function sigTag(o, res) { if (!o.rf || !res.best || ["NOISE", "UNKNOWN"].includes(res.best.id)) return;
   SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - o.rf) > 50).concat({ rf: o.rf, label: res.best.label.split(" · ")[0], until: Date.now() + 30000, radio: o.radio }); }
 addEventListener("keydown", e => { if (e.key === "Escape" && SIG.run) sigCancel(); });
+
+// ---------- optionales Sprachmodul (AMBE fuer DMR, D-STAR, YSF): mbelib wird lokal aus dem Originalquelltext gebaut ----------
+async function voiceModuleReady() {
+  let st = await api("/api/voice").catch(() => null); if (!st) return false;
+  if (st.state === "ready") return true;
+  const ok = await new Promise(res => { const d = dialog({ title: "Sprachmodul (AMBE) einrichten", icon: "i-radio", buttons: [["Abbrechen", "close"], ["Bauen", "ok", "primary"]], body: `
+    <p>DMR, D-STAR und YSF übertragen Sprache mit dem AMBE-Verfahren. Wellenwerk liefert dafür <b>keinen Code</b> mit.</p>
+    <p>Auf Wunsch lädt Wellenwerk den freien Quelltext <b>mbelib</b> (ISC-Lizenz, github.com/szechyjs/mbelib, Fassung ${esc(st.version)}), prüft jede Datei über ihre Prüfsumme und übersetzt ihn mit dem C-Compiler dieses Rechners. Das Ergebnis bleibt im Datenordner.</p>
+    <p class="warn">AMBE ist patentrechtlich geschützt. Ob du das Modul an deinem Ort nutzen darfst, musst du selbst prüfen – <b>Nutzung auf eigene Verantwortung</b>.</p>
+    ${st.hint ? `<p class="err">${esc(st.hint)}</p>` : `<p class="hint">C-Compiler: ${esc(st.compiler)}</p>`}${st.state === "error" ? `<p class="err">Letzter Versuch: ${esc(st.msg)}</p>` : ""}
+    <label style="flex-direction:row;gap:6px;align-items:center;color:var(--fg)"><input type="checkbox" class="vm-ok" style="width:auto;margin:0"> Ich habe den Hinweis gelesen und übernehme die Verantwortung.</label>` });
+    const okb = d.querySelector('button[value="ok"]'), cb = d.querySelector(".vm-ok"); okb.disabled = true; cb.onchange = () => okb.disabled = !cb.checked || !!st.hint;
+    d.addEventListener("close", () => res(d.returnValue === "ok")); });
+  if (!ok) return false;
+  try { st = await api("/api/voice/build", { method: "POST", body: { accept: true } }); } catch (e) { toast(e.message, true); return false; }
+  toast("Sprachmodul wird gebaut …");
+  for (let i = 0; i < 300 && st.state === "building"; i++) { await new Promise(r => setTimeout(r, 1000)); st = await api("/api/voice").catch(() => st); }
+  if (st.state === "ready") { toast("Sprachmodul bereit"); return true; }
+  toast("Sprachmodul: " + (st.msg || "fehlgeschlagen"), true); return false;
+}

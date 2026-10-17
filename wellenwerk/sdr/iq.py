@@ -53,6 +53,8 @@ class IqRig(SdrRig):
         loop = asyncio.get_running_loop()
         pcm = await loop.run_in_executor(None, self.rx.process, iq)
         if len(pcm) and self.on_audio:
+            if getattr(self, "_dvvoice", False) and getattr(self, "_dvdec", "") in self.DV_VOICE:
+                pcm = self.voice_take(len(pcm))             # eigener Digitalfunk-Dekoder mit Sprachmodul: Sprache statt Rauschen
             self.on_audio(pcm.tobytes(), AUDIO_RATE)
         if self.state["mode"] == "FM" and self.rx.disc is not None:
             self.dv_feed(self.rx.disc, AUDIO_RATE)

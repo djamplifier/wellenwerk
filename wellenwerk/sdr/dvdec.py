@@ -29,6 +29,13 @@ def _num(bits) -> int:
 
 
 # ---------- Symbole abtasten ----------
+def _mf(x, fs: float, rate: float = 4800) -> np.ndarray:
+    """Ueber ein Symbol mitteln (Integrate-and-Dump-Naeherung): halbiert bis drittelt die Symbolfehler gegenueber Punktabtastung."""
+    x = np.asarray(x, np.float64)
+    n = int(round(fs / rate))
+    return np.convolve(x, np.ones(n) / n, "same") if n > 1 else x
+
+
 def sample_symbols(x: np.ndarray, fs: float, pos: int, sync: list[int], start: int, count: int, rate: float = 4800):
     """Symbole start..start+count (relativ zum ersten Synchron-Symbol) bei Position pos (Beginn des Synchronworts in x).
     Takt fein nachgestellt und Pegel/Gleichanteil per Ausgleichsrechnung aus dem bekannten Synchronwort.
@@ -183,8 +190,8 @@ DT_NAMES = {0: "PI-Kopf", 1: "Sprachkopf", 2: "Abschluss", 3: "CSBK", 4: "MBC-Ko
 
 
 # ---------- DMR ----------
-def dmr_bursts(x: np.ndarray, fs: float) -> list[dict]:
-    """Alle DMR-Bursts in x: Art, Zeitschlitz, Colorcode und – bei Sprachkopf/Abschluss – Quelle und Ziel."""
+def _dmr_hits(x: np.ndarray, fs: float) -> list[tuple]:
+    """Synchronwort-Treffer (Position, Polaritaet, Art, Symbole) mit einheitlicher Polaritaet der Aussendung."""
     p = next(q for q in dvsync.PROTOCOLS if q["id"] == "dmr")
     hits = []
     for kind, syms in p["syncs"].items():
@@ -211,6 +218,13 @@ def dmr_bursts(x: np.ndarray, fs: float) -> list[dict]:
             score[pol0] = (max(ccs.count(c) for c in set(ccs)) if ccs else 0)
         gpol = max(score, key=score.get)
         hits = [h for h in hits if h[1] == gpol]
+    return hits
+
+
+def dmr_bursts(x: np.ndarray, fs: float) -> list[dict]:
+    """Alle DMR-Bursts in x: Art, Zeitschlitz, Colorcode und – bei Sprachkopf/Abschluss – Quelle und Ziel."""
+    x = _mf(x, fs)
+    hits = _dmr_hits(x, fs)
     out = []
     for pos, pol, kind, syms in hits:
         sy = [pol * s for s in syms]                      # Kehrlage: Symbole des Synchronworts gespiegelt
@@ -508,6 +522,7 @@ def _ysf_dch(pay: list[int], width: int, nbits: int, off: int = 0) -> bytes | No
 
 
 def ysf(x: np.ndarray, fs: float) -> list[dict]:
+    x = _mf(x, fs)
     p = next(q for q in dvsync.PROTOCOLS if q["id"] == "ysf")
     sync = list(p["syncs"].values())[0]
     t = dvsync._template(sync, 4800, fs)
@@ -532,6 +547,7 @@ def ysf(x: np.ndarray, fs: float) -> list[dict]:
                 if c2:
                     e.update(down=c2[:10].decode("latin-1").strip(), up=c2[10:].decode("latin-1").strip())
             elif fich["fi"] == 1 and fich["dt"] == 2:              # V/D-Modus 2: je Rahmen ein 10-Zeichen-Feld nach FN
+                e["vch"] = ysf_vch(bits[240:])
                 d = _ysf_dch(pay, 5, 96)
                 if d is not None:
                     fld = {0: "target", 1: "source", 2: "down", 3: "up"}.get(fich["fn"])
@@ -728,7 +744,7 @@ def _m17_lsf_parse(by) -> dict | None:
 def m17(x: np.ndarray, fs: float) -> list[dict]:
     """M17-Rahmen in x: LSF (vollstaendig) und Stream-Rahmen (LICH-Teil + Zaehler, Rahmennummer)."""
     p = next(q for q in dvsync.PROTOCOLS if q["id"] == "m17")
-    xs = np.asarray(x, np.float64)
+    xs = _mf(x, fs)
     out = []
     for kind, key in (("LSF", "lsf"), ("Stream", "str")):
         sync = p["syncs"][kind]
@@ -775,3 +791,67 @@ def m17_lich_collect(chunks: dict) -> dict | None:
     for i in range(6):
         by += list(chunks[i])
     return _m17_lsf_parse(by)
+
+
+# ---------- Sprachrahmen fuer das optionale Sprachmodul (dvvoice) ----------
+_DIB = {3: 1, 1: 0, -1: 2, -3: 3}
+
+
+def dmr_voice(x: np.ndarray, fs: float) -> list[tuple]:
+    """DMR-Sprache: ab jedem Sprach-Sync (Burst A) die Bursts A–F desselben Zeitschlitzes (alle 60 ms), je 3 AMBE+2-Rahmen
+    zu 36 Dibits. Rueckgabe [(Zeit s, Zeitschlitz|None, [d1, d2, d3])]. Bricht ab, sobald statt EMB ein Synchronwort folgt."""
+    x = _mf(x, fs)
+    p = next(q for q in dvsync.PROTOCOLS if q["id"] == "dmr")
+    syncs = [np.array(v, float) for v in p["syncs"].values()]
+    out = []
+    for pos, pol, kind, syms in _dmr_hits(x, fs):
+        if "Sprache" not in kind:
+            continue
+        sy = [pol * s for s in syms]
+        for k in range(6):
+            r = sample_symbols(x, fs, pos, sy, -66 + 288 * k, 144)
+            if not r:
+                break
+            sym = [pol * s for s in r[0]]
+            if k and max(abs(float(np.dot(np.array(sym[66:90], float), s))) / 216 for s in syncs) > 0.8:
+                break                                     # neues Synchronwort (Daten/Abschluss/naechster Superrahmen)
+            slot = None
+            if kind.startswith("BS"):
+                cach = _bits_of(sym[0:12])
+                slot = cach[4]
+            d = [_DIB[s] for s in sym[12:66] + sym[90:144]]
+            out.append((round((pos + 288 * k * fs / 4800) / fs, 3), slot, [d[0:36], d[36:72], d[72:108]]))
+    out.sort(key=lambda e: e[0])
+    return out
+
+
+def dstar_voice(x: np.ndarray, fs: float) -> list[tuple]:
+    """D-STAR-Sprache: ab jedem Daten-Sync 21 Rahmen zu 72 Bit (AMBE). Rueckgabe [(Zeit s, Bits)]."""
+    out, last = [], -1
+    for pos, pol in sorted(_pol_hits(x, fs, DS_SYNC, 0.72)):
+        if pos < last:
+            continue
+        b = _sample_bits(x, fs, pos, DS_SYNC, -72, 21 * 96, pol)
+        if not b:
+            continue
+        last = pos + int(20.5 * 96 * fs / 4800)
+        for k in range(21):
+            out.append((round((pos + (k * 96 - 72) * fs / 4800) / fs, 3), b[k * 96: k * 96 + 72]))
+    return out
+
+
+_YSF_W104 = None
+
+
+def ysf_vch(pay_bits: list[int]) -> list[list[int]]:
+    """YSF V/D-Modus 2: 5 Sprachkanaele (je 104 Bit, verschachtelt 26x4, geweisst), 27 Bit dreifach + 22 Bit -> 49 AMBE+2-Bits."""
+    global _YSF_W104
+    if _YSF_W104 is None:
+        _YSF_W104 = [(YSF_WHITEN[i >> 3] >> (7 - (i & 7))) & 1 for i in range(104)]
+    res = []
+    for j in range(5):
+        off = j * 144 + 40
+        v = [pay_bits[off + (i % 26) * 4 + i // 26] ^ _YSF_W104[i] for i in range(104)]
+        a = [1 if v[i] + v[i + 1] + v[i + 2] >= 2 else 0 for i in range(0, 81, 3)]
+        res.append(a + v[81:103])
+    return res

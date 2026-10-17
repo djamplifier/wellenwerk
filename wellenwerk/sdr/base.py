@@ -112,13 +112,25 @@ class SdrRig:
     # ---------- eigenes Dekodieren (dvdec): laufend aus dem Diskriminator-Puffer ----------
     DV_LOCAL = {"dmr", "dstar", "ysf", "m17"}
 
-    def dv_decode(self, proto: str) -> str:
-        """Eigenen Dekoder ein-/ausschalten (\"\" = aus). Nur sinnvoll mit sauberem Signal (eigene IQ-Empfaenger)."""
+    DV_VOICE = {"dmr", "dstar", "ysf"}
+
+    def dv_decode(self, proto: str, voice=None) -> str:
+        """Eigenen Dekoder ein-/ausschalten (\"\" = aus). Nur sinnvoll mit sauberem Signal (eigene IQ-Empfaenger).
+        voice: Sprache ueber das optionale Sprachmodul ausgeben (None = unveraendert)."""
+        from .. import dvvoice
         proto = (proto or "").lower()
         if proto and proto not in self.DV_LOCAL:
             raise RigError(f"Eigener Dekoder für {proto} noch nicht vorhanden")
+        if voice is not None:
+            self._dvvoice = bool(voice) and dvvoice.DATA is not None and dvvoice.available(dvvoice.DATA)
         self._dvdec = proto
+        self._vbuf, self._vplay = bytearray(), False
         self.state["sdr"]["dv_local"] = proto
+        self.state["sdr"]["dv_voice"] = bool(proto and getattr(self, "_dvvoice", False) and proto in self.DV_VOICE)
+        try:
+            asyncio.ensure_future(self.changed(force=True))        # Oberflaeche sofort informieren
+        except RuntimeError:
+            pass
         if proto and not getattr(self, "_dvtask", None):
             self._dvtask = asyncio.ensure_future(self._dv_loop())
         return proto
@@ -126,7 +138,7 @@ class SdrRig:
     async def _dv_loop(self):
         import numpy as np
         from . import dvdec
-        done, seen, ds_txt, ds_last, ysf_cur, m17_cur, hw = None, {}, [], {}, {}, {}, {}
+        done, seen, ds_txt, ds_last, ysf_cur, m17_cur, hw, vs = None, {}, [], {}, {}, {}, {}, {}
         try:
             while getattr(self, "_dvdec", ""):
                 await asyncio.sleep(1.0)
@@ -136,15 +148,21 @@ class SdrRig:
                 rate, total = b["rate"], b.get("total", 0)
                 if done is None:
                     done = max(0, total - rate)
-                parts, n = [], 0                           # Abtastwerte ab (done - 0,15 s) bis jetzt
+                parts, n = [], 0                           # Abtastwerte ab (done - 0,5 s) bis jetzt (D-STAR: 21 Rahmen ab Sync)
                 for _t, a in reversed(b["buf"]):
                     parts.append(a)
                     n += len(a)
-                    if total - n <= done - int(rate * 0.15):
+                    if total - n <= done - int(rate * 0.5):
                         break
                 x = np.concatenate(parts[::-1]).astype(np.float64)
                 start = total - len(x)
                 now = asyncio.get_running_loop().time()
+                voice = getattr(self, "_dvvoice", False) and self._dvdec in self.DV_VOICE
+                if voice and self._dvdec in ("dstar", "dmr"):
+                    try:
+                        await self._dv_voice(x, rate, start, vs)
+                    except Exception as e:
+                        log.warning("Sprachdekodierung: %s", e)
                 if self._dvdec == "m17":                    # LSF direkt oder aus 6 LICH-Teilen (Spaeteinstieg)
                     for e in await asyncio.to_thread(dvdec.m17, x, rate):
                         pos = start + int(e["t"] * rate)
@@ -171,7 +189,13 @@ class SdrRig:
                     done = total
                     continue
                 if self._dvdec == "ysf":                    # Felder (Ziel/Quelle/Down/Up) sammeln, melden sobald Quelle bekannt
-                    for e in await asyncio.to_thread(dvdec.ysf, x, rate):
+                    yres = await asyncio.to_thread(dvdec.ysf, x, rate)
+                    if voice:
+                        try:
+                            await self._dv_voice(x, rate, start, vs, yres)
+                        except Exception as e:
+                            log.warning("Sprachdekodierung: %s", e)
+                    for e in yres:
                         pos = start + int(e["t"] * rate)
                         if pos < done - int(rate * 0.05) or pos <= hw.get("ysf", -1) + rate * 0.01:   # schon im letzten Durchgang
                             continue
@@ -238,6 +262,59 @@ class SdrRig:
                 done = total
         finally:
             self._dvtask = None
+
+    def voice_take(self, n: int):
+        """n Tonwerte (12 kHz, int16) aus der dekodierten Sprache; vorgepuffert, damit der Sekundentakt des Dekoders
+        keine Luecken reisst. Ohne Sprache: Stille statt Digitalrauschen."""
+        import numpy as np
+        vb = getattr(self, "_vbuf", None)
+        if vb is None:
+            vb = self._vbuf = bytearray()
+        if not getattr(self, "_vplay", False) and len(vb) >= 12000 * 2 * 1.3:
+            self._vplay = True
+        if not self._vplay or not vb:
+            self._vplay = False
+            return np.zeros(n, "<i2")
+        k = min(len(vb), n * 2)
+        a = np.frombuffer(bytes(vb[:k]), "<i2")
+        del vb[:k]
+        return np.concatenate([a, np.zeros(n - len(a), "<i2")]) if len(a) < n else a
+
+    def voice_push(self, pcm: bytes):
+        vb = getattr(self, "_vbuf", None)
+        if vb is None:
+            vb = self._vbuf = bytearray()
+        vb.extend(pcm)
+        if len(vb) > 12000 * 2 * 4:                       # Rueckstau begrenzen (max. ca. 2,5 s Verzoegerung)
+            del vb[:len(vb) - 12000 * 2 * 2]
+
+    async def _dv_voice(self, x, rate: int, start: int, vs: dict, ysf_res=None):
+        """Sprachrahmen des laufenden Verfahrens dekodieren und in den Tonpuffer legen."""
+        import numpy as np
+        from .. import dvvoice
+        from . import dvdec
+        proto = self._dvdec
+        if proto == "dstar":
+            frames = [(t, None, [b]) for t, b in await asyncio.to_thread(dvdec.dstar_voice, x, rate)]
+        elif proto == "dmr":
+            frames = await asyncio.to_thread(dvdec.dmr_voice, x, rate)
+        elif proto == "ysf":
+            frames = [(e["t"], None, e["vch"]) for e in (ysf_res or []) if "vch" in e]
+        else:
+            return
+        out = []
+        for t, slot, fr in frames:
+            pos = start + int(t * rate)
+            if pos <= vs.get("hw", -1) + rate * 0.005:      # schon ausgegeben
+                continue
+            if proto == "dmr" and vs.get("slot") is not None and slot != vs["slot"] and pos - vs.get("last", 0) < rate:
+                continue                                  # anderer Zeitschlitz, solange der erste spricht
+            if vs.get("voc") is None or pos - vs.get("last", -(1 << 40)) > rate * 0.5:
+                vs["voc"] = dvvoice.Vocoder(None, proto)  # neue Aussendung: Vocoder-Zustand neu
+            vs["slot"], vs["hw"], vs["last"] = slot, pos, pos
+            out.extend(vs["voc"].frame(b) for b in fr)
+        if out:
+            self.voice_push(dvvoice.to_pcm12k(np.concatenate(out)))
 
     def emit_decode(self, msg: dict):
         if DECODE["sink"]:
