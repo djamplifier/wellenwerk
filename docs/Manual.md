@@ -493,7 +493,7 @@ With ARDOP and VARA Wellenwerk keys the radio as soon as the modem wants to tran
 
 ![Satellites](bilder/13-satelliten.png)
 
-Orbital data and transmitters are loaded automatically. On the left the list with current elevation (green above the horizon), **Choose satellites** (toolbar) chooses up to 100 satellites. Next to it the pass polar diagram, the map with ground track and footprint, position and frequencies, and the next passes.
+Orbital data and transmitters are loaded automatically. On the left the list with current elevation (green above the horizon), **Choose satellites** (toolbar) chooses up to 100 satellites. Next to it the pass diagram (sky from above, glowing track of the next pass), the **3D Earth** with all chosen satellites as small 3D figures in real time (the ISS with its own shape; darker in the Earth's shadow), track and footprint of the selected satellite at its real altitude, position and frequencies, and the next passes. On the globe the Earth turns smoothly with the selected satellite; drag with the mouse button held to turn it yourself (following pauses), the mouse wheel zooms, a **double-click** resumes following. Clicking a satellite selects it.
 
 - Choose the satellite's **transmitter** – downlink/uplink are shown.
 - **Track radio (Doppler):** keeps adjusting the receive frequency; **Uplink via split** also sets the transmit frequency.

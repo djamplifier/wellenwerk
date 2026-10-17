@@ -88,6 +88,20 @@ function gcPoints(a, b, n = 64) {                              // Grosskreis zwi
     const x = s1 * A[0] + s2 * Bv[0], y = s1 * A[1] + s2 * Bv[1], z = s1 * A[2] + s2 * Bv[2]; out.push([Math.asin(z) / RAD, Math.atan2(y, x) / RAD]); }
   return out;
 }
+// Kleiner 3D-Satellit: Koerper mit Goldfolie, Solarfluegel quer zur Flugrichtung, Glanz wandert; ISS mit Gitterstruktur und acht Fluegeln
+function drawSatSprite(ctx, x, y, dir, size = 1, iss = false, lit = true, t = 0) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(dir); const s = size, sh = lit ? 1 : .35, gl = (Math.sin(t / 600) + 1) / 2;
+  ctx.shadowColor = lit ? "rgba(140,220,255,.9)" : "transparent"; ctx.shadowBlur = 10 * s;
+  const panel = (px, py, w, h) => { const g = ctx.createLinearGradient(px, py, px + w, py + h); g.addColorStop(0, `rgba(30,70,${Math.round(160 * sh)},1)`); g.addColorStop(gl, `rgba(${Math.round(120 * sh)},${Math.round(200 * sh)},255,1)`); g.addColorStop(1, `rgba(20,50,${Math.round(130 * sh)},1)`);
+    ctx.fillStyle = g; ctx.fillRect(px, py, w, h); ctx.strokeStyle = "rgba(200,235,255,.5)"; ctx.lineWidth = .5; ctx.strokeRect(px, py, w, h); ctx.beginPath(); for (let k = 1; k < 4; k++) { ctx.moveTo(px + w * k / 4, py); ctx.lineTo(px + w * k / 4, py + h); } ctx.stroke(); };
+  if (iss) { ctx.strokeStyle = `rgba(220,225,235,${sh})`; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.moveTo(-15 * s, 0); ctx.lineTo(15 * s, 0); ctx.stroke();
+    for (const sx of [-14, -9, 9, 14]) for (const sy of [-1, 1]) panel(sx * s - 2 * s, sy > 0 ? 1.5 * s : -8.5 * s, 4 * s, 7 * s);
+    const b = ctx.createLinearGradient(0, -3 * s, 0, 3 * s); b.addColorStop(0, `rgba(255,255,255,${sh})`); b.addColorStop(1, `rgba(150,160,175,${sh})`); ctx.fillStyle = b; ctx.fillRect(-5 * s, -1.6 * s, 10 * s, 3.2 * s); ctx.fillRect(-1.6 * s, -4 * s, 3.2 * s, 8 * s);
+    ctx.fillStyle = `rgba(230,180,90,${sh})`; ctx.fillRect(3 * s, 2 * s, 3 * s, 3 * s); }
+  else { panel(-11 * s, -2 * s, 7 * s, 4 * s); panel(4 * s, -2 * s, 7 * s, 4 * s); ctx.strokeStyle = `rgba(200,200,210,${sh})`; ctx.lineWidth = .8 * s; ctx.beginPath(); ctx.moveTo(-4 * s, 0); ctx.lineTo(4 * s, 0); ctx.stroke();
+    const g = ctx.createLinearGradient(-3 * s, -3 * s, 3 * s, 3 * s); g.addColorStop(0, `rgba(255,225,140,${sh})`); g.addColorStop(gl * .8 + .1, `rgba(255,250,220,${sh})`); g.addColorStop(1, `rgba(170,120,40,${sh})`);
+    ctx.fillStyle = g; ctx.fillRect(-3 * s, -3 * s, 6 * s, 6 * s); ctx.fillStyle = `rgba(240,240,250,${sh})`; ctx.beginPath(); ctx.arc(0, -3.6 * s, 1.1 * s, 0, 7); ctx.fill(); }
+  ctx.restore(); }
 function wwEarth(root, opts = {}) {
   const o = { mode: "globe", center: WW.home ? [WW.home[0], WW.home[1]] : [30, 10], zoom: 1, terminator: true, grid: "latlon", borders: true, hud: true, ...opts };
   if (o.mode === "flat") o.center = [0, o.center[1]];          // Weltkarte: Mitte auf dem Aequator
@@ -115,8 +129,9 @@ function wwEarth(root, opts = {}) {
   const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const toPx = (px, py) => [(px / (W / H) + 1) / 2 * W, (1 - (py + 1) / 2) * H];          // Shader-Koordinate -> CSS-Pixel
   const fromPx = (x, y) => [((x / W) * 2 - 1) * (W / H), 1 - (y / H) * 2];
-  E.proj = (lat, lon) => {
-    if (o.mode === "globe") { const B = basis(), P = ecef(lat, lon), R = .86 * o.zoom, z = dot(P, B.f); const [x, y] = toPx(dot(P, B.e) * R, dot(P, B.n) * R); return { x, y, vis: z > 0, z }; }
+  E.proj = (lat, lon, alt = 0) => {
+    if (o.mode === "globe") { const B = basis(), P = ecef(lat, lon), R = .86 * o.zoom * (1 + (alt || 0) / 6371), z = dot(P, B.f), ex = dot(P, B.e), ny = dot(P, B.n);
+      const [x, y] = toPx(ex * R, ny * R), out = (ex * ex + ny * ny) * (1 + (alt || 0) / 6371) ** 2 > 1; return { x, y, vis: z > 0 || (alt > 0 && out), z, back: z <= 0 }; }
     if (o.mode === "flat") { const k = Math.max(Math.PI / (W / H), Math.PI / 2) / o.zoom; let dl = lon * RAD - (o.center[1] * RAD + pan[0]); dl = ((dl + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
       const [x, y] = toPx(dl / k, (lat * RAD - (o.center[0] * RAD + pan[1])) / k); return { x, y, vis: true, wrap: dl }; }
     const la0 = o.center[0] * RAD, lo0 = o.center[1] * RAD, la = lat * RAD, lo = lon * RAD, R = .92 * o.zoom;   // Peilkarte
@@ -135,9 +150,10 @@ function wwEarth(root, opts = {}) {
     return [lat / RAD, (((lo0 + Math.atan2(Math.sin(az) * Math.sin(rho) * Math.cos(la0), Math.cos(rho) - Math.sin(la0) * Math.sin(lat))) / RAD + 540) % 360) - 180];
   };
   E.azCenter = () => toPx(0, 0); E.azRadius = () => .92 * o.zoom * H / 2;
+    E.satSprite = drawSatSprite;
   // Linie aus [lat, lon]-Punkten zeichnen; unterbricht auf der Rueckseite (Globus) bzw. am Kartenrand (Weltkarte)
   E.path = (ctx, pts) => { let pen = false, last = null;
-    for (const [la, lo] of pts) { const p = E.proj(la, lo); if (!p.vis || (last && Math.hypot(p.x - last.x, p.y - last.y) > W * .45)) { pen = false; last = p.vis ? p : null; if (!p.vis) continue; }
+    for (const [la, lo, al] of pts) { const p = E.proj(la, lo, al || 0); if (!p.vis || (last && Math.hypot(p.x - last.x, p.y - last.y) > W * .45)) { pen = false; last = p.vis ? p : null; if (!p.vis) continue; }
       if (!pen) { ctx.moveTo(p.x, p.y); pen = true; } else ctx.lineTo(p.x, p.y); last = p; } };
   // ---------- Leuchtschicht ----------
   const glow = (ctx, color, blur) => { ctx.shadowColor = color; ctx.shadowBlur = blur; };
@@ -157,6 +173,16 @@ function wwEarth(root, opts = {}) {
       for (let a = 0; a < 360; a += 30) { const s = Math.sin(a * RAD), c = Math.cos(a * RAD); ctx.beginPath(); ctx.moveTo(cx + s * R * .04, cy - c * R * .04); ctx.lineTo(cx + s * R, cy - c * R); ctx.stroke();
         ctx.fillText(a % 90 === 0 ? { 0: "N", 90: I18N.lang === "de" ? "O" : "E", 180: "S", 270: "W" }[a] : a, cx + s * (R + 14), cy - c * (R + 14)); }
       ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(90,200,255,.7)"; glow(ctx, "#2bb8ff", 10); ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke(); ctx.restore(); }
+    if (o.terminator) { const sp = sunPos(), S = ecef(sp.lat, sp.lon), u0 = Math.abs(S[2]) < .9 ? [0, 0, 1] : [1, 0, 0];
+      const cr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], nz = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
+      const U = nz(cr(S, u0)), V = cr(S, U), ring = [];
+      for (let i = 0; i <= 240; i++) { const a = i / 240 * 2 * Math.PI, P = [0, 1, 2].map(k => Math.cos(a) * U[k] + Math.sin(a) * V[k]); ring.push([Math.asin(P[2]) / RAD, Math.atan2(P[1], P[0]) / RAD]); }
+      ctx.save(); ctx.lineCap = "round";
+      if (o.mode === "globe") { const seg = back => { ctx.beginPath(); let pen = false; for (const [la, lo] of ring) { const p = E.proj(la, lo); if (p.back !== back) { pen = false; continue; } pen ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); pen = true; } ctx.stroke(); };
+        ctx.strokeStyle = "rgba(255,150,70,.22)"; ctx.lineWidth = 1.2; ctx.setLineDash([3, 5]); seg(true); ctx.setLineDash([]);
+        ctx.strokeStyle = "rgba(255,170,90,.95)"; ctx.lineWidth = 1.6; glow(ctx, "#ff9a3c", 16); seg(false); }
+      else { ctx.strokeStyle = "rgba(255,170,90,.85)"; ctx.lineWidth = 1.4; glow(ctx, "#ff9a3c", 14); ctx.beginPath(); E.path(ctx, ring); ctx.stroke(); }
+      ctx.restore(); }
     if (o.draw) { ctx.save(); o.draw(ctx, E, t); ctx.restore(); }
     for (const a of E.arcs) { const pts = gcPoints(a.from, a.to, 96), col = a.color || "#ff4fd8"; ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = a.width || 2; glow(ctx, col, 12); ctx.globalAlpha = .9; if (a.dash) ctx.setLineDash(a.dash);
       ctx.beginPath(); E.path(ctx, pts); ctx.stroke(); ctx.setLineDash([]);
@@ -174,7 +200,7 @@ function wwEarth(root, opts = {}) {
   const hudText = () => { if (!o.hud) { hud.textContent = ""; return; } const s = sunPos(), n = new Date();
     hud.innerHTML = `<b>${n.toISOString().slice(11, 16)} UTC</b><span>${I18N.t("Sonne").toUpperCase()} ${Math.abs(s.lat).toFixed(1)}°${s.lat >= 0 ? "N" : "S"} ${Math.abs(s.lon).toFixed(1)}°${s.lon >= 0 ? (I18N.lang === "de" ? "O" : "E") : "W"}</span>${o.hudExtra ? `<span>${esc(o.hudExtra)}</span>` : ""}`; };
   // ---------- Zeichnen ----------
-  const animated = () => E.arcs.some(a => a.flow !== false) || E.points.some(p => p.pulse) || spin;
+  const animated = () => o.animate || E.arcs.some(a => a.flow !== false) || E.points.some(p => p.pulse) || spin;
   let lastT = 0;
   const frame = t => {
     raf = 0; if (!alive) return;

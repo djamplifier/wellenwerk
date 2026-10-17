@@ -317,30 +317,70 @@ function createSatPasses(root) {
   const draw = () => { const now = Date.now(); $("tbody", root).innerHTML = SAT.passes.map(p => `<tr class="${p.aos <= now && p.los >= now ? "now" : ""}"><td>${new Date(p.aos).toISOString().slice(8, 10)}.${new Date(p.aos).toISOString().slice(5, 7)}.</td><td>${hhmm(p.aos)}</td><td>${Math.round(p.aosAz)}°</td><td><b>${Math.round(p.maxEl)}°</b></td><td>${hhmm(p.los)}</td><td>${Math.round(p.losAz)}°</td><td>${Math.round((p.los - p.aos) / 60000)} min</td></tr>`).join("") || '<tr><td colspan="7" class="hint">kein Überflug in 48 h</td></tr>'; };
   return WW.on("sat-sel", draw);
 }
-function createSatPolar(root) {
-  root.innerHTML = `<canvas class="pol"></canvas>`; const cv = $(".pol", root);
-  const draw = () => { const W = Math.min(root.clientWidth, root.clientHeight) - 4; if (W < 50) return; cv.width = cv.height = W; const ctx = cv.getContext("2d"), c = W / 2, R = c - 16;
-    const xy = (az, el) => { const r = R * (90 - Math.max(0, el)) / 90, a = az * Math.PI / 180; return [c + r * Math.sin(a), c - r * Math.cos(a)]; };
-    ctx.clearRect(0, 0, W, W); ctx.strokeStyle = "#999"; ctx.fillStyle = "#555"; ctx.font = "11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    [0, 30, 60].forEach(el => { ctx.beginPath(); ctx.arc(c, c, R * (90 - el) / 90, 0, 7); ctx.stroke(); }); [["N", 0], ["O", 90], ["S", 180], ["W", 270]].forEach(([l, a]) => { const p = xy(a, -8); ctx.fillText(l, p[0], p[1]); });
-    const p = SAT.passes[0]; if (p && SAT.sel) { ctx.beginPath(); let f = true; for (let t = p.aos; t <= p.los; t += 10e3) { const l = satLook(SAT.sel.rec, new Date(t)), q = xy(l.az, l.el); f ? ctx.moveTo(q[0], q[1]) : ctx.lineTo(q[0], q[1]); f = false; } ctx.strokeStyle = "#1f5fae"; ctx.lineWidth = 2; ctx.stroke(); ctx.lineWidth = 1;
-      ctx.textAlign = "left"; ctx.fillText(`${p.aos <= Date.now() ? "jetzt" : hhmm(p.aos) + " UTC"} · max ${Math.round(p.maxEl)}°`, 4, 10); }
-    const l = SAT.now; if (l && l.el > -5) { const q = xy(l.az, l.el); ctx.beginPath(); ctx.arc(q[0], q[1], 6, 0, 7); ctx.fillStyle = l.el > 0 ? "#d62828" : "#888"; ctx.fill(); } };
-  const ro = new ResizeObserver(draw); ro.observe(root); const offs = [WW.on("sat-tick", draw), WW.on("sat-sel", draw)]; return () => { ro.disconnect(); offs.forEach(f => f()); };
+function createSatPolar(root) {   // Ueberflug im Holo-Look: Horizont-Ringe, Bahn des naechsten Ueberflugs leuchtend, Satellit als 3D-Figur
+  root.innerHTML = `<canvas class="pol"></canvas>`; const cv = $(".pol", root); let raf = 0, alive = true;
+  const draw = t => {
+    const Wc = root.clientWidth, Hc = root.clientHeight, W = Math.min(Wc, Hc) - 4; if (W < 50) return; const dpr = devicePixelRatio || 1;
+    cv.width = Wc * dpr; cv.height = Hc * dpr; cv.style.width = Wc + "px"; cv.style.height = Hc + "px"; const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cx = Wc / 2, cy = Hc / 2, R = W / 2 - 22, xy = (az, el) => { const r = R * (90 - Math.max(0, el)) / 90, a = az * Math.PI / 180; return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; };
+    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(Wc, Hc) * .7); bg.addColorStop(0, "#071a2c"); bg.addColorStop(1, "#02060d"); ctx.fillStyle = bg; ctx.fillRect(0, 0, Wc, Hc);
+    ctx.strokeStyle = "rgba(90,210,255,.3)"; ctx.lineWidth = 1; [30, 60].forEach(el => { ctx.beginPath(); ctx.arc(cx, cy, R * (90 - el) / 90, 0, 7); ctx.stroke(); });
+    for (let a = 0; a < 360; a += 30) { const [x, y] = xy(a, 0); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke(); }
+    ctx.shadowColor = "#2bd4ff"; ctx.shadowBlur = 12; ctx.strokeStyle = "rgba(90,210,255,.85)"; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(160,230,255,.85)"; ctx.font = "11px 'Share Tech Mono', monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    [["N", 0], [I18N.lang === "de" ? "O" : "E", 90], ["S", 180], ["W", 270]].forEach(([l, a]) => { const p = xy(a, -9); ctx.fillText(l, p[0], p[1]); });
+    ctx.fillStyle = "rgba(120,200,240,.6)"; ctx.fillText("30°", cx + 4, cy - R * 60 / 90 + 8); ctx.fillText("60°", cx + 4, cy - R * 30 / 90 + 8);
+    const p = SAT.passes[0];
+    if (p && SAT.sel) { const pts = []; for (let tt = p.aos; tt <= p.los; tt += 10e3) { const l = satLook(SAT.sel.rec, new Date(tt)); if (l) pts.push(xy(l.az, l.el)); }
+      ctx.save(); ctx.strokeStyle = "#ffb02e"; ctx.shadowColor = "#ffb02e"; ctx.shadowBlur = 12; ctx.lineWidth = 2; ctx.setLineDash([6, 5]); ctx.lineDashOffset = -t / 60; ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.stroke(); ctx.restore();
+      if (pts.length) { ctx.fillStyle = "#3dffa2"; ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], 3.5, 0, 7); ctx.fill(); ctx.fillStyle = "#ff4fd8"; ctx.beginPath(); ctx.arc(pts[pts.length - 1][0], pts[pts.length - 1][1], 3.5, 0, 7); ctx.fill(); }
+      ctx.textAlign = "left"; ctx.fillStyle = "#dffaff"; ctx.shadowColor = "#2bd4ff"; ctx.shadowBlur = 6; ctx.font = "12px 'Share Tech Mono', monospace";
+      ctx.fillText(`${SAT.sel.name}`, 10, 14); ctx.fillStyle = "rgba(160,230,255,.85)"; ctx.font = "11px 'Share Tech Mono', monospace"; ctx.fillText(`${p.aos <= Date.now() ? I18N.t("jetzt") : hhmm(p.aos) + " UTC"} · max ${Math.round(p.maxEl)}°`, 10, 30); ctx.shadowBlur = 0; }
+    const l = SAT.sel && satLook(SAT.sel.rec, new Date());
+    if (l && l.el > -5) { const q = xy(l.az, l.el), n = satLook(SAT.sel.rec, new Date(Date.now() + 20e3)), q2 = n ? xy(n.az, n.el) : q;
+      drawSatSprite(ctx, q[0], q[1], Math.atan2(q2[1] - q[1], q2[0] - q[0]) + Math.PI / 2, 1.1, SAT.sel.norad === 25544, l.el > 0, t);
+      ctx.fillStyle = "#dffaff"; ctx.font = "11px 'Share Tech Mono', monospace"; ctx.textAlign = "left"; ctx.fillText(`Az ${Math.round(l.az)}° · El ${Math.round(l.el)}°`, q[0] + 16, q[1] + 16); } };
+  const loop = t => { if (!alive) return; if (root.isConnected && root.offsetParent && !document.hidden) draw(t); raf = setTimeout(() => requestAnimationFrame(loop), 60); };
+  requestAnimationFrame(loop); return () => { alive = false; clearTimeout(raf); };
 }
-function createSatMap(root) {   // Satellit ueber der Erde: Bodenspur, Sichtbereich, eigener Standort
-  const E = wwEarth(root, { mode: store.get("sm.mode", "globe"), modes: [["globe", "Globus"], ["flat", "Karte"]], grid: "latlon", onMode: m => store.set("sm.mode", m) });
-  let last = 0, follow = true;
-  const draw = () => { if (!SAT.sel || !SAT.now || Date.now() - last < 3000) return; last = Date.now(); const x = SAT.sel, now = new Date(), l = SAT.now;
-    const track = []; for (let t = -45; t <= 90; t++) { const p = satLook(x.rec, new Date(+now + t * 60e3)); if (p) track.push([p.lat, p.lon]); }
-    const fr = Math.acos(6371 / (6371 + l.alt)) * 6371, foot = []; for (let a = 0; a <= 360; a += 4) foot.push(destPoint([l.lat, l.lon], a, fr));
-    E.lines = [{ pts: track, color: "#ffb02e", width: 1.6, dash: [5, 5], glow: 8 }, { pts: foot, color: l.el > 0 ? "#3dffa2" : "#2bd4ff", width: 1.4, glow: 10 }];
-    E.points = [...(WW.home ? [{ lat: WW.home[0], lon: WW.home[1], color: "#2bd4ff", r: 3.5, pulse: true }] : []), { lat: l.lat, lon: l.lon, color: "#ff4fd8", r: 5, pulse: true, label: x.name }];
-    E.arcs = WW.home && l.el > 0 ? [{ from: WW.home, to: [l.lat, l.lon], color: "#3dffa2", width: 1.4 }] : [];
-    if (follow && E.o.mode === "globe") E.set({ center: [Math.max(-60, Math.min(60, l.lat)), l.lon] }); else E.redraw(); };
+function createSatMap(root) {   // Satelliten in Echtzeit ueber der 3D-Erde: Bahn in Flughoehe, Sichtbereich, kleine 3D-Satelliten (ISS eigene Form)
+  const E = wwEarth(root, { mode: store.get("sm.mode", "globe"), modes: [["globe", "Globus"], ["flat", "Karte"]], grid: "latlon", animate: true, onMode: m => store.set("sm.mode", m),
+    draw: (ctx, E, t) => drawSats(ctx, E, t), onClick: (ll, hit) => { if (hit?.norad) satSelect(hit.norad); } });
+  let follow = true, track = null, trackT = 0, others = [], othersT = 0;
+  const sun = () => { const s = sunPos(); return ecef(s.lat, s.lon); };
+  const lookAt = (x, d) => satLook(x.rec, d);
+  const head = (x, now, l) => { const n = lookAt(x, new Date(+now + 20e3)); if (!n) return 0; const a = E.proj(l.lat, l.lon, l.alt), b = E.proj(n.lat, n.lon, n.alt); return Math.atan2(b.y - a.y, b.x - a.x) + Math.PI / 2; };
+  const inShadow = l => { const S = sun(), P = ecef(l.lat, l.lon), k = 1 + l.alt / 6371, d = (P[0] * S[0] + P[1] * S[1] + P[2] * S[2]) * k; if (d > 0) return false;
+    const px = P[0] * k - d * S[0], py = P[1] * k - d * S[1], pz = P[2] * k - d * S[2]; return Math.hypot(px, py, pz) < 1; };
+  function drawSats(ctx, E, t) {
+    if (!SAT.list.length) return; const now = new Date();
+    if (Date.now() - othersT > 1000) { othersT = Date.now(); others = SAT.list.filter(x => SAT.chosen?.has(x.norad) && x !== SAT.sel).slice(0, 60);
+      E.points = [...(WW.home ? [{ lat: WW.home[0], lon: WW.home[1], color: "#2bd4ff", r: 3.5, pulse: true, tip: WW.settings.callsign || "" }] : [])]; }
+    const hit = [];
+    for (const x of others) { const l = lookAt(x, now); if (!l) continue; const p = E.proj(l.lat, l.lon, l.alt); if (!p.vis) continue;
+      E.satSprite(ctx, p.x, p.y, head(x, now, l), x.norad === 25544 ? .55 : .42, x.norad === 25544, !inShadow(l), t + x.norad);
+      hit.push({ lat: l.lat, lon: l.lon, alt: l.alt, x }); }
+    const x = SAT.sel; if (x) { const l = lookAt(x, now);
+      if (l) { if (!track || Date.now() - trackT > 20000) { trackT = Date.now(); track = []; for (let m = -45; m <= 95; m++) { const q = lookAt(x, new Date(+now + m * 60e3)); if (q) track.push([q.lat, q.lon, E.o.mode === "globe" ? q.alt : 0]); } }
+        ctx.save(); ctx.strokeStyle = "rgba(255,190,80,.9)"; ctx.lineWidth = 1.6; ctx.setLineDash([6, 5]); ctx.lineDashOffset = -t / 60; ctx.shadowColor = "#ffb02e"; ctx.shadowBlur = 10; ctx.beginPath(); E.path(ctx, track); ctx.stroke(); ctx.restore();
+        const fr = Math.acos(6371 / (6371 + l.alt)) * 6371, foot = []; for (let a = 0; a <= 360; a += 4) foot.push(destPoint([l.lat, l.lon], a, fr));
+        ctx.save(); ctx.strokeStyle = l.el > 0 ? "#3dffa2" : "rgba(43,212,255,.8)"; ctx.lineWidth = 1.3; ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 10; ctx.beginPath(); E.path(ctx, foot); ctx.stroke(); ctx.restore();
+        const p = E.proj(l.lat, l.lon, l.alt), g = E.proj(l.lat, l.lon, 0);
+        if (p.vis) { if (E.o.mode === "globe" && g.vis) { ctx.save(); ctx.strokeStyle = "rgba(255,79,216,.5)"; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.restore(); }
+          if (WW.home && l.el > 0) { const h = E.proj(WW.home[0], WW.home[1], 0); if (h.vis) { ctx.save(); ctx.strokeStyle = "#3dffa2"; ctx.shadowColor = "#3dffa2"; ctx.shadowBlur = 12; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.restore(); } }
+          E.satSprite(ctx, p.x, p.y, head(x, now, l), x.norad === 25544 ? 1.25 : 1.15, x.norad === 25544, !inShadow(l), t);
+          ctx.save(); ctx.fillStyle = "#dffaff"; ctx.shadowColor = "#2bd4ff"; ctx.shadowBlur = 6; ctx.font = "12px 'Share Tech Mono', monospace"; ctx.fillText(`${x.name}  ${Math.round(l.alt)} km`, p.x + 18, p.y - 10); ctx.restore(); }
+        hit.push({ lat: l.lat, lon: l.lon, alt: l.alt, x });
+        if (follow && E.o.mode === "globe") {                   // Erde dreht gleichmaessig mit dem Satelliten mit (weich nachgefuehrt)
+          const c = E.o.center, tl = Math.max(-55, Math.min(55, l.lat)); let dl = l.lon - c[1]; dl = ((dl + 540) % 360) - 180;
+          const k = drawSats.c ? .06 : 1; drawSats.c = true; E.o.center = [c[0] + (tl - c[0]) * k, ((c[1] + dl * k + 540) % 360) - 180]; } } }
+    E.hits = hit; }
+  // Treffer fuer Hinweis/Klick: Satelliten in Flughoehe
+  const pick0 = E.pick; E.pick = (px, py) => { for (const h of E.hits || []) { const q = E.proj(h.lat, h.lon, h.alt); if (q.vis && Math.hypot(q.x - px, q.y - py) < 12) return { norad: h.x.norad, tip: `${h.x.name} · ${Math.round(h.alt)} km` }; } return pick0(px, py); };
   root.addEventListener("pointerdown", () => { follow = false; });
-  root.addEventListener("dblclick", () => { follow = true; last = 0; draw(); });
-  const offs = [WW.on("sat-tick", draw), WW.on("sat-sel", () => { last = 0; follow = true; draw(); })]; return () => { offs.forEach(f => f()); E.destroy(); };
+  root.addEventListener("dblclick", () => { follow = true; drawSats.c = null; });
+  const offs = [WW.on("sat-sel", () => { track = null; follow = true; drawSats.c = null; }), WW.on("sat-chosen", () => { othersT = 0; })];
+  return () => { offs.forEach(f => f()); E.destroy(); };
 }
 APPS.sat = {
   title: "Satelliten", icon: "i-sat",

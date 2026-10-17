@@ -487,7 +487,7 @@ Bei ARDOP und VARA tastet Wellenwerk das Funkgerät, sobald das Modem senden wil
 
 ![Satelliten](bilder/13-satelliten.png)
 
-Bahndaten und Sender werden automatisch geladen. Links die Liste mit aktueller Elevation (über dem Horizont grün), **Satelliten wählen** (Werkzeugleiste) legt bis zu 100 Satelliten fest. Daneben das Überflug-Polardiagramm, die Karte mit Bodenspur und Sichtbereich, Position und Frequenzen sowie die nächsten Überflüge.
+Bahndaten und Sender werden automatisch geladen. Links die Liste mit aktueller Elevation (über dem Horizont grün), **Satelliten wählen** (Werkzeugleiste) legt bis zu 100 Satelliten fest. Daneben das Überflug-Diagramm (Himmel von oben, leuchtende Bahn des nächsten Überflugs), die **3D-Erde** mit allen ausgewählten Satelliten als kleinen 3D-Figuren in Echtzeit (die ISS mit eigener Form; im Erdschatten dunkler), Bahn und Sichtbereich des gewählten Satelliten in echter Flughöhe, Position und Frequenzen sowie die nächsten Überflüge. Auf dem Globus dreht die Erde gleichmäßig mit dem gewählten Satelliten mit; mit gedrückter Maustaste drehst du selbst (das Mitdrehen pausiert), das Mausrad zoomt, ein **Doppelklick** schaltet das Mitdrehen wieder ein. Klick auf einen Satelliten wählt ihn aus.
 
 - **Sender** des Satelliten wählen – Downlink/Uplink werden angezeigt.
 - **Funkgerät nachführen (Doppler):** stellt die Empfangsfrequenz laufend nach; **Uplink per Split** stellt die Sendefrequenz mit ein.
