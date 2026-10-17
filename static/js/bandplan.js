@@ -104,6 +104,15 @@ function planFollow() {
   }, 700);
 }
 WW.on("rig", planFollow);
+// Betriebsart, die der Bandplan bei f einstellen wuerde – fuer Klicks im Wasserfall: Abstimmpunkt und Rahmen gleich fuer die
+// neue Betriebsart berechnen (sonst klappt der Rahmen nach dem Umschalten USB -> LSB auf die andere Seite des Signals)
+function planTarget(f) {
+  const r = WW.rig || {}; if (!planOn()) return null;
+  const p = planAt(f); if (!p || !p.mode || BPA.override === p.key) return null;
+  if (r.receiver && !["USB", "LSB", "CW", "AM", "FM", "PKTUSB", "PKTLSB"].includes(p.mode)) return null;
+  return { mode: r.receiver && p.mode.startsWith("PKT") ? p.mode.slice(3) : p.mode, bw: p.bw || 0, key: p.key };
+}
+function planTake(t) { clearTimeout(BPA.timer); BPA.key = t.key; BPA.override = null; BPA.sent = { mode: t.mode, t: Date.now() }; BPA.lastMode = t.mode; setMode(t.mode, t.bw); }
 digiFreqs();
 // ---------- Frequenzliste der Digimodes ----------
 function tuneDigi(t, e) {

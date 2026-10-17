@@ -21,12 +21,17 @@ function createSliders(root) {
   const upd = () => $$(".hslider", root).forEach(el => { if (el._hold) return; const v = (WW.rig.levels || {})[el.dataset.n]; if (v != null) setVis(el, v); else el.querySelector("span").textContent = fmt(el, 0); });
   root.addEventListener("mousedown", e => {
     const el = e.target.closest(".hslider"); if (!el) return;
-    const move = ev => { const r = el.getBoundingClientRect(), p = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), lo = +el.dataset.min, hi = +el.dataset.max, st = +el.dataset.step || 0.01;
-      const v = Math.round((lo + p * (hi - lo)) / st) * st; el._hold = true; setVis(el, v); clearTimeout(el._t); el._t = setTimeout(() => { act("/api/rig/level", { name: el.dataset.n, value: v }); setTimeout(() => el._hold = false, 1500); }, 90); };
-    move(e); const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); }; window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+    // Waehrend des Ziehens und kurz danach zeigt der Regler den eigenen Wert; Rueckmeldungen des Geraets (CAT-Abfrage hinkt
+    // hinterher) wuerden ihn sonst hin- und herspringen lassen
+    const move = ev => { const r = el.getBoundingClientRect(), p = Math.max(0, Math.min(1, (ev.clientX - r.left - 12) / Math.max(1, r.width - 24))), lo = +el.dataset.min, hi = +el.dataset.max, st = +el.dataset.step || 0.01;
+      const v = Math.round((lo + p * (hi - lo)) / st) * st; el._hold = true; clearTimeout(el._rel); setVis(el, v); if (v === el._v) return; el._v = v;
+      clearTimeout(el._t); el._t = setTimeout(() => act("/api/rig/level", { name: el.dataset.n, value: v }), 90); };
+    move(e); const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); el._v = null; clearTimeout(el._rel); el._rel = setTimeout(() => { el._hold = false; upd(); }, 2000); };
+    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
   });
-  root.addEventListener("wheel", e => { const el = e.target.closest(".hslider"); if (!el) return; e.preventDefault(); const v = ((WW.rig.levels || {})[el.dataset.n] || 0) + (e.deltaY < 0 ? 1 : -1) * (+el.dataset.step || 0.01) * (el.dataset.type === "f" ? 5 : 1);
-    const c = Math.max(+el.dataset.min, Math.min(+el.dataset.max, v)); el._hold = true; setVis(el, c); act("/api/rig/level", { name: el.dataset.n, value: c }).then(() => setTimeout(() => el._hold = false, 1500)); }, { passive: false });
+  root.addEventListener("wheel", e => { const el = e.target.closest(".hslider"); if (!el) return; e.preventDefault(); const v = (el._hold && el._wv != null ? el._wv : ((WW.rig.levels || {})[el.dataset.n] || 0)) + (e.deltaY < 0 ? 1 : -1) * (+el.dataset.step || 0.01) * (el.dataset.type === "f" ? 5 : 1);
+    const c = Math.max(+el.dataset.min, Math.min(+el.dataset.max, v)); el._hold = true; el._wv = c; setVis(el, c); clearTimeout(el._rel);
+    clearTimeout(el._t); el._t = setTimeout(() => act("/api/rig/level", { name: el.dataset.n, value: c }), 60); el._rel = setTimeout(() => { el._hold = false; el._wv = null; upd(); }, 2000); }, { passive: false });
   $(".rc-sl-layout", root).addEventListener("change", e => { RC.layout.sliders.active = +e.target.value; saveRigLayout(); });
   const offs = [WW.on("rig", upd), WW.on("rc-layout", build), WW.on("caps", build)]; build();
   return () => offs.forEach(f => f());

@@ -14,7 +14,16 @@ const stateFile = () => path.join(app.getPath("userData"), "fenster.json");
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => { if (mainWin) { if (mainWin.isMinimized()) mainWin.restore(); mainWin.focus(); } });
 
-function freePort() { return new Promise((res, rej) => { const s = net.createServer(); s.unref(); s.on("error", rej); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); }); }
+function tryPort(want) { return new Promise((res, rej) => { const s = net.createServer(); s.unref(); s.on("error", rej); s.listen(want, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); }); }
+// Immer derselbe Port: Die Oberflaeche speichert Anordnung und Einstellungen im Browser-Speicher, und der gilt je Adresse
+// (mit Port). Ein wechselnder Port haette bei jedem Start eine leere Oberflaeche bedeutet.
+const portFile = () => path.join(app.getPath("userData"), "port.json");
+async function freePort() {
+  let want = 48090; try { want = JSON.parse(fs.readFileSync(portFile(), "utf8")).port || want; } catch { }
+  let p; try { p = await tryPort(want); } catch { p = await tryPort(0); }
+  try { fs.writeFileSync(portFile(), JSON.stringify({ port: p })); } catch { }
+  return p;
+}
 function serverExe() {
   const exe = process.platform === "win32" ? "Wellenwerk.exe" : "Wellenwerk";
   const cands = [path.join(process.resourcesPath || "", "server", exe), path.join(__dirname, "..", "dist", "Wellenwerk", exe)];

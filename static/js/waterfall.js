@@ -36,6 +36,7 @@ function createWfPanel(root) {
     if (cur && !$(".wf-src", root).value) st.src = ""; };
   const setMode = m => { st.mode = m; store.set("wf.view", st); $$(".seg2 button", root).forEach(b => b.classList.toggle("on", b.dataset.m === m));
     spec.classList.toggle("hidden", m === "3d"); fall.classList.toggle("hidden", m === "3d"); c3.classList.toggle("hidden", m !== "3d"); if (m === "3d") init3d(); };
+  const radioRow = () => (WW.radios || []).find(r => r.id === src());
   const radioState = () => (src() === WW.current ? WW.rig : (WW.radios || []).find(r => r.id === src())?.state) || WW.rig || {};
   // Pegel: automatisch (Rauschboden .. Spitzen) oder fest; dazu Kontrast und Helligkeit (Regler in der Leiste)
   const level = d => { let L;
@@ -90,7 +91,17 @@ function createWfPanel(root) {
       if (per < 1) { const b = a + per / 2 - .5, k = Math.floor(b), t = b - k, d0 = l.data[Math.max(0, Math.min(n - 1, k))], d1 = l.data[Math.max(0, Math.min(n - 1, k + 1))]; v = d0 + (d1 - d0) * t; }
       else for (let i = Math.floor(a), e = Math.max(Math.floor(a) + 1, Math.floor(a + per)); i < e; i++) { const d = l.data[Math.max(0, Math.min(n - 1, i))]; if (d > v) v = d; }
       out[x] = (l.low <= view[0] + (x + 0.5) * (view[1] - view[0]) / W && view[0] + (x + 0.5) * (view[1] - view[0]) / W <= l.high) ? norm(v, L) : 0; }
-    return out; }, { pps: +o.pps || 25 });
+    return out; }, { pps: +o.pps || 25, before: (g, W, H) => remapFall(g, W, H) });
+  // Zoomen/Verschieben: vorhandene Zeilen auf den neuen Ausschnitt umrechnen, damit Skala und alter Wasserfall zusammenpassen
+  let fallView = null, fallTmp = null;
+  function remapFall(g, W, H) {
+    if (!view) return; if (!fallView || fallTmp?.width !== W || fallTmp?.height !== H) { fallView = view.slice(); fallTmp ||= document.createElement("canvas"); fallTmp.width = W; fallTmp.height = H; return; }
+    if (fallView[0] === view[0] && fallView[1] === view[1]) return;
+    const w = view[1] - view[0], k = (fallView[1] - fallView[0]) / w, x0 = (fallView[0] - view[0]) / w * W, t = fallTmp.getContext("2d");
+    t.clearRect(0, 0, W, H); t.drawImage(fall, 0, 0);
+    const c = scr.lut ? `rgb(${scr.lut[0]},${scr.lut[1]},${scr.lut[2]})` : "#000"; g.fillStyle = c; g.fillRect(0, 0, W, H);
+    g.imageSmoothingEnabled = true; g.drawImage(fallTmp, 0, 0, W, H, x0, 0, W * k, H); fallView = view.slice();
+  }
   // ---------- 3D (WebGL2) ----------
   const COLS = 512;
   function init3d() {
@@ -159,7 +170,7 @@ function createWfPanel(root) {
       api(`/api/radios/${S.data}/rig/level`, { method: "POST", body: { name: "SPECTRUM_SPAN", value: v } }).catch(() => { }); } };
   // Gezoomt: Empfaenger mit eigener Spektrumberechnung (IQ-Geraete, KiwiSDR) liefern den Ausschnitt feiner – passende Breite anfordern
   const zoomRes = () => { const S = srcs(), r = (WW.radios || []).find(x => x.id === S.data); if (!r || !isSdr(r) || !view || !last) return;
-    if (!(r.state?.sdr?.hw || r.sdr_type === "kiwisdr" || r.kind === "kiwisdr")) return;
+    if (!(r.state?.sdr?.hw || ["kiwisdr", "openwebrx"].includes(r.sdr_type) || r.kind === "kiwisdr")) return;
     const w = view[1] - view[0], full = (r.state?.sdr?.rate) || 0, sp = WF_SPANS.find(v => v >= w * 1.15) || 0, want = full && sp >= full * .8 ? 0 : sp;
     if (want === (+st.span || 0)) return; st.span = want; zoomed = true; reqSpan = null; store.set("wf.view", st); $(".wf-span", root).value = String(want); };
   // ---------- Bedienung ----------
@@ -172,7 +183,15 @@ function createWfPanel(root) {
       if (sw || (isSdr(dr) && rf && last && (rf < last.low || rf > last.high))) { toast(sw ? `Empfänger wechselt gerade auf „${sw.to || "neues Profil"}“ – bitte kurz warten` : "Das Spektrum zeigt noch den alten Bereich – bitte kurz warten"); return; }
       const mk = cv === spec && typeof fmkHit === "function" ? fmkHit(e.clientX - r.left, e.clientY - r.top) : null;
       if (mk) return fmkTune(mk, S.ctl, S.data, e);                                   // Markierung angeklickt
-      if (!sigOnClick(S.ctl, f, e, S.pan ? S.data : null, recent.filter(l => l.radio === S.data))) tune(snapRaster(f, radioState().mode)); });   // im Abstimmraster
+      if (sigOnClick(S.ctl, f, e, S.pan ? S.data : null, recent.filter(l => l.radio === S.data))) return;
+      // Klick aufs Signal: so abstimmen, dass der Rahmen (Durchlassbereich) mittig ueber der Klickstelle liegt – bei SSB liegt
+      // die Traegerfrequenz sonst am Rand und das Signal neben dem Rahmen. AM/FM sind symmetrisch.
+      const rs0 = radioState(), pt = S.ctl === WW.current && typeof planTarget === "function" ? planTarget(f) : null;
+      const go = () => { const rs = radioState(), pb = wfPass(rs), mid = ["AM", "SAM", "FM", "WFM", "NFM"].includes(rs.mode) ? 0 : Math.round((pb[0] + pb[1]) / 2);
+        tune(snapRaster(f - mid, rs.mode)); };                                        // im Abstimmraster
+      if (!pt || pt.mode === rs0.mode) return go();
+      // Betriebsart nach Bandplan zuerst umstellen und auf den neuen Durchlassbereich warten (Empfaenger legen z. B. CW neben die Frequenz)
+      planTake(pt); let n = 0; const wait = () => { const rs = radioState(); if ((rs.mode === pt.mode && !(isSdr(radioRow()) && JSON.stringify(rs.sdr?.pb) === JSON.stringify(rs0.sdr?.pb))) || ++n > 30) go(); else setTimeout(wait, 50); }; wait(); });
     if (cv === spec) cv.addEventListener("mousemove", e => { if (typeof fmkTip !== "function") return; const r = cv.getBoundingClientRect(), t = fmkTip(e.clientX - r.left, e.clientY - r.top); if (cv.title !== t) cv.title = t; cv.style.cursor = t ? "pointer" : ""; });
     cv.addEventListener("wheel", e => { if (!view || !last) return; e.preventDefault(); scr.invalidate(); zoomed = true; const r = cv.getBoundingClientRect(), at = view[0] + (e.clientX - r.left) / r.width * (view[1] - view[0]), k = e.deltaY > 0 ? 1.25 : 0.8;
       let a = at - (at - view[0]) * k, b = at + (view[1] - at) * k; if (b - a > last.high - last.low) [a, b] = [last.low, last.high]; if (b - a < 500) return;

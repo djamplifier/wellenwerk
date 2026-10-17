@@ -193,7 +193,7 @@ fieldset { border: 1px solid var(--line2); border-radius: 3px; margin: 0 0 6px; 
 .hslider { position: relative; height: 40px; background: var(--rc-panel); border: 1px solid color-mix(in srgb, var(--rc-bars) 22%, transparent); border-radius: 8px; cursor: ew-resize; padding: 0 12px; }
 .hslider::before { content: ""; position: absolute; left: 12px; right: 12px; bottom: 10px; height: 4px; border-radius: 2px; background: var(--rc-slider); }
 .hslider i { position: absolute; left: 12px; bottom: 10px; height: 4px; border-radius: 2px; background: var(--rc-sliderFill); max-width: calc(100% - 24px); }
-.hslider b { position: absolute; bottom: 6px; width: 12px; height: 12px; margin-left: 8px; border-radius: 50%; background: var(--rc-active); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc-active) 25%, transparent); }
+.hslider b { position: absolute; bottom: 6px; width: 12px; height: 12px; margin-left: 6px; border-radius: 50%; background: var(--rc-active); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc-active) 25%, transparent); }
 .hslider span { position: absolute; top: 4px; left: 12px; right: 12px; font-size: 11px; line-height: 14px; color: var(--rc-text); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tune-pop { height: auto; padding: 6px; border-radius: 3px; }
 

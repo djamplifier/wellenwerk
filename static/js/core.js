@@ -86,6 +86,7 @@ function wfScroller(canvas, levels, opts = {}) {
     const dt = Math.min(250, now - S.prev); S.prev = now;
     const W = canvas.clientWidth, H = canvas.clientHeight;
     if (W && H && (canvas.width !== W || canvas.height !== H)) { canvas.width = W; canvas.height = H; }
+    if (W && H) opts.before?.(g, W, H);
     if (W && H && S.q.length && S.lut) {
       S.acc += dt * S.pps / 1000; let n = Math.floor(S.acc); S.acc -= n; n = Math.min(n, H);
       if (n > 0) { g.drawImage(canvas, 0, 0, W, H - n, 0, n, W, H - n); const img = g.createImageData(W, n), d = img.data, lut = S.lut;
@@ -216,8 +217,11 @@ function connectWs() {
     const m = JSON.parse(ev.data);
     switch (m.type) {
       case "rig":
-        if (m.current || m.radio === WW.current) {
-          const modelChanged = m.rig.connected && m.rig.model !== WW.capsModel;
+        // Nur das aktuelle Geraet zeigen. Meldet der Dienst ein anderes als aktuell, ist unsere Liste veraltet: neu laden statt
+        // beide Geraete abwechselnd anzuzeigen (Regler und Betriebsart sprangen sonst hin und her)
+        if (m.current && m.radio && m.radio !== WW.current) { if (!WW._lrp) { WW._lrp = true; loadRadios().finally(() => { WW._lrp = false; }); } }
+        else if (m.radio === WW.current || (m.current && !m.radio)) {
+          const modelChanged = m.rig.connected && capsKey(m.radio, m.rig) !== WW.capsModel;   // anderes Geraet oder Modell: Faehigkeiten neu laden
           // Waehrend schnellen Abstimmens (Mausrad, Tasten) keine noch nicht aktualisierte Geraetefrequenz uebernehmen
           const p = WW._fpend; if (p && Date.now() - p.t < 1500 && m.rig.connected && m.rig.freq !== p.hz) m.rig = { ...m.rig, freq: p.hz };
           WW.rig = m.rig; if (modelChanged) loadCaps(); WW.emit("rig", WW.rig);
@@ -253,14 +257,19 @@ function connectWs() {
   ws.onopen = () => { WW.ws = ws; refreshState(); WW.emit("ws-open"); };
   ws.onclose = () => { WW.emit("offline"); setTimeout(connectWs, 2000); };
 }
+// Faehigkeiten gehoeren zu Geraet + Modell (SDR-Empfaenger melden kein Modell – daher auch die Geraete-ID)
+const capsKey = (id, st) => `${id || ""}|${st?.model || st?.sdr?.kind || ""}`;
 async function loadCaps() {
-  try { WW.caps = await api("/api/rig/caps"); } catch { WW.caps = {}; }
-  WW.capsModel = WW.rig.model; WW.emit("caps", WW.caps);
+  const key = capsKey(WW.current, WW.rig); WW.capsModel = key;
+  let c; try { c = await api("/api/rig/caps"); } catch { c = {}; }
+  if (WW.capsModel !== key) return;                     // inzwischen anderes Geraet: dessen Abfrage gilt
+  WW.caps = c; WW.emit("caps", WW.caps);
 }
 async function loadRadios() {
   const r = await api("/api/radios"); const changed = r.current !== WW.current; WW.radios = r.radios; WW.current = r.current;
   const cur = r.radios.find(x => x.id === r.current);       // Zustand des (neuen) aktuellen Geraets sofort uebernehmen
   if (changed && cur?.state) { WW.rig = { ...cur.state, band: bandFor(cur.state.freq) }; WW.emit("rig", WW.rig); }
+  if (changed) loadCaps();
   WW.emit("radios", r);
 }
 async function loadLogbooks() {
@@ -280,7 +289,7 @@ async function refreshState() {
   }
   WW.rig = st.rig;
   await loadRadios();
-  if (st.rig.connected && st.rig.model !== WW.capsModel) await loadCaps();
+  if (st.rig.connected && capsKey(WW.current, st.rig) !== WW.capsModel) await loadCaps();
   WW.spots = await api("/api/spots");
   try { WW.decodes = await api("/api/decodes"); const ci = await api("/api/cluster/info"); WW.clusterInfo = ci.info; } catch { }
   WW.emit("state"); WW.emit("rig", WW.rig); WW.emit("rotor", WW.rotor); WW.emit("cluster", WW.cluster); WW.emit("spots"); WW.emit("cluster-info", WW.clusterInfo);

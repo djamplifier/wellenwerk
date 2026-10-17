@@ -311,14 +311,34 @@ class OpenWebRXRig(SdrRig):
                 vals = list(struct.unpack(f"<{len(data) // 4}f", data[: len(data) // 4 * 4]))
             if not vals:
                 return
+            # Zoom: Ausschnitt aus der vollen FFT des Servers (sonst haette ein 2-MHz-Spektrum nach dem Verdichten nur ~2 kHz je Punkt)
+            low, high = self.center - self.rate / 2, self.center + self.rate / 2
+            span = getattr(self, "zoom_span", 0)
+            if span:
+                n0, cf = len(vals), self._zoom_view()
+                i0 = max(0, int((cf - span / 2 - low) / self.rate * n0)); i1 = min(n0, max(i0 + 8, int(round((cf + span / 2 - low) / self.rate * n0))))
+                vals, low, high = vals[i0:i1], low + i0 * self.rate / n0, low + i1 * self.rate / n0
             # auf hoechstens 1024 Punkte verdichten, dB-Werte -> 0..255 wie bei den anderen Quellen
             n = len(vals)
             if n > 1024:
                 f = n / 1024
                 vals = [max(vals[int(i * f): int((i + 1) * f)] or [vals[int(i * f)]]) for i in range(1024)]
             data8 = [int(min(255, max(0, (v + 150) * 255 / 130))) for v in vals]
-            self.on_spectrum(dict(name="OpenWebRX", low=self.center - self.rate / 2, high=self.center + self.rate / 2,
-                                  center=self.center, span=self.rate, min=60, max=230, data=data8))
+            self.on_spectrum(dict(name="OpenWebRX", low=low, high=high, center=(low + high) / 2, span=high - low, min=60, max=230, data=data8))
+
+    async def set_span(self, hz: int) -> int:
+        """Wasserfall-Breite: Ausschnitt aus der Server-FFT (Aufloesung = Bandbreite / FFT-Groesse des Servers)."""
+        self.zoom_span = hz if 0 < hz < (self.rate or 0) * 0.8 else 0
+        self.zoom_cf = 0
+        return int(self.zoom_span or self.rate or 0)
+
+    def _zoom_view(self):
+        """Mitte des Ausschnitts: bleibt stehen, bis die Empfangsfrequenz das mittlere Drittel verlaesst."""
+        span, f, half = self.zoom_span, self.state["freq"], self.rate / 2
+        if not self.zoom_cf or abs(f - self.zoom_cf) > span * 0.35:
+            self.zoom_cf = f
+        self.zoom_cf = min(max(self.zoom_cf, self.center - half + span / 2), self.center + half - span / 2)
+        return self.zoom_cf
 
     async def _first_tune(self, fallback: int):
         """Nach dem Verbinden (auch Neuverbinden) die gewuenschte Frequenz einstellen. Liegt sie nicht im aktuellen

@@ -90,8 +90,10 @@ function sigOnClick(radioId, f, e, tapId, rfLines) {
     const air = f >= 108e6 && f <= 137e6, amBand = f <= 137e6 || (f >= 225e6 && f <= 400e6);   // AM oberhalb 30 MHz nur bis Flugfunk bzw. UHF-Flugfunk – 4FSK sieht gemittelt sonst wie AM aus
     const lines = rfLines && rfLines.length ? rfLines : sigLines(dr.id, 4000), am = amBand ? sigRfAm(lines, f) : null;
     sigProbe({ radio: dr.id, ctl: radioId || dr.id, rf: f, x: e?.clientX, y: e?.clientY, am: am || air ? { carrier: am?.carrier, air } : null }, sigProbeList(f, decs), decs); return true; }
-  const st = sigState(radioId), inv = SIG_SB[st.mode];
+  const st = sigState(radioId), pt = (!radioId || radioId === WW.current) && typeof planTarget === "function" ? planTarget(f) : null;
+  const mode = pt && pt.mode !== st.mode ? pt.mode : st.mode, inv = SIG_SB[mode];
   if (inv === undefined) return false;                               // AM/FM/CW: wie bisher direkt abstimmen
+  if (mode !== st.mode) planTake(pt);                                // neue Betriebsart nach Bandplan gleich setzen, Abstimmpunkt passend dazu
   const dial = Math.round(inv ? f + 1500 : f - 1500);
   sigRig(radioId, "freq", { hz: dial }).catch(err => toast(err.message, true));
   sigIdentify({ radio: tapId || radioId || WW.current, ctl: radioId || WW.current, rfAm: sigRfAm(rfLines && rfLines.length ? rfLines : sigLines(tapId || radioId || WW.current, 4000), f), fc: 1500, rf: f, dial, inverted: inv, x: e?.clientX, y: e?.clientY, settle: tapId ? 1.8 : 1.2 });
