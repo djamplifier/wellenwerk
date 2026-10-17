@@ -556,22 +556,20 @@ function sigTag(o, res) { if (!o.rf || !res.best || ["NOISE", "UNKNOWN"].include
   SIG.tags = SIG.tags.filter(t => t.until > Date.now() && Math.abs(t.rf - o.rf) > 50).concat({ rf: o.rf, label: res.best.label.split(" · ")[0], until: Date.now() + 30000, radio: o.radio }); }
 addEventListener("keydown", e => { if (e.key === "Escape" && SIG.run) sigCancel(); });
 
-// ---------- optionales Sprachmodul (AMBE fuer DMR, D-STAR, YSF): mbelib wird lokal aus dem Originalquelltext gebaut ----------
+// ---------- optionales Sprachmodul (AMBE fuer DMR, D-STAR, YSF): mbelib legt der Nutzer selbst in <Datenordner>/module ----------
 async function voiceModuleReady() {
   let st = await api("/api/voice").catch(() => null); if (!st) return false;
   if (st.state === "ready") return true;
-  const ok = await new Promise(res => { const d = dialog({ title: "Sprachmodul (AMBE) einrichten", icon: "i-radio", buttons: [["Abbrechen", "close"], ["Bauen", "ok", "primary"]], body: `
-    <p>DMR, D-STAR und YSF übertragen Sprache mit dem AMBE-Verfahren. Wellenwerk liefert dafür <b>keinen Code</b> mit.</p>
-    <p>Auf Wunsch lädt Wellenwerk den freien Quelltext <b>mbelib</b> (ISC-Lizenz, github.com/szechyjs/mbelib, Fassung ${esc(st.version)}), prüft jede Datei über ihre Prüfsumme und übersetzt ihn mit dem C-Compiler dieses Rechners. Das Ergebnis bleibt im Datenordner.</p>
-    <p class="warn">AMBE ist patentrechtlich geschützt. Ob du das Modul an deinem Ort nutzen darfst, musst du selbst prüfen – <b>Nutzung auf eigene Verantwortung</b>.</p>
-    ${st.hint ? `<p class="err">${esc(st.hint)}</p>` : `<p class="hint">C-Compiler: ${esc(st.compiler)}</p>`}${st.state === "error" ? `<p class="err">Letzter Versuch: ${esc(st.msg)}</p>` : ""}
-    <label style="flex-direction:row;gap:6px;align-items:center;color:var(--fg)"><input type="checkbox" class="vm-ok" style="width:auto;margin:0"> Ich habe den Hinweis gelesen und übernehme die Verantwortung.</label>` });
-    const okb = d.querySelector('button[value="ok"]'), cb = d.querySelector(".vm-ok"); okb.disabled = true; cb.onchange = () => okb.disabled = !cb.checked || !!st.hint;
-    d.addEventListener("close", () => res(d.returnValue === "ok")); });
-  if (!ok) return false;
-  try { st = await api("/api/voice/build", { method: "POST", body: { accept: true } }); } catch (e) { toast(e.message, true); return false; }
-  toast("Sprachmodul wird gebaut …");
-  for (let i = 0; i < 300 && st.state === "building"; i++) { await new Promise(r => setTimeout(r, 1000)); st = await api("/api/voice").catch(() => st); }
-  if (st.state === "ready") { toast("Sprachmodul bereit"); return true; }
-  toast("Sprachmodul: " + (st.msg || "fehlgeschlagen"), true); return false;
+  const r = await new Promise(res => { const d = dialog({ title: "Sprachmodul (AMBE) nicht gefunden", icon: "i-radio", buttons: [["Schließen", "close"], ["Anleitung", "doc"], ["Erneut prüfen", "ok", "primary"]], body: `
+    <p>Für die Sprache von DMR, D-STAR und YSF braucht Wellenwerk die Bibliothek <b>mbelib</b>. Sie ist nicht enthalten und wird von Wellenwerk nicht geladen – du kannst sie selbst übersetzen und in diesen Ordner legen:</p>
+    <p><code translate="no" style="user-select:all">${esc(st.folder)}</code></p>
+    <p>Dateiname: libmbe.dylib (Mac), libmbe.so (Linux) oder mbe.dll (Windows). Wie das geht, steht in der Anleitung.</p>
+    <p class="warn">AMBE ist patentrechtlich geschützt. Ob du es an deinem Ort nutzen darfst, musst du selbst prüfen – Nutzung auf eigene Verantwortung.</p>
+    ${st.msg ? `<p class="err" translate="no">${esc(st.msg)}</p>` : ""}` });
+    d.addEventListener("close", () => res(d.returnValue)); });
+  if (r === "doc") { window.open("/static/hilfe.html#" + (I18N.lang === "de" ? "sprachmodul-ambe-optional" : "voice-module-ambe-optional"), "_blank", "width=1100,height=860"); return false; }
+  if (r !== "ok") return false;
+  st = await api("/api/voice").catch(() => st);
+  if (st.state === "ready") { toast("Sprachmodul gefunden"); return true; }
+  toast("Sprachmodul noch nicht gefunden", true); return false;
 }

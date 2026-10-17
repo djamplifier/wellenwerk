@@ -263,15 +263,33 @@ Also read by Wellenwerk itself:
 
 ![M17 from your own receiver, decoded by Wellenwerk itself](bilder/28-eigene-dekoder.png)
 
-**Listening to voice (optional voice module).** DMR, D-STAR and YSF transmit voice with the patented AMBE method. Wellenwerk ships no code for it. For these systems the live card has a **Voice** button. On the first press a notice explains what happens: Wellenwerk downloads the free source code *mbelib* (ISC licence) in a fixed version, checks every file by its checksum and compiles it with the computer's C compiler. This takes a few seconds; the result stays in the data folder. Whether you may use it where you live is for you to check – **use at your own risk**; nothing is downloaded without confirmation.
-
-Afterwards you hear the decoded voice instead of the digital noise, delayed by about 1–2 seconds. With DMR Wellenwerk follows the time slot that speaks first. The level is adjusted automatically. A C compiler is needed: on a Mac “xcode-select --install”, on Linux “build-essential”, on Windows e.g. w64devkit or MSYS2. M17 (Codec2) and transmitting via an MMDVM hotspot will follow.
-
-![Notice before setting up the voice module](bilder/29-sprachmodul.png)
+**Listening to voice:** see [Voice module (AMBE, optional)](#voice-module-ambe-optional).
 
 **More receiver decoders:** if an OpenWebRX+ offers them, the *Data reception* window and the card also provide **FT8, FT4, WSPR, JT65, JT9, FST4, Q65, MSK144, JS8Call** (with the name for the callsign), **PSK31/63, RTTY** (also the weather service's 50 Bd/450 Hz), **CW, NAVTEX, SITOR-B, DSC, AIS** (ships), **ADS-B/Mode S** (aircraft with ID, altitude, speed, position), **LoRa APRS, Meshtastic, MeshCom, MeshCore** and **FANET**. A click on 162 MHz (AIS), 1090 MHz (ADS-B), 433.775 MHz (LoRa APRS), 433.175 MHz (MeshCom), 869.5 MHz (Meshtastic), 156.525 MHz or the HF DSC frequencies and 490/518 kHz (NAVTEX) switches on the matching decoder directly; for detected FT8 etc. the card offers “Let the receiver decode”. Deliberately not offered: pagers, selective calling/ZVEI, airline company data (ACARS, VDL2, HFDL), utility meters and LoRaWAN – receiving them is not permitted in Germany (§ 5 TDDDG). Marine radar (9 GHz) is outside the receivers' range. All messages are collected in **View → Data reception**; a decoder can also be chosen there by hand. A receiver reports which decoders it offers. Note: you hear digital voice only if the server outputs it; Wellenwerk shows the IDs and texts.
 
 **Alt+click** only tunes, without identification. In AM, FM and CW a click tunes directly as before. Switch on/off and set the maximum duration under **F8 → Waterfall**. The identification is a well-founded estimate, not proof: with very weak or overlapping signals it prefers to report “unknown signal” with guesses.
+
+### Voice module (AMBE, optional)
+
+DMR, D-STAR and YSF transmit voice with the patented AMBE method. Wellenwerk contains **no code for it and does not download any**. If you want to hear the voice, get the free source code *mbelib* (ISC licence) yourself, compile it and put the finished library into the folder **`module`** in Wellenwerk's data folder. Whether you may use it where you live is for you to check – **use at your own risk**.
+
+By default the data folder is `~/Library/Application Support/Wellenwerk` (Mac), `%APPDATA%\Wellenwerk` (Windows) or `~/.local/share/wellenwerk` (Linux). The **Voice** button in the live card shows the exact folder as long as no module has been found. Wellenwerk looks there for `libmbe.dylib` (Mac), `libmbe.so` (Linux) or `mbe.dll` (Windows); a system-wide installed mbelib is found as well.
+
+**Mac** (once “xcode-select --install” for the C compiler):
+
+```
+git clone https://github.com/szechyjs/mbelib.git
+cd mbelib
+cc -O2 -shared -fPIC -o libmbe.dylib ambe3600x2400.c ambe3600x2450.c ecc.c imbe7100x4400.c imbe7200x4400.c mbelib.c -lm
+```
+
+**Linux** (package “build-essential”): as above, just with `-o libmbe.so`.
+
+**Windows** (e.g. with w64devkit or MSYS2/gcc): as above, with `gcc` instead of `cc`, without `-fPIC` and `-lm`, output `-o mbe.dll`.
+
+Move the resulting file into the folder `module` (create it if needed). No restart is needed. The **Voice** button then switches the output on: instead of the digital noise you hear the decoded voice, delayed by about 1–2 seconds. With DMR Wellenwerk follows the time slot that speaks first; the level is adjusted automatically. M17 (Codec2) and transmitting via an MMDVM hotspot will follow.
+
+![Notice as long as no voice module has been found](bilder/29-sprachmodul.png)
 
 ### Remote audio
 

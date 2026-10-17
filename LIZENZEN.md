@@ -57,7 +57,7 @@ FT8/FT4-Dekoder von Karlis Goba, https://github.com/kgoba/ft8_lib – MIT-Lizenz
 
 ## Sprachmodul (optional, wird nicht mitgeliefert)
 
-- **mbelib** (https://github.com/szechyjs/mbelib, Copyright (C) 2010 mbelib Author, ISC-Lizenz): wird nur auf ausdrücklichen Wunsch des Nutzers in einer festen Fassung (Commit 9a04ed5c) aus dem Originalquelltext geladen, per SHA-256 geprüft und auf dessen Rechner übersetzt (wellenwerk/dvvoice.py). Wellenwerk enthält keinen mbelib-Code. AMBE ist patentrechtlich geschützt; die Nutzung verantwortet der Nutzer.
+- **mbelib** (https://github.com/szechyjs/mbelib, Copyright (C) 2010 mbelib Author, ISC-Lizenz): weder enthalten noch von Wellenwerk geladen. Wer die Sprache hören will, übersetzt mbelib selbst und legt die Bibliothek in den Ordner `module` des Datenordners; Wellenwerk bindet sie dann ein (wellenwerk/dvvoice.py). AMBE ist patentrechtlich geschützt; die Nutzung verantwortet der Nutzer.
 - **Verschachtelungstabellen für DMR- und D-STAR-Sprachrahmen** in wellenwerk/dvvoice.py aus DSD (https://github.com/szechyjs/dsd, Copyright (C) 2010 DSD Author, ISC-Lizenz):
 
   > Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.

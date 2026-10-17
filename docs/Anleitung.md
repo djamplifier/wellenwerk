@@ -257,15 +257,33 @@ Ebenso selbst gelesen werden:
 
 ![M17 von einem eigenen Empfänger, von Wellenwerk selbst dekodiert](bilder/28-eigene-dekoder.png)
 
-**Sprache hören (optionales Sprachmodul).** DMR, D-STAR und YSF übertragen die Sprache mit dem patentgeschützten AMBE-Verfahren. Wellenwerk liefert dafür keinen Code mit. In der Live-Karte gibt es bei diesen Verfahren den Knopf **Sprache**. Beim ersten Druck erklärt ein Hinweis, was passiert: Wellenwerk lädt den freien Quelltext *mbelib* (ISC-Lizenz) in einer festen Fassung, prüft jede Datei über ihre Prüfsumme und übersetzt ihn mit dem C-Compiler des Rechners. Das dauert wenige Sekunden, das Ergebnis bleibt im Datenordner. Ob die Nutzung am eigenen Ort erlaubt ist, muss jeder selbst prüfen – **Nutzung auf eigene Verantwortung**; ohne Bestätigung wird nichts geladen.
-
-Danach hört man statt des Digitalrauschens die dekodierte Sprache, etwa 1–2 Sekunden verzögert. Bei DMR folgt Wellenwerk dem Zeitschlitz, der zuerst spricht. Der Pegel wird automatisch angepasst. Ein C-Compiler wird gebraucht: am Mac „xcode-select --install“, unter Linux „build-essential“, unter Windows z. B. w64devkit oder MSYS2. M17 (Codec2) und Senden über einen MMDVM-Hotspot folgen.
-
-![Hinweis vor dem Einrichten des Sprachmoduls](bilder/29-sprachmodul.png)
+**Sprache hören:** siehe [Sprachmodul (AMBE, optional)](#sprachmodul-ambe-optional).
 
 **Weitere Dekoder der Empfänger:** Bietet ein OpenWebRX+ sie an, stehen im Fenster *Datenempfang* und in der Karte auch **FT8, FT4, WSPR, JT65, JT9, FST4, Q65, MSK144, JS8Call** (mit Name zum Rufzeichen), **PSK31/63, RTTY** (auch 50 Bd/450 Hz des Wetterdienstes), **CW, NAVTEX, SITOR-B, DSC, AIS** (Schiffe), **ADS-B/Mode S** (Flugzeuge mit Kennung, Höhe, Geschwindigkeit, Position), **LoRa-APRS, Meshtastic, MeshCom, MeshCore** und **FANET** zur Verfügung. Ein Klick auf 162 MHz (AIS), 1090 MHz (ADS-B), 433,775 MHz (LoRa-APRS), 433,175 MHz (MeshCom), 869,5 MHz (Meshtastic), 156,525 MHz bzw. die Kurzwellen-DSC-Frequenzen und 490/518 kHz (NAVTEX) schaltet den passenden Dekoder direkt ein; bei erkanntem FT8 & Co. bietet die Karte „Vom Empfänger dekodieren lassen“ an. Bewusst nicht angeboten werden Pager, Selektivruf/ZVEI, Firmendaten der Luftfahrt (ACARS, VDL2, HFDL), Verbrauchszähler und LoRaWAN – deren Empfang ist in Deutschland nicht erlaubt (§ 5 TDDDG). Schiffsradar (9 GHz) liegt außerhalb der Empfänger. Alle Meldungen sammelt das Fenster **Ansicht → Datenempfang**; dort lässt sich ein Dekoder auch von Hand wählen. Welche Dekoder ein Empfänger bietet, meldet er selbst. Hinweis: Sprache digitaler Verfahren hörst du nur, wenn der Server sie ausgibt; Wellenwerk zeigt die Kennungen und Texte.
 
 **Alt+Klick** stimmt nur ab, ohne Erkennung. In AM, FM und CW stimmt ein Klick wie bisher direkt ab. Ein- und ausschalten und die Höchstdauer einstellen unter **F8 → Wasserfall**. Die Erkennung ist eine gut begründete Schätzung, kein Beweis: bei sehr schwachen oder sich überlagernden Signalen meldet sie lieber „unbekanntes Signal“ mit Vermutungen.
+
+### Sprachmodul (AMBE, optional)
+
+DMR, D-STAR und YSF übertragen die Sprache mit dem patentgeschützten AMBE-Verfahren. Wellenwerk enthält dafür **keinen Code und lädt auch keinen nach**. Wer die Sprache hören möchte, besorgt sich den freien Quelltext *mbelib* (ISC-Lizenz) selbst, übersetzt ihn und legt die fertige Bibliothek in den Ordner **`module`** im Datenordner von Wellenwerk. Ob die Nutzung am eigenen Ort erlaubt ist, muss jeder selbst prüfen – **Nutzung auf eigene Verantwortung**.
+
+Der Datenordner liegt standardmäßig unter `~/Library/Application Support/Wellenwerk` (Mac), `%APPDATA%\Wellenwerk` (Windows) bzw. `~/.local/share/wellenwerk` (Linux). Den genauen Ordner zeigt der Knopf **Sprache** in der Live-Karte an, solange noch kein Modul gefunden wurde. Wellenwerk sucht dort nach `libmbe.dylib` (Mac), `libmbe.so` (Linux) bzw. `mbe.dll` (Windows); eine systemweit installierte mbelib wird ebenfalls gefunden.
+
+**Mac** (einmalig „xcode-select --install“ für den C-Compiler):
+
+```
+git clone https://github.com/szechyjs/mbelib.git
+cd mbelib
+cc -O2 -shared -fPIC -o libmbe.dylib ambe3600x2400.c ambe3600x2450.c ecc.c imbe7100x4400.c imbe7200x4400.c mbelib.c -lm
+```
+
+**Linux** (Paket „build-essential“): wie oben, nur mit `-o libmbe.so`.
+
+**Windows** (z. B. mit w64devkit oder MSYS2/gcc): wie oben, mit `gcc` statt `cc`, ohne `-fPIC` und `-lm`, Ausgabe `-o mbe.dll`.
+
+Die erzeugte Datei in den Ordner `module` verschieben (ggf. anlegen). Ein Neustart ist nicht nötig. Danach schaltet der Knopf **Sprache** die Ausgabe ein: Statt des Digitalrauschens hört man die dekodierte Sprache, etwa 1–2 Sekunden verzögert. Bei DMR folgt Wellenwerk dem Zeitschlitz, der zuerst spricht; der Pegel wird automatisch angepasst. M17 (Codec2) und Senden über einen MMDVM-Hotspot folgen.
+
+![Hinweis, solange kein Sprachmodul gefunden wurde](bilder/29-sprachmodul.png)
 
 ### Fernbetrieb-Audio
 

@@ -1,49 +1,25 @@
 """Optionales Sprachmodul fuer DMR, D-STAR und YSF (AMBE/AMBE+2).
 
-Wellenwerk liefert dafuer keinen Code mit. Auf Knopfdruck (und nur mit ausdruecklicher Zustimmung des Nutzers) wird
-mbelib (ISC-Lizenz, github.com/szechyjs/mbelib) in einer festen Fassung aus dem Originalquelltext geladen, jede Datei
-per SHA-256 geprueft und mit dem C-Compiler des Rechners zu einer Bibliothek im Datenordner uebersetzt. Ob die Nutzung
-der AMBE-Verfahren am eigenen Ort Patent- oder Lizenzrechte beruehrt, verantwortet der Nutzer.
+Wellenwerk enthaelt dafuer keinen Code und laedt auch keinen nach. Wer die Sprache hoeren will, besorgt sich selbst
+mbelib (freier Quelltext, ISC-Lizenz, github.com/szechyjs/mbelib), uebersetzt es und legt die Bibliothek in den Ordner
+<Datenordner>/module/ (oder installiert sie systemweit). Wellenwerk sucht sie nur und bindet sie ein, wenn vorhanden.
+Ob die Nutzung der AMBE-Verfahren am eigenen Ort Patent- oder Lizenzrechte beruehrt, verantwortet der Nutzer.
 
 Die Verschachtelungstabellen fuer DMR und D-STAR stammen aus DSD (ISC-Lizenz, Copyright (C) 2010 DSD Author).
 """
 from __future__ import annotations
 
 import ctypes
-import hashlib
-import io
+import ctypes.util
 import logging
-import shutil
-import subprocess
-import sys
-import tarfile
-import threading
-import urllib.request
 from pathlib import Path
 
 import numpy as np
 
 log = logging.getLogger("ww.voice")
 
-MBELIB_REV = "9a04ed5c78176a9965f3d43f7aa1b1f5330e771f"
-MBELIB_URL = f"https://codeload.github.com/szechyjs/mbelib/tar.gz/{MBELIB_REV}"
-MBELIB_SHA256 = {
-    "ambe3600x2400.c": "30fc8c891bd0e2971115381d85bda874a5fdf549b295db66dec6f43efcb70ca1",
-    "ambe3600x2400_const.h": "27dd645e468c3ba1f0d2e420cc784ea5f8850cc973ce4a4f8519c4055c1511a1",
-    "ambe3600x2450.c": "677f1542021011d91e79b5ee7dfe2579e6f02fd173dbbfb4e69c6eba859465e0",
-    "ambe3600x2450_const.h": "cb02e200baa88e7cda37b9dc57085fd942a9f2911e9707e5c5f998de57f2361a",
-    "ecc.c": "ea2dfd7d7b2f00ac640e2b0b215ddcf97425c4a822b74811120c7ae7a7fef88a",
-    "ecc_const.h": "8bd6b61dce5684e92dfbe3f5e4ddfce522dc5be3e3387a99361e645f9e60f153",
-    "imbe7100x4400.c": "3309d18dccee7e9893f84ac38ae954bb0673eed2edd2f56de8b5addefef74a42",
-    "imbe7200x4400.c": "da185a5cdcaf2dd2d03a6ea2524bdeea339f97a9d5985efc0fc3a0ad41f172b9",
-    "imbe7200x4400_const.h": "62982451d7c23d3d6d255bf1dff34c4bdcf9c40e0aa04b7f5f40393705924737",
-    "mbelib.c": "f51242d7d23693870af503c7614a886ed6f119c5f215a1841fa81714b7f425ed",
-    "mbelib.h": "be480617bb4750d2a6ed493b24a80c9e958c60ff3dd58c928fc348b5a46d312e",
-    "mbelib_const.h": "656718c330e5170b2fa5979d9b28bfb96f970f5af7211f29b450481afbe4d07d",
-    "config.h": "d77dadc82cf65808b908a268ec4757b0fc55a2d326dd9dd79607ad38cbf3655d",
-    "COPYRIGHT": "59df7c481fca54d6ccab5ef36fe1ae6a8217b7f5e13ee4d18f63684a29871b8b",
-}
-LIBNAME = {"darwin": "libmbe.dylib", "win32": "mbe.dll"}.get(sys.platform, "libmbe.so")
+LIBNAMES = ("libmbe.dylib", "libmbe.so", "libmbe.so.1", "mbe.dll", "libmbe.dll")
+NEEDED = ("mbe_initMbeParms", "mbe_processAmbe3600x2400Framef", "mbe_processAmbe3600x2450Framef", "mbe_processAmbe2450Dataf")
 
 # DMR: 36 Dibits je AMBE+2-Rahmen -> ambe_fr[4][24] (Bit 1 nach W/X, Bit 0 nach Y/Z)
 DMR_W = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2]
@@ -57,104 +33,50 @@ DS_X = [10, 22, 11, 9, 10, 22, 11, 23, 8, 20, 9, 21, 10, 8, 9, 21, 8, 6, 7, 19, 
         6, 4, 5, 17, 4, 2, 3, 15, 4, 16, 5, 3, 2, 14, 3, 1, 2, 14, 3, 15, 0, 12, 1, 13, 2, 0, 1, 13, 0, 12, 10, 11, 0, 12, 1, 13]
 
 DATA: Path | None = None                                  # Datenordner (setzt main.py)
-_state = {"state": "missing", "msg": "", "compiler": ""}
 _lib = None
-_lock = threading.Lock()
+_err = ""
 
 
-def _dir(data: Path) -> Path:
-    return data / "module" / "mbelib"
+def folder(data: Path | None = None) -> Path:
+    return Path(data or DATA or ".") / "module"
 
 
-def compiler() -> str:
-    for c in ("cc", "gcc", "clang"):
-        p = shutil.which(c)
-        if p:
-            return p
-    return ""
+def _find(data: Path | None) -> str:
+    for n in LIBNAMES:
+        p = folder(data) / n
+        if p.exists():
+            return str(p)
+    return ctypes.util.find_library("mbe") or ""          # systemweit installiert (z. B. „make install“)
 
 
-def status(data: Path) -> dict:
-    if _state["state"] != "building":
-        if _lib is not None or (_dir(data) / LIBNAME).exists():
-            _state.update(state="ready")
-        elif _state["state"] == "ready":
-            _state.update(state="missing")
-    hint = ""
-    if not compiler():
-        hint = {"darwin": "Kein C-Compiler gefunden – im Terminal „xcode-select --install“ ausführen.",
-                "win32": "Kein C-Compiler gefunden – z. B. w64devkit oder MSYS2 (gcc) installieren und in den PATH aufnehmen."}.get(
-            sys.platform, "Kein C-Compiler gefunden – z. B. „sudo apt install build-essential“.")
-    return dict(_state, compiler=compiler(), hint=hint, version=MBELIB_REV[:10], license="ISC")
-
-
-def build(data: Path) -> None:
-    """Quelltext laden, pruefen, uebersetzen (im Hintergrund aufrufen)."""
-    with _lock:
-        if _state["state"] == "building":
-            return
-        _state.update(state="building", msg="Quelltext wird geladen …")
-    try:
-        cc = compiler()
-        if not cc:
-            raise RuntimeError(status(data)["hint"])
-        raw = urllib.request.urlopen(urllib.request.Request(MBELIB_URL, headers={"User-Agent": "Wellenwerk"}), timeout=60).read()
-        src = _dir(data) / "src"
-        shutil.rmtree(src, ignore_errors=True)
-        src.mkdir(parents=True)
-        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tf:
-            for m in tf.getmembers():
-                name = m.name.split("/", 1)[-1]
-                if name in MBELIB_SHA256 and m.isfile():
-                    (src / name).write_bytes(tf.extractfile(m).read())
-        for name, sha in MBELIB_SHA256.items():
-            f = src / name
-            if not f.exists() or hashlib.sha256(f.read_bytes()).hexdigest() != sha:
-                raise RuntimeError(f"Prüfsumme stimmt nicht: {name} – Abbruch, nichts übersetzt")
-        _state["msg"] = "wird übersetzt …"
-        out = _dir(data) / LIBNAME
-        cfiles = [str(src / n) for n in MBELIB_SHA256 if n.endswith(".c")]
-        cmd = [cc, "-O2", "-shared", "-o", str(out), *cfiles, "-I", str(src)]
-        if sys.platform != "win32":
-            cmd[3:3] = ["-fPIC"]
-            cmd.append("-lm")
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if r.returncode != 0 or not out.exists():
-            raise RuntimeError("Übersetzen fehlgeschlagen: " + (r.stderr or r.stdout)[-400:])
-        _load(data)
-        _state.update(state="ready", msg="")
-        log.info("Sprachmodul (mbelib %s) gebaut: %s", MBELIB_REV[:10], out)
-    except Exception as e:
-        log.warning("Sprachmodul: %s", e)
-        _state.update(state="error", msg=str(e))
-
-
-def remove(data: Path) -> None:
-    global _lib
-    _lib = None                                           # bereits geladene Bibliothek bleibt bis zum Neustart im Speicher
-    shutil.rmtree(_dir(data), ignore_errors=True)
-    _state.update(state="missing", msg="")
-
-
-def _load(data: Path):
-    global _lib
+def _load(data: Path | None = None):
+    global _lib, _err
     if _lib is None:
-        p = _dir(data) / LIBNAME
-        if not p.exists():
+        p = _find(data)
+        if not p:
             return None
-        lib = ctypes.CDLL(str(p))
-        for fn in ("mbe_processAmbe3600x2400Framef", "mbe_processAmbe3600x2450Framef", "mbe_processAmbe2450Dataf"):
-            getattr(lib, fn).restype = None
-        _lib = lib
+        try:
+            lib = ctypes.CDLL(p)
+            for fn in NEEDED:
+                getattr(lib, fn).restype = None
+        except (OSError, AttributeError) as e:
+            _err = f"{p}: {e}"
+            log.warning("Sprachmodul nicht ladbar: %s", _err)
+            return None
+        _lib, _err = lib, ""
+        lib._ww_path = p
+        log.info("Sprachmodul eingebunden: %s", p)
     return _lib
 
 
-def available(data: Path) -> bool:
-    try:
-        return _load(data) is not None
-    except OSError as e:
-        _state.update(state="error", msg=str(e))
-        return False
+def available(data: Path | None = None) -> bool:
+    return _load(data) is not None
+
+
+def status(data: Path | None = None) -> dict:
+    lib = _load(data)
+    return dict(state="ready" if lib else "error" if _err else "missing", path=getattr(lib, "_ww_path", "") if lib else "",
+                folder=str(folder(data)), msg=_err)
 
 
 class Vocoder:

@@ -2773,23 +2773,7 @@ async def ws_audio(websocket: WebSocket, radio: str = ""):
 
 @app.get("/api/voice", tags=["Empfänger"])
 async def voice_status():
-    """Optionales Sprachmodul (mbelib, lokal gebaut): Zustand, gefundener C-Compiler, Hinweis."""
-    return dvvoice.status(DATA)
-
-
-@app.post("/api/voice/build", tags=["Empfänger"])
-async def voice_build(body: dict):
-    """Sprachmodul aus dem Originalquelltext bauen – nur mit {"accept": true} (Nutzer uebernimmt die Verantwortung)."""
-    if body.get("accept") is not True:
-        raise HTTPException(400, "Bitte zuerst den Hinweis bestätigen")
-    asyncio.get_running_loop().run_in_executor(None, dvvoice.build, DATA)
-    await asyncio.sleep(0.1)
-    return dvvoice.status(DATA)
-
-
-@app.delete("/api/voice", tags=["Empfänger"])
-async def voice_remove():
-    dvvoice.remove(DATA)
+    """Optionales Sprachmodul (vom Nutzer selbst gebaute mbelib in <Datenordner>/module): Zustand, Fundort, Ordner."""
     return dvvoice.status(DATA)
 
 

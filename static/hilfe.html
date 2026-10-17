@@ -25,6 +25,7 @@ fetch("/docs/" + DOC).then(r => { if (!r.ok) throw new Error(EN ? "Document not 
   // Ueberschriften-Anker wie auf GitHub, damit das Inhaltsverzeichnis funktioniert
   el.querySelectorAll("h2, h3").forEach(h => h.id = h.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-"));
   el.querySelectorAll('a[href^="http"]').forEach(a => a.target = "_blank");
+  if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
   el.querySelectorAll('a[href="LICENSE"], a[href^="licenses/"]').forEach(a => { a.href = "/docs/" + (a.getAttribute("href") === "LICENSE" ? "LICENSE" : "LIZENZEN.md"); a.target = "_blank"; });
 }).catch(e => document.getElementById("doc").textContent = e.message);
 </script></body></html>
