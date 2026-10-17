@@ -93,6 +93,8 @@ jobs:
           curl -sf http://127.0.0.1:8099/api/radios | grep -q '"connected":true'
           curl -sf http://127.0.0.1:8099/api/freedv; echo
           curl -sf http://127.0.0.1:8099/api/freedv | grep -q '"available":true'
+          npm i --silent --no-audit --no-fund --prefix "$RUNNER_TEMP/ui" puppeteer-core@23.11.1
+          node .github/scripts/ui-selbsttest.cjs
 
       - name: Desktop-Programm bauen
         working-directory: desktop

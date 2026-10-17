@@ -260,7 +260,7 @@ function createSatSchedule(root) {
     $(".ss-info", root).textContent = `${rows.length} Überflüge`;
     $("tbody", root).innerHTML = rows.map(({ x, p }) => `<tr data-n="${x.norad}" class="${p.aos <= t && p.los >= t ? "now" : ""}${x.norad === SAT.sel?.norad ? " sel" : ""}"><td>${esc(x.name)}</td><td>${fmtDT(p.aos)}</td><td>${Math.round(p.aosAz)}°</td><td><b>${Math.round(p.maxEl)}°</b></td><td>${hhmm(p.los)}</td><td>${Math.round(p.losAz)}°</td><td>${Math.round((p.los - p.aos) / 60000)} min</td><td>${esc(op(x))}</td></tr>`).join("")
       || '<tr><td colspan="8" class="hint">keine Überflüge</td></tr>'; };
-  root.addEventListener("change", e => { if (e.target.closest(".pane-tb")) draw(); });
+  root.addEventListener("change", e => { if (e.target.closest(".pane-tb")) draw().catch(() => { }); });
   root.addEventListener("click", e => { const r = e.target.closest("tr[data-n]"); if (r) satSelect(+r.dataset.n); });
   draw().catch(e => root.innerHTML = `<div class="err">${esc(e.message)}</div>`);
   const tm = setInterval(draw, 60000), offs = [WW.on("sat-chosen", draw)]; return () => { clearInterval(tm); offs.forEach(f => f()); };
@@ -310,7 +310,7 @@ function createSatInfo(root) {
     $(".sat-head", root).innerHTML = `<b>${esc(x.name)}</b><span class="${l.el > 0 ? "up" : ""}">Az ${l.az.toFixed(1)}° · El ${l.el.toFixed(1)}°</span><span>${Math.round(l.range).toLocaleString(I18N.locale)} km</span><span>Höhe ${Math.round(l.alt)} km</span><span>${l.rr > 0 ? "entfernt sich" : "nähert sich"} ${Math.abs(l.rr).toFixed(2)} km/s</span><span class="hint">${nx}</span>`;
     x.transmitters.forEach((t, i) => { const dl = $(`[data-dl="${i}"]`, root), ul = $(`[data-ul="${i}"]`, root); if (dl && t.down_low) dl.textContent = fmtMHz(Math.round(t.down_low * (1 - l.rr / C_KMS))); if (ul && t.up_low) ul.textContent = fmtMHz(Math.round(t.up_low * (1 + l.rr / C_KMS))); });
     $(".sat-trinfo", root).textContent = SAT.info || ""; };
-  const offs = [WW.on("sat-sel", sel), WW.on("sat-tick", tick)]; satInit().then(sel); return () => offs.forEach(f => f());
+  const offs = [WW.on("sat-sel", sel), WW.on("sat-tick", tick)]; satInit().then(sel).catch(() => { }); return () => offs.forEach(f => f());   // Fehler zeigt die Satellitenliste
 }
 function createSatPasses(root) {
   root.innerHTML = `<div class="tablewrap"><table class="grid"><thead><tr><th>Datum</th><th>Beginn</th><th>Az</th><th>max. El</th><th>Ende</th><th>Az</th><th>Dauer</th></tr></thead><tbody></tbody></table></div>`;
