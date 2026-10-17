@@ -3,14 +3,14 @@
 Stationssteuerung, Logbuch und Digitalbetrieb für Funkamateure – ein Desktop-Programm für Windows, macOS und Linux.
 Code, Logo und Icons sind eigenständig.
 
-## Download (Version 1.3.9)
+## Download (Version 1.3.10)
 | System | Datei |
 |---|---|
-| Windows 10/11 | [Wellenwerk-1.3.9-Windows-Setup.exe](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.9/Wellenwerk-1.3.9-Windows-Setup.exe) |
-| Mac mit Apple-Chip (M1–M4) | [Wellenwerk-1.3.9-Mac-AppleSilicon.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.9/Wellenwerk-1.3.9-Mac-AppleSilicon.dmg) |
-| Mac mit Intel-Chip | [Wellenwerk-1.3.9-Mac-Intel.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.9/Wellenwerk-1.3.9-Mac-Intel.dmg) |
-| Linux (alle Distributionen) | [Wellenwerk-1.3.9-Linux.AppImage](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.9/Wellenwerk-1.3.9-Linux.AppImage) |
-| Debian/Ubuntu | [wellenwerk_1.3.9_amd64.deb](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.9/wellenwerk_1.3.9_amd64.deb) |
+| Windows 10/11 | [Wellenwerk-1.3.10-Windows-Setup.exe](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.10/Wellenwerk-1.3.10-Windows-Setup.exe) |
+| Mac mit Apple-Chip (M1–M4) | [Wellenwerk-1.3.10-Mac-AppleSilicon.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.10/Wellenwerk-1.3.10-Mac-AppleSilicon.dmg) |
+| Mac mit Intel-Chip | [Wellenwerk-1.3.10-Mac-Intel.dmg](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.10/Wellenwerk-1.3.10-Mac-Intel.dmg) |
+| Linux (alle Distributionen) | [Wellenwerk-1.3.10-Linux.AppImage](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.10/Wellenwerk-1.3.10-Linux.AppImage) |
+| Debian/Ubuntu | [wellenwerk_1.3.10_amd64.deb](https://github.com/djamplifier/wellenwerk/releases/download/v1.3.10/wellenwerk_1.3.10_amd64.deb) |
 
 Alle Versionen und Neuerungen: [Releases](https://github.com/djamplifier/wellenwerk/releases). Installierte Programme melden neue Versionen selbst.
 
